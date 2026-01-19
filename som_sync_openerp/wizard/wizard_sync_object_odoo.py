@@ -17,9 +17,9 @@ class WizardSyncObjectOdoo(osv.osv_memory):
             return {'type': 'ir.actions.act_window_close'}
 
         sync_obj = self.pool.get('odoo.sync')
-        # Support execution from model odoo.sync
         wiz = self.browse(cursor, uid, ids[0], context=context)
         context['is_static'] = wiz.is_static
+
         if wiz.is_static:
             if not wiz.odoo_id:
                 raise osv.except_osv(
@@ -32,7 +32,9 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                     "You can only sync one record at a time for static models."
                 )
             context['odoo_id'] = wiz.odoo_id
+
         if from_model == 'odoo.sync':
+            # Support execution from model odoo.sync
             for _id in active_ids:
                 # Get the real model and res_id from odoo.sync record
                 sync_data = sync_obj.browse(cursor, uid, _id)
@@ -43,6 +45,7 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                 )
             return {'type': 'ir.actions.act_window_close'}
 
+        # Normal execution from any model that can be synced
         for record_id in active_ids:
             sync_obj.syncronize_sync(
                 cursor, uid, from_model, 'sync', record_id, context=context

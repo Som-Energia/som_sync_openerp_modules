@@ -152,3 +152,65 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
         self.assertEqual(update, True)
+
+    def test__get_or_create_static_odoo_id__create(self):
+        afp_obj = self.openerp.pool.get("account.fiscal.position")
+        afp_id = afp_obj.create(self.cursor, self.uid, {'name': 'Test Static AFP'}, context={})
+
+        param_odoo_id = 123
+        odoo_id = self.os_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, param_odoo_id, context={}
+        )
+        self.assertEqual(odoo_id, param_odoo_id)
+
+        os_ids = self.os_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.fiscal.position'),
+            ('res_id', '=', afp_id),
+        ])
+        self.assertEqual(len(os_ids), 1)
+        os_record = self.os_obj.browse(self.cursor, self.uid, os_ids[0])
+        self.assertEqual(os_record.odoo_id, param_odoo_id)
+
+    def test__get_or_create_static_odoo_id__existing_update(self):
+        afp_obj = self.openerp.pool.get("account.fiscal.position")
+        afp_id = afp_obj.create(self.cursor, self.uid, {'name': 'Test Static AFP'}, context={})
+
+        param_odoo_id = 123
+        odoo_id = self.os_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, param_odoo_id, context={}
+        )
+        self.assertEqual(odoo_id, param_odoo_id)
+
+        os_ids_1 = self.os_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.fiscal.position'),
+            ('res_id', '=', afp_id),
+        ])
+        self.assertEqual(len(os_ids_1), 1)
+
+        param_odoo_id2 = 456
+        odoo_id = self.os_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, param_odoo_id2, context={}
+        )
+
+        os_ids_2 = self.os_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.fiscal.position'),
+            ('res_id', '=', afp_id),
+        ])
+        self.assertEqual(len(os_ids_2), 1)
+        self.assertEqual(os_ids_1[0], os_ids_2[0])
+        self.assertEqual(odoo_id, param_odoo_id2)
+
+    def test__get_or_create_static_odoo_id__just_get(self):
+        afp_obj = self.openerp.pool.get("account.fiscal.position")
+        afp_id = afp_obj.create(self.cursor, self.uid, {'name': 'Test Static AFP'}, context={})
+
+        param_odoo_id = 123
+        odoo_id = self.os_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, param_odoo_id, context={}
+        )
+        self.assertEqual(odoo_id, param_odoo_id)
+
+        odoo_id = self.os_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, False, context={}
+        )
+        self.assertEqual(odoo_id, param_odoo_id)
