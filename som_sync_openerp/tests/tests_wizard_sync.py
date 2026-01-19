@@ -59,3 +59,58 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
             call(ANY, self.uid, u'res.country', 'sync', 2, context=context),
             call(ANY, self.uid, u'res.country.state', 'sync', 5, context=context),
         ])
+
+    def test_action_sync__static_model(self):
+        # Mock syncronize_sync method
+        self.sync_obj.syncronize_sync = MagicMock()
+
+        context = {
+            'from_model': 'account.fiscal.position',
+            'active_ids': [1]
+        }
+        wiz_values = {
+            'odoo_id': 100,
+        }
+        wiz_id = self.wizard_obj.create(self.cursor, self.uid, wiz_values, context=context)
+        wiz = self.wizard_obj.browse(self.cursor, self.uid, wiz_id, context=context)
+        # Ensure is_static is True
+        self.assertTrue(wiz.is_static)
+
+        self.wizard_obj.action_sync(self.cursor, self.uid, [wiz_id], context=context)
+
+        # Verify syncronize_sync was called once
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
+
+        # Verify arguments of the call
+        expected_context = context.copy()
+        expected_context['is_static'] = True
+        expected_context['odoo_id'] = 100
+        self.sync_obj.syncronize_sync.assert_called_with(
+            self.cursor, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
+        )
+
+    def test_action_sync__no_static_model(self):
+        # Mock syncronize_sync method
+        self.sync_obj.syncronize_sync = MagicMock()
+
+        context = {
+            'from_model': 'res.partner',
+            'active_ids': [1]
+        }
+        wiz_values = {}
+        wiz_id = self.wizard_obj.create(self.cursor, self.uid, wiz_values, context=context)
+        wiz = self.wizard_obj.browse(self.cursor, self.uid, wiz_id, context=context)
+        # Ensure is_static is False
+        self.assertFalse(wiz.is_static)
+
+        self.wizard_obj.action_sync(self.cursor, self.uid, [wiz_id], context=context)
+
+        # Verify syncronize_sync was called once
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
+
+        # Verify arguments of the call
+        expected_context = context.copy()
+        expected_context['is_static'] = False
+        self.sync_obj.syncronize_sync.assert_called_with(
+            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+        )
