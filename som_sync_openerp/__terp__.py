@@ -10,6 +10,7 @@
         'l10n_ES_partner',
         'base_extended_som',
         'base_iban',
+        'account_payment_extension',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",
