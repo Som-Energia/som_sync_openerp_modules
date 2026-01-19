@@ -189,5 +189,25 @@
             <field name="value"
                    eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_fiscal_position'))"/>
         </record>
+
+        <record id="action_wizard_sync_odoo_from_account_payment_term" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{'from_model': 'account.payment.term'}"/>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_account_payment_term" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">account.payment.term</field>
+            <field name="value"
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_payment_term'))"/>
+        </record>
+
     </data>
 </openerp>

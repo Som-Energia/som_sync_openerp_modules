@@ -23,6 +23,7 @@ MAPPING_MODELS_ENTITIES = {
 
 STATIC_MODELS = [
     'account.fiscal.position',
+    'account.payment.term',
 ]
 
 # Mapping of models: key -> erp model, value -> odoo endpoint sufix
