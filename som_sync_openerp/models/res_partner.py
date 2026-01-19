@@ -23,11 +23,10 @@ class ResPartner(osv.osv):
     }
 
     MAPPING_FK = {
-        # 'property_account_position_id': 'account.fiscal.position', #'fiscal_position'
         # 'property_payment_term_id': 'account.payment.term', #'payment_term'
         'property_account_receivable': 'account.account',  # 'account_receivable
         'property_account_payable': 'account.account',  # 'account_payable'
-        'property_account_position': 'account.fiscal.position',
+        'property_account_position': 'account.fiscal.position',  # 'account.fiscal.position'
     }
 
     MAPPING_CONSTANTS = {

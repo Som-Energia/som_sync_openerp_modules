@@ -19,20 +19,28 @@ class WizardSyncObjectOdoo(osv.osv_memory):
         sync_obj = self.pool.get('odoo.sync')
         # Support execution from model odoo.sync
         wiz = self.browse(cursor, uid, ids[0], context=context)
+        context['is_static'] = wiz.is_static
+        if wiz.is_static:
+            if not wiz.odoo_id:
+                raise osv.except_osv(
+                    "Error",
+                    "You must specify an Odoo ID when syncing a static model."
+                )
+            if len(active_ids) > 1:
+                raise osv.except_osv(
+                    "Error",
+                    "You can only sync one record at a time for static models."
+                )
+            context['odoo_id'] = wiz.odoo_id
         if from_model == 'odoo.sync':
             for _id in active_ids:
+                # Get the real model and res_id from odoo.sync record
                 sync_data = sync_obj.browse(cursor, uid, _id)
                 from_res_model = sync_data.model.model
                 erp_id = sync_data.res_id
                 sync_obj.syncronize_sync(
                     cursor, uid, from_res_model, 'sync', erp_id, context=context
                 )
-            return {'type': 'ir.actions.act_window_close'}
-        elif wiz.is_static:
-            context['odoo_id'] = wiz.odoo_id
-            sync_obj.syncronize_sync(
-                cursor, uid, from_model, 'sync', active_ids[0], context=context
-            )
             return {'type': 'ir.actions.act_window_close'}
 
         for record_id in active_ids:
@@ -46,7 +54,15 @@ class WizardSyncObjectOdoo(osv.osv_memory):
         if context is None:
             context = {}
         from_model = context.get('from_model')
-        return from_model in STATIC_MODELS
+        is_static = from_model in STATIC_MODELS
+        if not is_static and from_model == 'odoo.sync':
+            # we check if model of odoo.sync is static
+            active_ids = context.get('active_ids', [])
+            sync_obj = self.pool.get('odoo.sync')
+            sync_data = sync_obj.browse(cursor, uid, active_ids[0])
+            from_res_model = sync_data.model.model
+            is_static = from_res_model in STATIC_MODELS
+        return is_static
 
     _columns = {
         "state": fields.selection([("init", "Init"), ("end", "End")], "State"),

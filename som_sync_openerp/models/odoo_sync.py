@@ -152,10 +152,9 @@ class OdooSync(osv.osv):
         """
         if context is None:
             context = {}
-
         # Check if model is static
-        if model in STATIC_MODELS:
-            odoo_id = self.get_static_odoo_sync_record(
+        if model in STATIC_MODELS or context.get('is_static', False):
+            odoo_id = self.get_or_create_static_odoo_id(
                 cursor, uid, model, openerp_id, context.get('odoo_id', False), context
             )
             return odoo_id, openerp_id
@@ -278,7 +277,7 @@ class OdooSync(osv.osv):
 
         return odoo_id, erp_id
 
-    def get_static_odoo_sync_record(
+    def get_or_create_static_odoo_id(
             self, cursor, uid, model, openerp_id, odoo_id=False, context={}):
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
