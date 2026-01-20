@@ -49,6 +49,7 @@ MAPPING_MODELS_POST = {
 
 # Mapping of modles to patch
 MAPPING_MODELS_PATCH = {
+    'res.partner': 'partner',
 }
 
 
@@ -102,6 +103,8 @@ class OdooSync(osv.osv):
                 if not odoo_id:
                     raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
                 data[fk_field] = odoo_id
+            else:
+                data[fk_field] = None
 
         # Map fields to sync
         result_data = {}
@@ -138,6 +141,19 @@ class OdooSync(osv.osv):
             print("MAX ATTEMPS REACHED. SKIPPING SYNC FOR RECORD:", model, openerp_id)
             raise ERPObjectNotExistsException("{},{}".format(model, openerp_id))
         return True
+
+    def get_dict_to_patch(self, cursor, uid, erp_data, odoo_data):
+        modified_fields = {}
+        for key in odoo_data.keys():
+            if key in erp_data:
+                odoo_field_data = odoo_data[key]
+                if isinstance(odoo_field_data, list):
+                    odoo_field_data = odoo_field_data[0]
+                if isinstance(odoo_field_data, dict):
+                    odoo_field_data = odoo_field_data['id']
+                if erp_data[key] != odoo_field_data:
+                    modified_fields[key] = erp_data[key]
+        return modified_fields
 
     @job(queue='sync_odoo', timeout=3600)
     def syncronize(self, cursor, uid,
@@ -224,15 +240,19 @@ class OdooSync(osv.osv):
                         })
 
                 if MAPPING_MODELS_PATCH.get(model, False):
-                    # WIP: Update logic for existing records in Odoo
                     erp_data.pop('pnt_erp_id', False)
                     odoo_metadata.pop('company_id', False)
                     odoo_metadata.pop('company_name', False)
-                    # for account we need https://github.com/puntsistemes/som-energia_odoo/pull/39
-                    # compare erp_data and odoo_metadata and if different update Odoo
-                    if erp_data != odoo_metadata:
-                        self.update_odoo_record(cursor, uid, model, odoo_id, erp_data, context)
-
+                    dict_to_patch = self.get_dict_to_patch(cursor, uid, erp_data, odoo_metadata)
+                    if dict_to_patch:
+                        success, msg = self.update_odoo_record(
+                            cursor, uid, model, odoo_id, erp_id, dict_to_patch, context)
+                        if not success:
+                            sync_vals.update({
+                                'sync_state': 'error',
+                                'odoo_last_update_result': msg,
+                                'update_last_sync': True,
+                            })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
                 odoo_id, msg = self.create_odoo_record(
@@ -330,9 +350,22 @@ class OdooSync(osv.osv):
             raise CreationNotSupportedException(model)
         return False, ''
 
-    def update_odoo_record(self, cursor, uid, model, odoo_id, data, context={}):
+    def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context={}):
         # TODO: needs an endpoint with PATCH operation to implement this
-        raise UpdateNotSupportedException(model)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        url_base = '{}{}/{}/{}'.format(
+            odoo_url_api, MAPPING_MODELS_PATCH.get(model), odoo_id, erp_id)
+        headers = {
+            "X-API-Key": odoo_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        response = requests.patch(url_base, json=data, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'success' in data and data.get('success', False):
+                return True, ''
+        return False, response.text
 
     def exists(self, cursor, uid, model, url_sufix, context={}):
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
@@ -355,7 +388,6 @@ class OdooSync(osv.osv):
             data = response.json()
             if data and 'success' in data and data.get('success', False):
                 return data.get('data')
-        print("ERROR GETTING DATA FROM ODOO:", response.status_code, response.text)
         return False
 
     def update_odoo_id(self, cursor, uid, model, openerp_id, odoo_id, context=None):
