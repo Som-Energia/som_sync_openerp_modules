@@ -25,6 +25,7 @@ STATIC_MODELS = [
     'account.fiscal.position',
     'account.payment.term',
     'payment.type',
+    'res.country',
 ]
 
 # Mapping of models: key -> erp model, value -> odoo endpoint sufix
@@ -214,7 +215,8 @@ class OdooSync(osv.osv):
 
             # Check if the record already exists in Odoo
             endpoint_suffix = rp_obj.get_endpoint_suffix(cursor, uid, openerp_id, context=context)
-            odoo_id, erp_id, odoo_metadata = self.exists(cursor, uid, model, endpoint_suffix)
+            odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
+                cursor, uid, model, endpoint_suffix, openerp_id, context=context)
 
             if odoo_id:
                 if not erp_id:
@@ -367,14 +369,22 @@ class OdooSync(osv.osv):
                 return True, ''
         return False, response.text
 
-    def exists(self, cursor, uid, model, url_sufix, context={}):
+    def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context={}):
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
-        if data:
-            if isinstance(data, list):
+        if not data:
+            return False, False, False
+        if isinstance(data, list):
+            if len(data) == 0:
+                return False, False, False
+            elif len(data) == 1:
                 data = data[0]
-            metadata = data.get('metadata', [{}])[0]
-            return data.get('odoo_id', False), data.get('erp_id', False), metadata
-        return False, False, False
+            else:  # multiple records returned, we filter by erp_id
+                data = [d for d in data if d.get('erp_id', False) == erp_id]
+                if len(data) == 0:
+                    return False, False, False
+                data = data[0]
+        metadata = data.get('metadata', [{}])[0]
+        return data.get('odoo_id', False), data.get('erp_id', False), metadata
 
     def get_odoo_data(self, cursor, uid, model, url_sufix, context={}):
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
