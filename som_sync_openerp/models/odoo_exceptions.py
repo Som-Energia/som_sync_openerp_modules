@@ -41,3 +41,17 @@ class UpdateNotSupportedException(Exception):
 
     def __str__(self):
         return self.__repr__()
+
+
+class ForeingKeyNotAvailable(Exception):
+    """Foreign Key required for operation is not available in Odoo API for this model"""
+
+    def __init__(self, msg):
+        super(ForeingKeyNotAvailable, self).__init__(msg)
+        self.msg = "Odoo no ha permés la creació o obtenció de la FK: {}".format(msg)
+
+    def __repr__(self):
+        return self.msg
+
+    def __str__(self):
+        return self.__repr__()

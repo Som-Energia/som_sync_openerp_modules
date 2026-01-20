@@ -12,12 +12,13 @@ class ResPartner(osv.osv):
         'lang': 'lang',
         'vat': 'vat',
         'customer': 'is_customer',
-        # 'supplier': 'is_supplier',
+        'supplier': 'is_supplier',
         'property_account_receivable': 'property_account_receivable_id',  # 'account_receivable
         'property_account_payable': 'property_account_payable_id',  # 'account_payable'
-        'property_account_position': 'property_account_position_id',
-        'property_payment_term': 'property_payment_term_id',
-        'payment_type_customer': 'property_inbound_payment_method_line_id',
+        'property_account_position': 'property_account_position_id',  # 'account.fiscal.position'
+        'property_payment_term': 'property_payment_term_id',  # 'account.payment.term'
+        'payment_type_customer': 'property_inbound_payment_method_line_id',  # 'payment.type'
+        'payment_type_supplier': 'property_outbound_payment_method_line_id',  # 'payment.type'
     }
 
     MAPPING_FK = {
@@ -26,6 +27,7 @@ class ResPartner(osv.osv):
         'property_account_position': 'account.fiscal.position',  # 'account.fiscal.position'
         'property_payment_term': 'account.payment.term',  # 'account.payment.term'
         'payment_type_customer': 'payment.type',  # 'payment.type'
+        'payment_type_supplier': 'payment.type',  # 'payment.type'
     }
 
     MAPPING_CONSTANTS = {

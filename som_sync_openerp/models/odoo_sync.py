@@ -5,7 +5,7 @@ from osv import osv, fields
 from oorq.decorators import job
 import requests
 from datetime import datetime
-from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException  # noqa: E501
+from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
 
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
@@ -95,13 +95,13 @@ class OdooSync(osv.osv):
             context_copy['from_fk_sync'] = True
         for fk_field in keys_fk:
             model_fk = rp_obj.MAPPING_FK[fk_field]
-            id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field][0]
-            odoo_id, erp_id = self.syncronize_sync(
-                cursor, uid, model_fk, 'sync', id_fk, context_copy)
-            if not odoo_id:
-                # TODO: handle missing foreign key
-                print("FK NOT FOUND IN ODOO:", model_fk, id_fk)
-            data[fk_field] = odoo_id
+            id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
+            if id_fk:
+                odoo_id, erp_id = self.syncronize_sync(
+                    cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                if not odoo_id:
+                    raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                data[fk_field] = odoo_id
 
         # Map fields to sync
         result_data = {}
@@ -250,13 +250,9 @@ class OdooSync(osv.osv):
                         'update_last_sync': True,
                     })
 
-        except CreationNotSupportedException as e:
-            sync_vals.update({
-                'sync_state': 'error',
-                'odoo_last_update_result': str(e),
-                'update_last_sync': True,
-            })
-        except UpdateNotSupportedException as e:
+        except (
+            CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
+        ) as e:
             sync_vals.update({
                 'sync_state': 'error',
                 'odoo_last_update_result': str(e),
