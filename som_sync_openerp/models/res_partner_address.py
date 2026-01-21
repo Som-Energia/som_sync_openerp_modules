@@ -12,14 +12,14 @@ class ResPartnerAddress(osv.osv):
         'email': 'email',
         'phone': 'phone',
         'street': 'street',
-        'zip': 'code_zip',
+        'zip': 'zip',
         'partner_id': 'parent_id',
         'state_id': 'state_id',
         # 'country_id': 'country_id',
     }
     MAPPING_FK = {
         'state_id': 'res.country.state',
-        # 'country_id': 'res.country',
+        'country_id': 'res.country',
         'partner_id': 'res.partner',
     }
 
