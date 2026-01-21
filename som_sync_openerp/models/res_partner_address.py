@@ -28,6 +28,10 @@ class ResPartnerAddress(osv.osv):
         'is_company': False,
         # TODO: Not lang in partner.address, worthit get it from partner?
         'lang': 'ca_ES',
+        # TODO: Not is_customer in partner.address, worthit get it from partner?
+        'is_customer': True,
+        # TODO: Not is_supplier in partner.address, worthit get it from partner?
+        'is_supplier': False,
     }
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):
