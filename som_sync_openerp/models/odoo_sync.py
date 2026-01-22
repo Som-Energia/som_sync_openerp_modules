@@ -81,26 +81,18 @@ class OdooSync(osv.osv):
         return res
 
     def get_model_vals_to_sync(self, cursor, uid, model, id, context={}):
-
         rp_obj = self.pool.get(model)
+
+        result_data = {}
 
         has_mapping_fk = (
             hasattr(rp_obj, 'MAPPING_FK') and rp_obj.MAPPING_FK
             and isinstance(rp_obj.MAPPING_FK, dict)
         )
-
-        # has_mapping_related_fields = (
-        #     hasattr(rp_obj, 'MAPPING_RELATED_FIELDS') and rp_obj.MAPPING_RELATED_FIELDS
-        #     and isinstance(rp_obj.MAPPING_RELATED_FIELDS, dict)
-        # )
         keys_no_direct_read = (
             rp_obj.MAPPING_FK.keys() if has_mapping_fk
             else []
         )
-        # keys_no_direct_read += (
-        #     rp_obj.MAPPING_RELATED_FIELDS.keys() if has_mapping_related_fields
-        #     else []
-        # )
 
         # Read fields that are not foreign keys or related fields
         keys_to_read = [
@@ -114,7 +106,7 @@ class OdooSync(osv.osv):
         has_related_fields = hasattr(rp_obj, 'get_related_values')
         if has_related_fields:
             related_values = rp_obj.get_related_values(cursor, uid, id, context=context)
-            data.update(related_values)
+            result_data.update(related_values)
 
         # Read and sync foreign key fields
         if has_mapping_fk:
@@ -136,14 +128,17 @@ class OdooSync(osv.osv):
                     data[fk_field] = None
 
         # Map fields to sync
-        result_data = {}
         for erp_key, odoo_key in rp_obj.MAPPING_FIELDS_TO_SYNC.items():
             if erp_key in data:
                 result_data[odoo_key] = data[erp_key]
 
         # Add constant fields
-        for erp_key, constant_value in rp_obj.MAPPING_CONSTANTS.items():
-            result_data[erp_key] = constant_value
+        has_mapping_constants = (
+            hasattr(rp_obj, 'MAPPING_CONSTANTS') and rp_obj.MAPPING_CONSTANTS
+            and isinstance(rp_obj.MAPPING_CONSTANTS, dict)
+        )
+        if has_mapping_constants:
+            result_data.update(rp_obj.MAPPING_CONSTANTS)
 
         return result_data
 
