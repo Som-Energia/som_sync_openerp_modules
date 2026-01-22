@@ -15,10 +15,10 @@ class ResPartnerAddress(osv.osv):
         'zip': 'zip',
         'partner_id': 'parent_id',
         'state_id': 'state_id',
-        # related fields
-        'lang': 'lang',
-        'is_customer': 'is_customer',
-        'is_supplier': 'is_supplier',
+        # # related fields
+        # 'lang': 'lang',
+        # 'is_customer': 'is_customer',
+        # 'is_supplier': 'is_supplier',
     }
     MAPPING_FK = {
         'state_id': 'res.country.state',
@@ -37,11 +37,20 @@ class ResPartnerAddress(osv.osv):
         # 'is_supplier': False,
     }
 
-    MAPPING_RELATED_FIELDS = {
-        'is_customer': 'partner_id.is_customer',
-        'is_supplier': 'partner_id.is_supplier',
-        'lang': 'partner_id.lang',
-    }
+    # MAPPING_RELATED_FIELDS = {
+    #     'is_customer': 'partner_id.is_customer',
+    #     'is_supplier': 'partner_id.is_supplier',
+    #     'lang': 'partner_id.lang',
+    # }
+
+    def get_related_values(self, cr, uid, id, context={}):
+        address = self.browse(cr, uid, id, context=context)
+        res = {
+            'is_customer': address.partner_id.is_customer,
+            'is_supplier': address.partner_id.is_supplier,
+            'lang': address.partner_id.lang,
+        }
+        return res
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):
         # /contact/{parent_id}/{ttype}

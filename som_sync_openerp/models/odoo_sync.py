@@ -80,15 +80,8 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
-    def get_attr_path(self, record, path):
-        value = record
-        for attr in path.split('.'):
-            value = getattr(value, attr, False)
-            if not value:
-                break
-        return value
-
     def get_model_vals_to_sync(self, cursor, uid, model, id, context={}):
+
         rp_obj = self.pool.get(model)
 
         has_mapping_fk = (
@@ -96,19 +89,18 @@ class OdooSync(osv.osv):
             and isinstance(rp_obj.MAPPING_FK, dict)
         )
 
-        has_mapping_related_fields = (
-            hasattr(rp_obj, 'MAPPING_RELATED_FIELDS') and rp_obj.MAPPING_RELATED_FIELDS
-            and isinstance(rp_obj.MAPPING_RELATED_FIELDS, dict)
-        )
-
+        # has_mapping_related_fields = (
+        #     hasattr(rp_obj, 'MAPPING_RELATED_FIELDS') and rp_obj.MAPPING_RELATED_FIELDS
+        #     and isinstance(rp_obj.MAPPING_RELATED_FIELDS, dict)
+        # )
         keys_no_direct_read = (
             rp_obj.MAPPING_FK.keys() if has_mapping_fk
             else []
         )
-        keys_no_direct_read += (
-            rp_obj.MAPPING_RELATED_FIELDS.keys() if has_mapping_related_fields
-            else []
-        )
+        # keys_no_direct_read += (
+        #     rp_obj.MAPPING_RELATED_FIELDS.keys() if has_mapping_related_fields
+        #     else []
+        # )
 
         # Read fields that are not foreign keys or related fields
         keys_to_read = [
@@ -119,12 +111,10 @@ class OdooSync(osv.osv):
         data = rp_obj.read(cursor, uid, id, keys_to_read)
 
         # Read related fields if any
-        if has_mapping_related_fields:
-            rp_record = False
-            rp_record = rp_obj.browse(cursor, uid, id, context=context)
-            for related_field in rp_obj.MAPPING_RELATED_FIELDS.keys():
-                value = self.get_attr_path(rp_record, rp_obj.MAPPING_RELATED_FIELDS[related_field])
-                data[related_field] = value
+        has_related_fields = hasattr(rp_obj, 'get_related_values')
+        if has_related_fields:
+            related_values = rp_obj.get_related_values(cursor, uid, id, context=context)
+            data.update(related_values)
 
         # Read and sync foreign key fields
         if has_mapping_fk:
