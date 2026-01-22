@@ -15,7 +15,10 @@ class ResPartnerAddress(osv.osv):
         'zip': 'zip',
         'partner_id': 'parent_id',
         'state_id': 'state_id',
-        # 'country_id': 'country_id',
+        # related fields
+        'lang': 'lang',
+        'is_customer': 'is_customer',
+        'is_supplier': 'is_supplier',
     }
     MAPPING_FK = {
         'state_id': 'res.country.state',
@@ -26,12 +29,18 @@ class ResPartnerAddress(osv.osv):
     MAPPING_CONSTANTS = {
         'type': 'invoice',
         'is_company': False,
-        # TODO: Not lang in partner.address, worthit get it from partner?
-        'lang': 'ca_ES',
-        # TODO: Not is_customer in partner.address, worthit get it from partner?
-        'is_customer': True,
-        # TODO: Not is_supplier in partner.address, worthit get it from partner?
-        'is_supplier': False,
+        # # TODO: Not lang in partner.address, worthit get it from partner?
+        # 'lang': 'ca_ES',
+        # # TODO: Not is_customer in partner.address, worthit get it from partner?
+        # 'is_customer': True,
+        # # TODO: Not is_supplier in partner.address, worthit get it from partner?
+        # 'is_supplier': False,
+    }
+
+    MAPPING_RELATED_FIELDS = {
+        'is_customer': 'partner_id.is_customer',
+        'is_supplier': 'partner_id.is_supplier',
+        'lang': 'partner_id.lang',
     }
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):

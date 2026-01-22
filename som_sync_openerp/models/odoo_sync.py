@@ -80,32 +80,70 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
+    def get_attr_path(self, record, path):
+        value = record
+        for attr in path.split('.'):
+            value = getattr(value, attr, False)
+            if not value:
+                break
+        return value
+
     def get_model_vals_to_sync(self, cursor, uid, model, id, context={}):
         rp_obj = self.pool.get(model)
 
-        # Read fields that are not foreign keys
-        keys_to_read = [key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
-                        if key not in rp_obj.MAPPING_FK.keys()]
+        has_mapping_fk = (
+            hasattr(rp_obj, 'MAPPING_FK') and rp_obj.MAPPING_FK
+            and isinstance(rp_obj.MAPPING_FK, dict)
+        )
+
+        has_mapping_related_fields = (
+            hasattr(rp_obj, 'MAPPING_RELATED_FIELDS') and rp_obj.MAPPING_RELATED_FIELDS
+            and isinstance(rp_obj.MAPPING_RELATED_FIELDS, dict)
+        )
+
+        keys_no_direct_read = (
+            rp_obj.MAPPING_FK.keys() if has_mapping_fk
+            else []
+        )
+        keys_no_direct_read += (
+            rp_obj.MAPPING_RELATED_FIELDS.keys() if has_mapping_related_fields
+            else []
+        )
+
+        # Read fields that are not foreign keys or related fields
+        keys_to_read = [
+            key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
+            if key not in keys_no_direct_read
+        ]
         # TODO: check in prod if record id is already created when async
         data = rp_obj.read(cursor, uid, id, keys_to_read)
 
+        # Read related fields if any
+        if has_mapping_related_fields:
+            rp_record = False
+            rp_record = rp_obj.browse(cursor, uid, id, context=context)
+            for related_field in rp_obj.MAPPING_RELATED_FIELDS.keys():
+                value = self.get_attr_path(rp_record, rp_obj.MAPPING_RELATED_FIELDS[related_field])
+                data[related_field] = value
+
         # Read and sync foreign key fields
-        keys_fk = [key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
-                   if key in rp_obj.MAPPING_FK.keys()]
-        if keys_fk:
-            context_copy = self._clean_context_update_data(cursor, uid, context)
-            context_copy['from_fk_sync'] = True
-        for fk_field in keys_fk:
-            model_fk = rp_obj.MAPPING_FK[fk_field]
-            id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
-            if id_fk:
-                odoo_id, erp_id = self.syncronize_sync(
-                    cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
-                if not odoo_id:
-                    raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
-                data[fk_field] = odoo_id
-            else:
-                data[fk_field] = None
+        if has_mapping_fk:
+            keys_fk = [key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
+                       if key in rp_obj.MAPPING_FK.keys()]
+            if keys_fk:
+                context_copy = self._clean_context_update_data(cursor, uid, context)
+                context_copy['from_fk_sync'] = True
+            for fk_field in keys_fk:
+                model_fk = rp_obj.MAPPING_FK[fk_field]
+                id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
+                if id_fk:
+                    odoo_id, erp_id = self.syncronize_sync(
+                        cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                    if not odoo_id:
+                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                    data[fk_field] = odoo_id
+                else:
+                    data[fk_field] = None
 
         # Map fields to sync
         result_data = {}
