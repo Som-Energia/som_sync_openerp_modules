@@ -51,6 +51,7 @@ MAPPING_MODELS_POST = {
 # Mapping of modles to patch
 MAPPING_MODELS_PATCH = {
     'res.partner': 'partner',
+    'res.partner.address': 'partner',
 }
 
 
@@ -175,7 +176,8 @@ class OdooSync(osv.osv):
                     odoo_field_data = odoo_field_data[0]
                 if isinstance(odoo_field_data, dict):
                     odoo_field_data = odoo_field_data['id']
-                if erp_data[key] != odoo_field_data:
+                erp_value = False if erp_data[key] is None else erp_data[key]
+                if erp_value != odoo_field_data:
                     modified_fields[key] = erp_data[key]
         return modified_fields
 
@@ -512,6 +514,14 @@ class OdooSync(osv.osv):
             vals.update({
                 'odoo_last_sync_at': str_now,
                 'odoo_last_update_result': '',
+            })
+            update = True
+
+        # Case Odoo_id change
+        if sync_record.odoo_id != odoo_id:
+            vals.update({
+                'odoo_last_sync_at': str_now,
+                'sync_state': 'synced',
             })
             update = True
 
