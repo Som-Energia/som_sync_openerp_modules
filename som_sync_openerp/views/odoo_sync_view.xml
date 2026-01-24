@@ -45,5 +45,86 @@
 
         <menuitem id="menu_folder_odoo_sync" name="Odoo Sync" parent="base.menu_administration" sequence="99"/>
         <menuitem action="action_odoo_sync_tree" id="menu_action_odoo_sync_tree" parent="menu_folder_odoo_sync"/>
+
+        <!-- Action to get synced records with Odoo for res.partner -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.partner')]"
+            id="get_synced_records_odoo_action_partner"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.partner"/>
+
+        <!-- Action to get synced records with Odoo for res.partner.address -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.partner.address')]"
+            id="get_synced_records_odoo_action_partner_address"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.partner.address"/>
+
+        <!-- Action to get synced records with Odoo for res.country -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.country')]"
+            id="get_synced_records_odoo_action_country"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.country"/>
+
+        <!-- Action to get synced records with Odoo for res.country.state -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.country.state')]"
+            id="get_synced_records_odoo_action_country_state"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.country.state"/>
+
+        <!-- Action to get synced records with Odoo for res.municipi -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.municipi')]"
+            id="get_synced_records_odoo_action_municipi"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.municipi"/>
+
+        <!-- Action to get synced records with Odoo for res.partner.bank -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'res.partner.bank')]"
+            id="get_synced_records_odoo_action_partner_bank"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="res.partner.bank"/>
+
+        <!-- Action to get synced records with Odoo for account.account -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.account')]"
+            id="get_synced_records_odoo_action_account"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.account"/>
+
+        <!-- Action to get synced records with Odoo for account.fiscal.position -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.fiscal.position')]"
+            id="get_synced_records_odoo_action_fiscal_position"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.fiscal.position"/>
+
+        <!-- Action to get synced records with Odoo for account.payment.term -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.payment.term')]"
+            id="get_synced_records_odoo_action_payment_term"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.payment.term"/>
+
+        <!-- Action to get synced records with Odoo for payment.type -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'payment.type')]"
+            id="get_synced_records_odoo_action_payment_type"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="payment.type"/>
+
     </data>
 </openerp>
