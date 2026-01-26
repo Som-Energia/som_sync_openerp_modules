@@ -71,6 +71,46 @@ class OdooSync(osv.osv):
                                  'Odoo connection parameters not found.')
         return odoo_url_api, odoo_api_key
 
+    def sync_model_enabled(self, cursor, uid, model):
+        config_obj = self.pool.get('res.config')
+        list_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
+        if model in list_models_to_sync:
+            return True
+        return False
+
+    def sync_model_enabled_amplified(self, cursor, uid, model):
+        """
+            odoo_erp_models_to_sync = [
+                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.partner', 'auto_sync': False, 'async_enabled': True}]
+            auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
+                otherwise sync only on-demand.
+            async_enabled: if True, sync is done asynchronously
+        """
+        config_obj = self.pool.get('res.config')
+        dict_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
+        for dict_model in dict_models_to_sync:
+            if dict_model['model'] == model:
+                return True, dict_model['auto_sync'], dict_model['async_enabled']
+        return False, False, False
+
+    def common_sync_model_create(self, cursor, uid, model, ids, context={}):
+        try:
+            sync_enabled, auto_sync, async_enabled = (
+                self.sync_model_enabled_amplified(cursor, uid, model))
+            if sync_enabled and auto_sync:
+                if async_enabled:
+                    # Use job queue for async sync
+                    self.syncronize(
+                        cursor, uid, model, 'create', ids, context=context)
+                else:
+                    # Sync synchronously
+                    self.syncronize_sync(
+                        cursor, uid, model, 'create', ids, context=context)
+        except Exception:
+            logger = logging.getLogger('openerp.odoo.sync')
+            logger.exception("Error during common_sync_model_create for model {}".format(model))
+
     def _clean_context_update_data(self, cursor, uid, context={}):
         res = context.copy()
         res.pop('update_last_sync', False)
@@ -143,13 +183,6 @@ class OdooSync(osv.osv):
 
         return result_data
 
-    def sync_model_enabled(self, cursor, uid, model):
-        config_obj = self.pool.get('res.config')
-        list_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
-        if model in list_models_to_sync:
-            return True
-        return False
-
     def check_erp_record_exist(self, cursor, uid, model, openerp_id):
         rp_obj = self.pool.get(model)
         max_attemps = 5
@@ -196,6 +229,11 @@ class OdooSync(osv.osv):
         """
         if context is None:
             context = {}
+
+        # Ensure openerp_id is an integer if passed as a list
+        if isinstance(openerp_id, list):
+            openerp_id = openerp_id[0]
+
         # Check if model is static
         if model in STATIC_MODELS or context.get('is_static', False):
             odoo_id = self.get_or_create_static_odoo_id(
@@ -204,12 +242,12 @@ class OdooSync(osv.osv):
             return odoo_id, openerp_id
 
         # Early return if synchronization is disabled for this specific model
-        if not self.sync_model_enabled(cursor, uid, model):
+        # in this case auto_sync and async_enabled are not relevant.
+        # We need this check for on-demand syncs.
+        sync_enabled, auto_sync, async_enabled = (
+            self.sync_model_enabled_amplified(cursor, uid, model))
+        if not sync_enabled:
             return False, False
-
-        # Ensure openerp_id is an integer if passed as a list
-        if isinstance(openerp_id, list):
-            openerp_id = openerp_id[0]
 
         logger = logging.getLogger('openerp.odoo.sync')
         logger.info("Odoo syncronize {} with id {}".format(model, openerp_id))
