@@ -12,6 +12,8 @@ class ResMunicipi(osv.osv):
     }
     MAPPING_FK = {
     }
+    MAPPING_CONSTANTS = {
+    }
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):
         municipi = self.browse(cr, uid, id, context=context)

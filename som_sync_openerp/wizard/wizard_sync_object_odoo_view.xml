@@ -9,6 +9,10 @@
                 <form string="Synchronize with Odoo">
                     <label string="This wizard will synchronize the selected records with Odoo." colspan="4"/>
                     <separator colspan="4"/>
+                    <field name="is_static" colspan="4" invisible="1"/>
+                    <field name="odoo_id" colspan="4"
+                        attrs="{'invisible': [('is_static', '=', False)],
+                                'readonly': [('is_static', '=', False)]}"/>
                     <group colspan="4" col="2">
                         <button special="cancel" string="Cancel" icon="gtk-cancel"/>
                         <button name="action_sync" string="Synchronize" type="object" icon="gtk-execute"/>
@@ -51,6 +55,24 @@
             <field name="key">action</field>
             <field name="model">res.partner</field>
             <field name="value" eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_res_partner'))" />
+        </record>
+        <!-- action and value for res.partner.address -->
+        <record id="action_wizard_sync_odoo_from_res_partner_address" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{'from_model': 'res.partner.address'}"/>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_res_partner_address" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">res.partner.address</field>
+            <field name="value" eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_res_partner_address'))" />
         </record>
         <!-- action and value for res.country -->
         <record id="action_wizard_sync_odoo_from_res_country" model="ir.actions.act_window">
@@ -147,5 +169,64 @@
             <field name="value"
                    eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_res_partner_bank'))"/>
         </record>
+
+        <!-- Wizard in static models -->
+        <record id="action_wizard_sync_odoo_from_account_fiscal_position" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{'from_model': 'account.fiscal.position'}"/>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_account_fiscal_position" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">account.fiscal.position</field>
+            <field name="value"
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_fiscal_position'))"/>
+        </record>
+
+        <record id="action_wizard_sync_odoo_from_account_payment_term" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{'from_model': 'account.payment.term'}"/>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_account_payment_term" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">account.payment.term</field>
+            <field name="value"
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_payment_term'))"/>
+        </record>
+
+        <record id="action_wizard_sync_odoo_from_payment_type" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{'from_model': 'payment.type'}"/>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_payment_type" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">payment.type</field>
+            <field name="value"
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_payment_type'))"/>
+        </record>
+
     </data>
 </openerp>

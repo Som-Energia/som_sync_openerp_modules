@@ -12,6 +12,8 @@ class ResCountry(osv.osv):
     }
     MAPPING_FK = {
     }
+    MAPPING_CONSTANTS = {
+    }
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):
         country = self.browse(cr, uid, id, context=context)
@@ -25,8 +27,9 @@ class ResCountry(osv.osv):
         ids = super(ResCountry, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')
-        sync_obj.syncronize(
-            cr, uid, self._name, 'create', ids, context=context)
+        sync_obj.common_sync_model_create(
+            cr, uid, self._name, ids, context=context
+        )
 
         return ids
 

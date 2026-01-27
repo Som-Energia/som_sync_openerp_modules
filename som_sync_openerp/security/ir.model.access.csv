@@ -3,3 +3,4 @@
 "access_manager_odoo_sync","odoo.sync","model_odoo_sync","base.group_system",1,1,1,0
 "access_admin_odoo_sync","odoo.sync","model_odoo_sync","base.group_system",1,1,1,1
 "access_wizard_sync_object_odoo","wizard.sync.object.odoo","model_wizard_sync_object_odoo","base.group_user",1,1,1,1
+"access_wizard_open_related_record","wizard.open.related.record","model_wizard_open_related_record","base.group_user",1,1,1,1

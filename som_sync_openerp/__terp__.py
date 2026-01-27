@@ -10,6 +10,7 @@
         'l10n_ES_partner',
         'base_extended_som',
         'base_iban',
+        'account_payment_extension',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",
@@ -19,6 +20,7 @@
         "data/som_sync_openerp_data.xml",
         "views/odoo_sync_view.xml",
         "wizard/wizard_sync_object_odoo_view.xml",
+        "wizard/wizard_open_related_model_record_view.xml",
         "security/ir.model.access.csv",
     ],
     "installable": True,

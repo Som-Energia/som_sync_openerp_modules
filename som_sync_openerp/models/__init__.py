@@ -7,3 +7,4 @@ from . import res_country_state
 from . import res_municipi
 from . import res_partner_bank
 from . import res_partner
+from . import res_partner_address

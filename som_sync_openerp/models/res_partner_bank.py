@@ -14,6 +14,8 @@ class ResPartnerBank(osv.osv):
     MAPPING_FK = {
         'partner_id': 'res.partner',
     }
+    MAPPING_CONSTANTS = {
+    }
 
     def get_endpoint_suffix(self, cr, uid, id, context={}):
         sync_obj = self.pool.get('odoo.sync')
@@ -30,10 +32,10 @@ class ResPartnerBank(osv.osv):
     def create(self, cr, uid, vals, context={}):
         ids = super(ResPartnerBank, self).create(cr, uid, vals, context=context)
 
-        context['from_create'] = True
         sync_obj = self.pool.get('odoo.sync')
-        sync_obj.syncronize(
-            cr, uid, self._name, 'create', ids, context=context)
+        sync_obj.common_sync_model_create(
+            cr, uid, self._name, ids, context=context
+        )
 
         return ids
 

@@ -13,8 +13,22 @@
         </record>
         <record id="odoo_erp_models_to_sync" model="res.config">
             <field name="name">odoo_erp_models_to_sync</field>
-            <field name="value">['account.account','res.country','res.country.state','res.municipi','res.partner','res.partner.bank']</field>
-            <field name="description">OpenERP models to sync with Odoo</field>
+            <field name="value">
+                [{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.country', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.country.state', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.municipi', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.partner', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.partner.address', 'auto_sync': False, 'async_enabled': True},
+                 {'model': 'res.partner.bank', 'auto_sync': False, 'async_enabled': True}]
+                <!-- ['account.account','res.country','res.country.state','res.municipi','res.partner','res.partner.address','res.partner.bank'] -->
+            </field>
+            <field name="description">
+                OpenERP models to sync with Odoo.
+                auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
+                    otherwise sync only on-demand.
+                async_enabled: if True, sync is done asynchronously
+            </field>
         </record>
     </data>
 </openerp>
