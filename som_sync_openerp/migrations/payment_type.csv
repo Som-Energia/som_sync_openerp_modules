@@ -1,0 +1,8 @@
+"odoo_id","erp_id","payment_type","direccio"
+"369",3,"No remesables","inbound"
+"370",4,"Transferencia","inbound"
+"371",6,"Cobrament Targeta","inbound"
+"372",5,"Intragrup transfer","inbound"
+"373",1,"Recibo domiciliado","inbound"
+"374",2,"Transferencia","inbound"
+"375",0,"Transferencias APi","outbound"
