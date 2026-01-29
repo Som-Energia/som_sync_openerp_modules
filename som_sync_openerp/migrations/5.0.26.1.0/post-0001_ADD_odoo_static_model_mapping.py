@@ -111,4 +111,36 @@ def migrate(cursor, installed_version):
         erp_id_field='erp_id',
         odoo_id_field='odoo_id',
     )
-    logger.info("Static odoo.sync mappings creation completed successfully.")
+    logger.info("Static payment.type mappings creation completed successfully.")
+
+    logger.info("Creating static account.fiscal.position mappings")
+    fiscal_position_csv = get_module_resource(
+        'som_sync_openerp',
+        'migrations',
+        'fiscal_position.csv'
+    )
+    create_static_mappings_from_csv(
+        cursor=cursor,
+        model_name='account.fiscal.position',
+        csv_path=fiscal_position_csv,
+        erp_id_field='erp_id',
+        odoo_id_field='odoo_id',
+    )
+    logger.info("Static account.fiscal.position mappings creation completed successfully.")
+
+    logger.info("Creating static account.payment.term mappings")
+    payment_term_csv = get_module_resource(
+        'som_sync_openerp',
+        'migrations',
+        'payment_term.csv'
+    )
+    create_static_mappings_from_csv(
+        cursor=cursor,
+        model_name='account.payment.term',
+        csv_path=payment_term_csv,
+        erp_id_field='erp_id',
+        odoo_id_field='odoo_id',
+    )
+    logger.info("Static account.payment.term mappings creation completed successfully.")
+
+    logger.info("Static odoo.sync mappings creation finished.")
