@@ -93,10 +93,10 @@ def create_static_mappings_from_csv(
                 )
             else:
                 # Check if the record exists in the target model
-                if not check_record_exists(cursor, model_name, odoo_id, uid):
+                if not check_record_exists(cursor, model_name, erp_id, uid):
                     logger.warning(
                         "Target record %s id %s does not exist. Skipping mapping.",
-                        model_name, odoo_id
+                        model_name, erp_id
                     )
                     continue
 
