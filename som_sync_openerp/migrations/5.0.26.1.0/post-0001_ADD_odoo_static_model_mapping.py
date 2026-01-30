@@ -120,6 +120,21 @@ def migrate(cursor, installed_version):
     logger = logging.getLogger('openerp.migration')
     logger.info("Creating static odoo.sync mappings")
 
+    logger.info("Creating static res.country mappings")
+    res_country_csv = get_module_resource(
+        'som_sync_openerp',
+        'migrations',
+        'res_country.csv'
+    )
+    create_static_mappings_from_csv(
+        cursor=cursor,
+        model_name='res.country',
+        csv_path=res_country_csv,
+        erp_id_field='erp_id',
+        odoo_id_field='odoo_id',
+    )
+    logger.info("Static res.country mappings creation completed successfully.")
+
     logger.info("Creating static payment.type mappings")
     payment_type_csv = get_module_resource(
         'som_sync_openerp',
