@@ -608,6 +608,31 @@ class OdooSync(osv.osv):
 
         return (False, False, False)
 
+    def _get_erp_name(self, cursor, uid, ids, name, args, context=None):
+        if context is None:
+            context = {}
+
+        result = {}
+        for sync in self.browse(cursor, uid, ids, context=context):
+            erp_name = False
+
+            if sync.model and sync.res_id:
+                try:
+                    model_name = sync.model.model
+                    rp_obj = self.pool.get(model_name)
+                    if rp_obj:
+                        rec = rp_obj.read(
+                            cursor, uid, sync.res_id, ['name'], context=context
+                        )
+                        erp_name = rec and rec.get('name') or False
+                except Exception:
+                    # Registro borrado, modelo no cargado, etc.
+                    erp_name = False
+
+            result[sync.id] = erp_name
+
+        return result
+
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),
         'res_id': fields.integer('ERP id'),
@@ -625,6 +650,14 @@ class OdooSync(osv.osv):
             ('error', 'Error'),
             ('static', 'Static'),
         ], 'Syncronization state', required=True),
+        'erp_name': fields.function(
+            _get_erp_name,
+            type='char',
+            size=256,
+            string='ERP Name',
+            method=True,
+            store=False,
+        ),
     }
 
     _sql_constraints = [
