@@ -5,6 +5,22 @@ import pooler
 from addons import get_module_resource
 
 
+def check_record_exists(cursor, model_name, res_id, uid=1):
+    """
+    Check if a record exists in the given model with the specified res_id.
+
+    :param cursor: database cursor
+    :param model_name: OpenERP model name (e.g. 'payment.type')
+    :param res_id: record id to check
+    :param uid: user id (default: 1)
+    :return: True if record exists, False otherwise
+    """
+    pool = pooler.get_pool(cursor.dbname)
+    model_obj = pool.get(model_name)
+    record_ids = model_obj.search(cursor, uid, [('id', '=', res_id)])
+    return bool(record_ids)
+
+
 def create_static_mappings_from_csv(
     cursor,
     model_name,
@@ -23,7 +39,6 @@ def create_static_mappings_from_csv(
     :param odoo_id_field: CSV column name for Odoo id
     :param uid: user id (default: 1)
     """
-
     logger = logging.getLogger('openerp.migration')
     pool = pooler.get_pool(cursor.dbname)
 
@@ -77,6 +92,14 @@ def create_static_mappings_from_csv(
                     model_name, erp_id, odoo_id
                 )
             else:
+                # Check if the record exists in the target model
+                if not check_record_exists(cursor, model_name, odoo_id, uid):
+                    logger.warning(
+                        "Target record %s id %s does not exist. Skipping mapping.",
+                        model_name, odoo_id
+                    )
+                    continue
+
                 # Create new static mapping
                 sync_obj.create(cursor, uid, {
                     'model': model_id,
@@ -103,7 +126,6 @@ def migrate(cursor, installed_version):
         'migrations',
         'payment_type.csv'
     )
-
     create_static_mappings_from_csv(
         cursor=cursor,
         model_name='payment.type',
@@ -117,7 +139,7 @@ def migrate(cursor, installed_version):
     fiscal_position_csv = get_module_resource(
         'som_sync_openerp',
         'migrations',
-        'fiscal_position.csv'
+        'account_fiscal_position.csv'
     )
     create_static_mappings_from_csv(
         cursor=cursor,
