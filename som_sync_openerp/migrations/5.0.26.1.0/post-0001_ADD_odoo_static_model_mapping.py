@@ -120,64 +120,52 @@ def migrate(cursor, installed_version):
     logger = logging.getLogger('openerp.migration')
     logger.info("Creating static odoo.sync mappings")
 
-    logger.info("Creating static res.country mappings")
-    res_country_csv = get_module_resource(
-        'som_sync_openerp',
-        'migrations',
-        'res_country.csv'
-    )
-    create_static_mappings_from_csv(
-        cursor=cursor,
-        model_name='res.country',
-        csv_path=res_country_csv,
-        erp_id_field='erp_id',
-        odoo_id_field='odoo_id',
-    )
-    logger.info("Static res.country mappings creation completed successfully.")
+    migrations = [
+        {
+            'model': 'res.country',
+            'csv': 'res_country.csv',
+        },
+        {
+            'model': 'payment.type',
+            'csv': 'payment_type.csv',
+        },
+        {
+            'model': 'account.fiscal.position',
+            'csv': 'account_fiscal_position.csv',
+        },
+        {
+            'model': 'account.payment.term',
+            'csv': 'payment_term.csv',
+        },
+    ]
 
-    logger.info("Creating static payment.type mappings")
-    payment_type_csv = get_module_resource(
-        'som_sync_openerp',
-        'migrations',
-        'payment_type.csv'
-    )
-    create_static_mappings_from_csv(
-        cursor=cursor,
-        model_name='payment.type',
-        csv_path=payment_type_csv,
-        erp_id_field='erp_id',
-        odoo_id_field='odoo_id',
-    )
-    logger.info("Static payment.type mappings creation completed successfully.")
+    for item in migrations:
+        model_name = item['model']
+        csv_file = item['csv']
 
-    logger.info("Creating static account.fiscal.position mappings")
-    fiscal_position_csv = get_module_resource(
-        'som_sync_openerp',
-        'migrations',
-        'account_fiscal_position.csv'
-    )
-    create_static_mappings_from_csv(
-        cursor=cursor,
-        model_name='account.fiscal.position',
-        csv_path=fiscal_position_csv,
-        erp_id_field='erp_id',
-        odoo_id_field='odoo_id',
-    )
-    logger.info("Static account.fiscal.position mappings creation completed successfully.")
+        logger.info("Creating static %s mappings", model_name)
 
-    logger.info("Creating static account.payment.term mappings")
-    payment_term_csv = get_module_resource(
-        'som_sync_openerp',
-        'migrations',
-        'payment_term.csv'
-    )
-    create_static_mappings_from_csv(
-        cursor=cursor,
-        model_name='account.payment.term',
-        csv_path=payment_term_csv,
-        erp_id_field='erp_id',
-        odoo_id_field='odoo_id',
-    )
-    logger.info("Static account.payment.term mappings creation completed successfully.")
+        csv_path = get_module_resource(
+            'som_sync_openerp',
+            'migrations',
+            csv_file
+        )
+
+        if not csv_path:
+            logger.warning("CSV not found for model %s, skipping", model_name)
+            continue
+
+        create_static_mappings_from_csv(
+            cursor=cursor,
+            model_name=model_name,
+            csv_path=csv_path,
+            erp_id_field='erp_id',
+            odoo_id_field='odoo_id',
+        )
+
+        logger.info(
+            "Static %s mappings creation completed successfully.",
+            model_name
+        )
 
     logger.info("Static odoo.sync mappings creation finished.")
