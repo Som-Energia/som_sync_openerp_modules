@@ -55,9 +55,14 @@ def create_static_mappings_from_csv(
 
     model_id = model_ids[0]
 
+    created_and_update_count = 0
+    skipped_count = 0
+    total_count = 0
+
     with open(csv_path, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
+            total_count += 1
             try:
                 erp_id = int(row.get(erp_id_field, 0))
                 odoo_id = int(row.get(odoo_id_field, 0))
@@ -73,6 +78,7 @@ def create_static_mappings_from_csv(
                     "Skipping row with invalid ids (ERP: %s, Odoo: %s)",
                     erp_id, odoo_id
                 )
+                skipped_count += 1
                 continue
 
             # Check if mapping already exists
@@ -87,6 +93,7 @@ def create_static_mappings_from_csv(
                     'odoo_id': odoo_id,
                     'sync_state': 'static',
                 })
+                created_and_update_count += 1
                 logger.info(
                     "Updated static mapping %s ERP %s → Odoo %s",
                     model_name, erp_id, odoo_id
@@ -98,6 +105,7 @@ def create_static_mappings_from_csv(
                         "Target record %s id %s does not exist. Skipping mapping.",
                         model_name, erp_id
                     )
+                    skipped_count += 1
                     continue
 
                 # Create new static mapping
@@ -111,6 +119,15 @@ def create_static_mappings_from_csv(
                     "Created static mapping %s ERP %s → Odoo %s",
                     model_name, erp_id, odoo_id
                 )
+                created_and_update_count += 1
+
+    logger.info(
+        "\nCompleted static mappings for model %s:\n"
+        ">> Created/updated: %s created/updated.\n"
+        ">> Skipped: %s invalid entries.\n"
+        ">> Total processed: %s entries.\n",
+        model_name, created_and_update_count, skipped_count, total_count
+    )
 
 
 def migrate(cursor, installed_version):
