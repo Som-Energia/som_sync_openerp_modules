@@ -182,6 +182,15 @@ class OdooSync(osv.osv):
         if has_mapping_constants:
             result_data.update(rp_obj.MAPPING_CONSTANTS)
 
+        # Check False string fields and convert to empty string
+        for key, value in result_data.items():
+            if not (value is False or value is None):
+                continue
+            # get field type
+            field_obj = rp_obj._columns.get(key, False)
+            if field_obj and field_obj._type == 'char':
+                result_data[key] = ''
+
         return result_data
 
     def check_erp_record_exist(self, cursor, uid, model, openerp_id):
