@@ -449,9 +449,7 @@ class OdooSync(osv.osv):
         if isinstance(data, list):
             if len(data) == 0:
                 return False, False, False
-            elif len(data) == 1:
-                data = data[0]
-            else:  # multiple records returned, we filter by erp_id
+            else:  # we filter by erp_id
                 data = [d for d in data if d.get('erp_id', False) == erp_id]
                 if len(data) == 0:
                     return False, False, False
