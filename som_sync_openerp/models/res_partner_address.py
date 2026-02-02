@@ -58,11 +58,28 @@ class ResPartnerAddress(osv.osv):
         ids = super(ResPartnerAddress, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')
-        sync_obj.common_sync_model_create(
-            cr, uid, self._name, ids, context=context
+        sync_obj.common_sync_model_create_update(
+            cr, uid, self._name, ids, 'create', context=context
         )
 
         return ids
+
+    def write(self, cr, uid, ids, vals, context={}):
+        if context is None:
+            context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
+
+        res = super(ResPartnerAddress, self).write(cr, uid, ids, vals, context=context)
+
+        # we check if any of the fields to sync is in vals
+        if any(field in vals.keys() for field in self.MAPPING_FIELDS_TO_SYNC.keys()):
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, ids, 'write', context=context
+            )
+
+        return res
 
 
 ResPartnerAddress()

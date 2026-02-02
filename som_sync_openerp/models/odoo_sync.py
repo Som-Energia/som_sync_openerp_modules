@@ -94,7 +94,7 @@ class OdooSync(osv.osv):
                 return True, dict_model['auto_sync'], dict_model['async_enabled']
         return False, False, False
 
-    def common_sync_model_create(self, cursor, uid, model, ids, context={}):
+    def common_sync_model_create_update(self, cursor, uid, model, ids, action, context={}):
         try:
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
@@ -102,14 +102,15 @@ class OdooSync(osv.osv):
                 if async_enabled:
                     # Use job queue for async sync
                     self.syncronize(
-                        cursor, uid, model, 'create', ids, context=context)
+                        cursor, uid, model, action, ids, context=context)
                 else:
                     # Sync synchronously
                     self.syncronize_sync(
-                        cursor, uid, model, 'create', ids, context=context)
+                        cursor, uid, model, action, ids, context=context)
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
-            logger.exception("Error during common_sync_model_create for model {}".format(model))
+            logger.exception(
+                "Error during common_sync_model_create_update for model {}".format(model))
 
     def _clean_context_update_data(self, cursor, uid, context={}):
         res = context.copy()
@@ -264,10 +265,10 @@ class OdooSync(osv.osv):
             self.check_erp_record_exist(cursor, uid, model, openerp_id)
 
             # Data preparation logic based on the action type
-            if action in ['create', 'sync']:
+            if action in ['create', 'sync', 'write']:
                 erp_data = self.get_model_vals_to_sync(
                     cursor, uid, model, openerp_id, context=context)
-            elif action in ['write', 'unlink']:
+            elif action in ['unlink']:
                 # Log placeholder for future implementations (PATCH/DELETE)
                 logger.info("Action {} not implemented yet for model {}".format(action, model))
                 sync_vals.update({
