@@ -98,6 +98,8 @@ class OdooSync(osv.osv):
         try:
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
+            if action == 'sync':
+                auto_sync = True  # force sync for on-demand
             if sync_enabled and auto_sync:
                 if async_enabled:
                     # Use job queue for async sync
