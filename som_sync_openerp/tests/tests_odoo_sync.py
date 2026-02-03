@@ -348,3 +348,26 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'zip': u'5478'
         }
         self.assertEqual(vals, expected_vals)
+
+    def test__get_dict_to_patch(self):
+        erp_data = {
+            'name': 'Test Name modified',
+            'active': True,
+            'parent_id': 5,
+            'country_id': None,
+        }
+        odoo_record = {
+            'id': 10,
+            'name': 'Test Name',
+            'active': True,
+            'parent_id': [5, 'Parent Name'],
+            'country_id': False,
+        }
+
+        dict_to_patch = self.sync_obj.get_dict_to_patch(
+            self.cursor, self.uid, erp_data, odoo_record)
+
+        modified_fields = {
+            'name': 'Test Name modified',
+        }
+        self.assertEqual(dict_to_patch, modified_fields)
