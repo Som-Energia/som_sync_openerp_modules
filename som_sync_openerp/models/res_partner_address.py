@@ -11,7 +11,7 @@ class ResPartnerAddress(osv.osv):
         'name': 'name',
         'email': 'email',
         'phone': 'phone',
-        'street': 'street',
+        'nv': 'street',
         'zip': 'zip',
         'partner_id': 'parent_id',
         'state_id': 'state_id',
