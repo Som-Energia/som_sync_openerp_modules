@@ -40,16 +40,26 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                 sync_data = sync_obj.browse(cursor, uid, _id)
                 from_res_model = sync_data.model.model
                 erp_id = sync_data.res_id
-                sync_obj.syncronize_sync(
-                    cursor, uid, from_res_model, 'sync', erp_id, context=context
-                )
+                if wiz.is_static:
+                    sync_obj.syncronize_sync(
+                        cursor, uid, from_res_model, 'sync', erp_id, context=context
+                    )
+                else:
+                    sync_obj.common_sync_model_create_update(
+                        cursor, uid, from_res_model, erp_id, 'sync', context=context
+                    )
             return {'type': 'ir.actions.act_window_close'}
 
         # Normal execution from any model that can be synced
         for record_id in active_ids:
-            sync_obj.syncronize_sync(
-                cursor, uid, from_model, 'sync', record_id, context=context
-            )
+            if wiz.is_static:
+                sync_obj.syncronize_sync(
+                    cursor, uid, from_model, 'sync', record_id, context=context
+                )
+            else:
+                sync_obj.common_sync_model_create_update(
+                    cursor, uid, from_model, record_id, 'sync', context=context
+                )
 
         return {'type': 'ir.actions.act_window_close'}
 

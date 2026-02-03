@@ -151,7 +151,7 @@
                    eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_res_partner_bank'))"/>
         </record>
         <!-- action and value for odoo.sync -->
-        <record id="action_wizard_sync_odoo_from_res_partner_bank" model="ir.actions.act_window">
+        <record id="action_wizard_sync_odoo_from_odoo_sync" model="ir.actions.act_window">
             <field name="name">Synchronize with Odoo</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">wizard.sync.object.odoo</field>
@@ -160,14 +160,14 @@
             <field name="context" eval="{'from_model': 'odoo.sync'}"/>
             <field name="target">new</field>
         </record>
-        <record id="value_wizard_sync_odoo_from_res_partner_bank" model="ir.values">
+        <record id="value_wizard_sync_odoo_from_odoo_sync" model="ir.values">
             <field name="object" eval="1"/>
             <field name="name">Synchronize with Odoo</field>
             <field name="key2">client_action_multi</field>
             <field name="key">action</field>
             <field name="model">odoo.sync</field>
             <field name="value"
-                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_res_partner_bank'))"/>
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_odoo_sync'))"/>
         </record>
 
         <!-- Wizard in static models -->

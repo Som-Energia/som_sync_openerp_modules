@@ -28,8 +28,8 @@ class AccountAccount(osv.osv):
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')
-        sync_obj.common_sync_model_create(
-            cr, uid, self._name, ids, context=context
+        sync_obj.common_sync_model_create_update(
+            cr, uid, self._name, ids, 'create', context=context
         )
 
         return ids

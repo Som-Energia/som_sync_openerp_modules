@@ -7,10 +7,11 @@
     "category": "Added functionality",
     "depends": [
         'account',
-        'l10n_ES_partner',
+        'account_payment_extension',
         'base_extended_som',
         'base_iban',
-        'account_payment_extension',
+        'l10n_ES_partner',
+        'partner_address_tipovia',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",

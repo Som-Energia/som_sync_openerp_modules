@@ -89,9 +89,14 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
         )
 
-    def test_action_sync__no_static_model(self):
+    def test_action_sync__no_static_model_syncronize_sync(self):
         # Mock syncronize_sync method
-        self.sync_obj.syncronize_sync = MagicMock()
+        self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.sync_obj.syncronize = MagicMock()  # synchronize async
+
+        self.sync_obj.sync_model_enabled_amplified = MagicMock()
+        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
+        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, False
 
         context = {
             'from_model': 'res.partner',
@@ -107,10 +112,43 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
         # Verify syncronize_sync was called once
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
+        self.assertEqual(self.sync_obj.syncronize.call_count, 0)
 
         # Verify arguments of the call
         expected_context = context.copy()
         expected_context['is_static'] = False
         self.sync_obj.syncronize_sync.assert_called_with(
+            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+        )
+
+    def test_action_sync__no_static_model_syncronize_async(self):
+        # Mock syncronize_sync method
+        self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.sync_obj.syncronize = MagicMock()  # synchronize async
+
+        self.sync_obj.sync_model_enabled_amplified = MagicMock()
+        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
+        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, True
+
+        context = {
+            'from_model': 'res.partner',
+            'active_ids': [1]
+        }
+        wiz_values = {}
+        wiz_id = self.wizard_obj.create(self.cursor, self.uid, wiz_values, context=context)
+        wiz = self.wizard_obj.browse(self.cursor, self.uid, wiz_id, context=context)
+        # Ensure is_static is False
+        self.assertFalse(wiz.is_static)
+
+        self.wizard_obj.action_sync(self.cursor, self.uid, [wiz_id], context=context)
+
+        # Verify syncronize_sync was called once
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 0)
+        self.assertEqual(self.sync_obj.syncronize.call_count, 1)
+
+        # Verify arguments of the call
+        expected_context = context.copy()
+        expected_context['is_static'] = False
+        self.sync_obj.syncronize.assert_called_with(
             self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
         )
