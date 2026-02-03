@@ -314,3 +314,37 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'vat': u'S2903826B'
         }
         self.assertEqual(vals, expected_vals)
+
+    def test__get_model_vals_to_sync__partner_address(self):
+        # Ensure the mocked syncronize_sync returns a 2-tuple (odoo_id, erp_id)
+        # so the caller can unpack it without raising ValueError.
+        self.sync_obj.syncronize_sync = MagicMock(return_value=(3, 3))
+        address_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_address_8'
+        )[1]
+
+        vals = self.sync_obj.get_model_vals_to_sync(
+            self.cursor, self.uid, 'res.partner.address', address_id
+        )
+
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
+        self.sync_obj.syncronize_sync.assert_has_calls([
+            call(ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
+        ])
+        expected_vals = {
+            'city': u'Wavre',
+            'email': '',
+            'is_company': False,
+            'is_customer': True,
+            'is_supplier': False,
+            'lang': False,
+            'name': u'Sylvie Lelitre',
+            'parent_id': 3,
+            'phone': u'555123456',
+            'pnt_erp_id': 10,
+            'state_id': None,
+            'street': u'69 rue de Chimay',
+            'type': 'invoice',
+            'zip': u'5478'
+        }
+        self.assertEqual(vals, expected_vals)
