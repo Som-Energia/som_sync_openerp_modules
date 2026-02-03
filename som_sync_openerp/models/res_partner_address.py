@@ -11,11 +11,22 @@ class ResPartnerAddress(osv.osv):
         'name': 'name',
         'email': 'email',
         'phone': 'phone',
-        'nv': 'street',
+        'street': 'street',
         'zip': 'zip',
         'partner_id': 'parent_id',
         'state_id': 'state_id',
         'city': 'city',
+    }
+
+    MAPPING_TRIGGER_WRITE = {
+        'nv': 'nv',
+        'pnp': 'pnp',
+        'bq': 'bq',
+        'es': 'es',
+        'pt': 'pt',
+        'pu': 'pu',
+        'cpo': 'cpo',
+        'cpa': 'cpa',
     }
 
     MAPPING_FK = {
@@ -73,7 +84,8 @@ class ResPartnerAddress(osv.osv):
         res = super(ResPartnerAddress, self).write(cr, uid, ids, vals, context=context)
 
         # we check if any of the fields to sync is in vals
-        if any(field in vals.keys() for field in self.MAPPING_FIELDS_TO_SYNC.keys()):
+        if (any(field in vals.keys() for field in self.MAPPING_FIELDS_TO_SYNC.keys())
+                or any(field in vals.keys() for field in self.MAPPING_TRIGGER_WRITE.keys())):
             sync_obj = self.pool.get('odoo.sync')
             sync_obj.common_sync_model_create_update(
                 cr, uid, self._name, ids, 'write', context=context
