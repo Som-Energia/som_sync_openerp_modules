@@ -13,8 +13,7 @@
         </record>
         <record id="odoo_erp_models_to_sync" model="res.config">
             <field name="name">odoo_erp_models_to_sync</field>
-            <field name="value">
-                [{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},
+            <field name="value">[{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},
                  {'model': 'res.country', 'auto_sync': False, 'async_enabled': True},
                  {'model': 'res.country.state', 'auto_sync': False, 'async_enabled': True},
                  {'model': 'res.municipi', 'auto_sync': False, 'async_enabled': True},
