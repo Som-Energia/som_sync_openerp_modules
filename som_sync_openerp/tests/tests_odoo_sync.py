@@ -214,3 +214,48 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'account.fiscal.position', afp_id, False, context={}
         )
         self.assertEqual(odoo_id, param_odoo_id)
+
+    def test__sync_model_enabled_amplified__enabled_async_disabled_auto(self):
+        for model in [
+            'account.account',
+            'res.country.state',
+            'res.country',
+            'res.municipi',
+            'res.partner',
+            'res.partner.address',
+            'res.partner.bank'
+        ]:
+            res = self.os_obj.sync_model_enabled_amplified(
+                self.cursor, self.uid, model
+            )
+
+            self.assertEqual(res, (True, False, True))
+
+    def test__sync_model_enabled_amplified__all_enabled(self):
+        config_obj = self.openerp.pool.get('res.config')
+        config_obj.set(
+            self.cursor, self.uid, 'odoo_erp_models_to_sync',
+            """[
+                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.country.state', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.country', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.municipi', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.partner', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.partner.address', 'auto_sync': True, 'async_enabled': True},
+                {'model': 'res.partner.bank', 'auto_sync': True, 'async_enabled': True}
+            ]"""
+        )
+        for model in [
+            'account.account',
+            'res.country.state',
+            'res.country',
+            'res.municipi',
+            'res.partner',
+            'res.partner.address',
+            'res.partner.bank'
+        ]:
+            res = self.os_obj.sync_model_enabled_amplified(
+                self.cursor, self.uid, model
+            )
+
+            self.assertEqual(res, (True, True, True))

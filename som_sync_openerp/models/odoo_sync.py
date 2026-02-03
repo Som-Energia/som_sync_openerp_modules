@@ -71,13 +71,6 @@ class OdooSync(osv.osv):
                                  'Odoo connection parameters not found.')
         return odoo_url_api, odoo_api_key
 
-    def sync_model_enabled(self, cursor, uid, model):
-        config_obj = self.pool.get('res.config')
-        list_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
-        if model in list_models_to_sync:
-            return True
-        return False
-
     def sync_model_enabled_amplified(self, cursor, uid, model):
         """
             odoo_erp_models_to_sync = [
