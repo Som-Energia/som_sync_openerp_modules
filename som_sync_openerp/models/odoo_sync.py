@@ -42,6 +42,7 @@ MAPPING_MODELS_GET = {
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_POST = {
     'account.account': 'accounts',
+    'account.move': 'entries',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
@@ -295,10 +296,16 @@ class OdooSync(osv.osv):
                 })
                 # We continue to check existence even if the specific update action isn't ready
 
-            # Check if the record already exists in Odoo
-            endpoint_suffix = rp_obj.get_endpoint_suffix(cursor, uid, openerp_id, context=context)
-            odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
-                cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+            has_get = hasattr(rp_obj, 'get_endpoint_suffix')
+            if not has_get:
+                # If no method to get endpoint suffix, we cannot check if record exists in Odoo
+                odoo_id = False
+            else:
+                # Check if the record already exists in Odoo
+                endpoint_suffix = rp_obj.get_endpoint_suffix(
+                    cursor, uid, openerp_id, context=context)
+                odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
+                    cursor, uid, model, endpoint_suffix, openerp_id, context=context)
 
             if odoo_id:
                 if not erp_id:
