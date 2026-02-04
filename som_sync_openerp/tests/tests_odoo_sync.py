@@ -217,6 +217,12 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
         self.assertEqual(odoo_id, param_odoo_id)
 
+    def test__sync_model_enabled_amplified__setting_ok(self):
+        config_obj = self.openerp.pool.get('res.config')
+        dict_models_to_sync = eval(
+            config_obj.get(self.cursor, self.uid, 'odoo_erp_models_to_sync', '[]'))
+        self.assertIsInstance(dict_models_to_sync, list)
+
     def test__sync_model_enabled_amplified__enabled_async_disabled_auto(self):
         for model in [
             'account.account',
