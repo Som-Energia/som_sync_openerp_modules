@@ -88,7 +88,13 @@ class OdooSync(osv.osv):
         return False, False, False
 
     def common_sync_model_create_update(self, cursor, uid, model, ids, action, context={}):
+        """
+            Common method to sync model records on create or update actions.
+            Allows multiple ids to be processed.
+        """
         try:
+            if not isinstance(ids, list):
+                ids = [ids]
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
             if action == 'sync':
@@ -96,12 +102,14 @@ class OdooSync(osv.osv):
             if sync_enabled and auto_sync:
                 if async_enabled:
                     # Use job queue for async sync
-                    self.syncronize(
-                        cursor, uid, model, action, ids, context=context)
+                    for openerp_id in ids:
+                        self.syncronize(
+                            cursor, uid, model, action, openerp_id, context=context)
                 else:
                     # Sync synchronously
-                    self.syncronize_sync(
-                        cursor, uid, model, action, ids, context=context)
+                    for openerp_id in ids:
+                        self.syncronize_sync(
+                            cursor, uid, model, action, openerp_id, context=context)
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
