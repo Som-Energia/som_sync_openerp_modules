@@ -15,7 +15,9 @@ class ResMunicipi(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         municipi = self.browse(cr, uid, id, context=context)
         if municipi.ine:
             res = '{}'.format(municipi.ine)

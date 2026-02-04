@@ -17,7 +17,9 @@ class ResPartnerBank(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         sync_obj = self.pool.get('odoo.sync')
         bank = self.browse(cr, uid, id, context=context)
         sync_obj_id = sync_obj.search(
@@ -29,7 +31,9 @@ class ResPartnerBank(osv.osv):
         else:
             return False
 
-    def create(self, cr, uid, vals, context={}):
+    def create(self, cr, uid, vals, context=None):
+        if context is None:
+            context = {}
         ids = super(ResPartnerBank, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')

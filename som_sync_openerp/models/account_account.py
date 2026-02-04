@@ -16,7 +16,9 @@ class AccountAccount(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         account = self.browse(cr, uid, id, context=context)
         if account.code:
             res = '{}'.format(account.code)
@@ -24,7 +26,9 @@ class AccountAccount(osv.osv):
         else:
             return False
 
-    def create(self, cr, uid, vals, context={}):
+    def create(self, cr, uid, vals, context=None):
+        if context is None:
+            context = {}
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')
