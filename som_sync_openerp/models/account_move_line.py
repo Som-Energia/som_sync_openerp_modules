@@ -7,7 +7,6 @@ class AccountMoveLine(osv.osv):
     _inherit = 'account.move.line'
 
     MAPPING_FIELDS_TO_SYNC = {
-        'id': 'pnt_erp_id',
         'account_id': 'account_id',
         'partner_id': 'partner_id',
         'name': 'name',
