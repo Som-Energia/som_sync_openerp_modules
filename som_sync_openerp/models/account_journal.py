@@ -13,7 +13,7 @@ class AccountJournal(osv.osv):
     }
 
     _defaults = {
-        'som_sync_odoo': False,
+        'som_sync_odoo': lambda *a, **k: True,
     }
 
 
