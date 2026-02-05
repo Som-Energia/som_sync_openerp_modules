@@ -38,26 +38,26 @@ class AccountMove(osv.osv):
             res.append(aml_vals)
         return {'lines': res}
 
-    def _journal_is_syncrozable(self, cr, uid, ids, context=None):
-        if not isinstance(ids, list):
-            ids = [ids]
-        for move in self.browse(cr, uid, ids, context=context):
-            if move.journal_id and move.journal_id.som_sync_odoo:
-                return True
-        return False
+    def _journal_is_syncrozable(self, cr, uid, _id, context=None):
+        move = self.browse(cr, uid, _id, context=context)
+        return move.journal_id and move.journal_id.som_sync_odoo
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
+
         res = super(AccountMove, self).write(cr, uid, ids, vals, context=context)
 
-        if self._journal_is_syncrozable(cr, uid, ids, context=context) and \
-            'state' in vals and \
-                vals['state'] == 'posted':
-            sync_obj = self.pool.get('odoo.sync')
-            sync_obj.common_sync_model_create_update(
-                cr, uid, self._name, ids, 'create', context=context
-            )
+        for _id in ids:
+            if self._journal_is_syncrozable(cr, uid, _id, context=context) and \
+                'state' in vals and \
+                    vals['state'] == 'posted':
+                sync_obj = self.pool.get('odoo.sync')
+                sync_obj.common_sync_model_create_update(
+                    cr, uid, self._name, _id, 'create', context=context
+                )
 
         return res
 

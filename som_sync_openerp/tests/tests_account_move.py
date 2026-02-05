@@ -48,7 +48,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )[1]
 
         is_syncrozable = self.am_obj._journal_is_syncrozable(
-            self.cursor, self.uid, [move_id]
+            self.cursor, self.uid, move_id
         )
 
         self.assertTrue(is_syncrozable)
@@ -59,7 +59,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )[1]
 
         is_syncrozable = self.am_obj._journal_is_syncrozable(
-            self.cursor, self.uid, [move_id]
+            self.cursor, self.uid, move_id
         )
 
         self.assertFalse(is_syncrozable)
