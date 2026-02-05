@@ -39,7 +39,9 @@ class AccountMove(osv.osv):
         return {'lines': res}
 
     def _journal_is_syncrozable(self, cr, uid, ids, context=None):
-        for move in self.browse(self._cr, self._uid, self._ids):
+        if not isinstance(ids, list):
+            ids = [ids]
+        for move in self.browse(cr, uid, ids, context=context):
             if move.journal_id and move.journal_id.som_sync_odoo:
                 return True
         return False

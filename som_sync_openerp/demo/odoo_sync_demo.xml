@@ -26,5 +26,75 @@
         <record id="base.res_partner_agrolait" model="res.partner">
             <field name="vat">ES72789709E</field>
         </record>
+        <record id="fiscalyear_2026" model="account.fiscalyear">
+            <field name="name">Fiscal Year 2026</field>
+            <field name="code">FY2026</field>
+            <field name="date_start">2026-01-01</field>
+            <field name="date_stop">2026-12-31</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="period_012026" model="account.period">
+            <field name="name">01/2026</field>
+            <field name="date_start">2026-01-01</field>
+            <field name="date_stop">2026-01-31</field>
+            <field name="state">draft</field>
+            <field name="fiscalyear_id" ref="fiscalyear_2026"></field>
+        </record>
+        <record id="account_journal_syncronizable" model="account.journal">
+            <field name="name">General Journal</field>
+            <field name="code">General</field>
+            <field name="type">general</field>
+            <field name="som_sync_odoo">True</field>
+            <field name="view_id" ref="account.account_journal_view"/>
+            <field name="sequence_id" ref="account.sequence_journal"/>
+        </record>
+        <record id="account_move_001" model="account.move">
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="date">2026-01-15</field>
+            <field name="journal_id" ref="account_journal_syncronizable"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
+        <record id="account_move_line_001" model="account.move.line">
+            <field name="move_id" ref="account_move_001"/>
+            <field name="name">Product A</field>
+            <field name="debit">1000.00</field>
+            <field name="account_id" search="[('code', '=', 'x 600000')]" model="account.account"/>
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="journal_id" ref="account_journal_syncronizable"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
+        <record id="account_move_line_002" model="account.move.line">
+            <field name="move_id" ref="account_move_001"/>
+            <field name="name">Product A</field>
+            <field name="credit">1000.00</field>
+            <field name="account_id" search="[('code', '=', 'x 440000')]" model="account.account"/>
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="journal_id" ref="account_journal_syncronizable"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
+        <record id="account_move_002" model="account.move">
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="date">2026-01-15</field>
+            <field name="journal_id" ref="account.sales_journal"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
+        <record id="account_move_line_003" model="account.move.line">
+            <field name="move_id" ref="account_move_002"/>
+            <field name="name">Product B</field>
+            <field name="debit">500.00</field>
+            <field name="account_id" search="[('code', '=', 'x 600000')]" model="account.account"/>
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="journal_id" ref="account.sales_journal"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
+        <record id="account_move_line_004" model="account.move.line">
+            <field name="move_id" ref="account_move_002"/>
+            <field name="name">Product B</field>
+            <field name="credit">500.00</field>
+            <field name="account_id" search="[('code', '=', 'x 440000')]" model="account.account"/>
+            <field name="partner_id" ref="base.res_partner_agrolait"/>
+            <field name="journal_id" ref="account.sales_journal"/>
+            <field name="period_id" ref="period_012026"/>
+        </record>
     </data>
 </openerp>

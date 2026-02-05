@@ -12,5 +12,9 @@ class AccountJournal(osv.osv):
             help='If checked, this journal will be synchronized with Odoo.'),
     }
 
+    _defaults = {
+        'som_sync_odoo': False,
+    }
+
 
 AccountJournal()
