@@ -12,6 +12,36 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
 
+    def test__get_related_values(self):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_001"
+        )[1]
+        self.sync_obj.syncronize_sync = MagicMock(
+            return_value=(99, 1))
+
+        related_values = self.am_obj.get_related_values(
+            self.cursor, self.uid, move_id
+        )
+
+        expected_values = {
+            'lines': [
+                {
+                    'account_id': 99,
+                    'credit': 1000.0,
+                    'name': u'Product A',
+                    'partner_id': 99,
+                },
+                {
+                    'account_id': 99,
+                    'debit': 1000.0,
+                    'name': u'Product A',
+                    'partner_id': 99,
+                }
+            ]
+
+        }
+        self.assertEqual(related_values, expected_values)
+
     def test__journal_is_syncrozable_True(self):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
