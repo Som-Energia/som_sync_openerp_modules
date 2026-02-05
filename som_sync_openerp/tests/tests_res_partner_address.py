@@ -27,9 +27,14 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
 
     def test__create_triggers_sync(self):
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, True, True))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
 
         # Perform create operation
         self.rpa_obj.create(
@@ -44,10 +49,18 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
 
     def test__create__autosync_not_enabled_no_trigger(self):
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, False, False))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         # Perform create operation on a field that does not trigger sync
         self.rpa_obj.create(
@@ -65,9 +78,14 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "base", "res_partner_address_8"
         )[1]
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, True, True))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
 
         # Perform write operation
         self.rpa_obj.write(
@@ -84,10 +102,18 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "base", "res_partner_address_8"
         )[1]
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, False, False))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         # Perform write operation on a field that does not trigger sync
         self.rpa_obj.write(

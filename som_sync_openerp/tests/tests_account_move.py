@@ -16,8 +16,10 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
-        self.sync_obj.syncronize_sync = MagicMock(
-            return_value=(99, 1))
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
+        self.sync_obj.syncronize_sync = MagicMock(return_value=(99, 1))
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         related_values = self.am_obj.get_related_values(
             self.cursor, self.uid, move_id
@@ -69,9 +71,14 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, True, True))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
 
         # Perform write operation
         self.am_obj.write(
@@ -88,9 +95,14 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "account_move_002"
         )[1]
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, True, True))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
 
         # Perform write operation
         self.am_obj.write(
@@ -107,10 +119,18 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(
-            return_value=(True, False, False))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         # Perform write operation on a field that does not trigger sync
         self.am_obj.write(

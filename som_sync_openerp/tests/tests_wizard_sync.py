@@ -12,7 +12,10 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
     def test_action_sync__res_partner(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -41,7 +44,10 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         )[1]
 
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'odoo.sync',
@@ -62,7 +68,10 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
     def test_action_sync__static_model(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'account.fiscal.position',
@@ -91,12 +100,18 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
     def test_action_sync__no_static_model_syncronize_sync(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()  # synchronize async
-
-        self.sync_obj.sync_model_enabled_amplified = MagicMock()
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, False
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -123,12 +138,18 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
     def test_action_sync__no_static_model_syncronize_async(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()  # synchronize async
-
-        self.sync_obj.sync_model_enabled_amplified = MagicMock()
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, True
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
 
         context = {
             'from_model': 'res.partner',
