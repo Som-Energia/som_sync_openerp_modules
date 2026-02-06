@@ -48,6 +48,14 @@
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
+        <record id="account_journal_sales_syncronizable" model="account.journal">
+            <field name="name">Sales Journal</field>
+            <field name="code">SalesJournal</field>
+            <field name="type">sale</field>
+            <field name="som_sync_odoo">True</field>
+            <field name="view_id" ref="account.account_journal_view"/>
+            <field name="sequence_id" ref="account.sequence_journal"/>
+        </record>
         <record id="account_move_001" model="account.move">
             <field name="partner_id" ref="base.res_partner_agrolait"/>
             <field name="date">2026-01-15</field>
@@ -110,6 +118,28 @@
             <field name="res_id" search="[('name','=','0001_partner_bank_agrolait')]" model="res.partner.bank"/>
             <field name="odoo_last_sync_at">2023-01-01 10:00:00</field>
             <field name="sync_state">synced</field>
+        </record>
+        <record id="invoice_0001" model="account.invoice">
+            <field name="name">Pol 000001</field>
+            <field name="type">out_invoice</field>
+            <field name="number">INV0001</field>
+            <field name="state">draft</field>
+            <field name="date_invoice">2026-01-16</field>
+            <field name="partner_id" ref="base.res_partner_9"/>
+            <field name="address_invoice_id" ref="base.res_partner_address_1"/>
+            <field name="period_id" ref="period_012026"/>
+            <field name="account_id" ref="account.a_recv"/>
+            <field name="amount_untaxed">1000.0</field>
+            <field name="amount_tax">210.0</field>
+            <field name="amount_total">1210.0</field>
+            <field name="journal_id" ref="account_journal_sales_syncronizable"/>
+        </record>
+        <record id="invoice_0001_line_1" model="account.invoice.line">
+            <field name="name">Product A</field>
+            <field name="invoice_id" ref="invoice_0001"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
         </record>
     </data>
 </openerp>
