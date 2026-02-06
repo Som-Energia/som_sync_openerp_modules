@@ -30,6 +30,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         expected_values = {
+            'date': '2026-01-16',
             'invoice_line_ids': [
                 {
                     'account_id': odoo_account_id,
