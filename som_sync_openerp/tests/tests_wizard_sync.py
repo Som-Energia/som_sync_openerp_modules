@@ -29,7 +29,7 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
         # Verify arguments of the last call
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 3, context=context
+            ANY, self.uid, 'res.partner', 'sync', 3, context=context
         )
 
     def test_action_sync__odoo_sync(self):
@@ -60,10 +60,13 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
 
         # Verify arguments of the calls
+        partner_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_1).res_id
+        country_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_2).res_id
+        country_state_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_3).res_id
         self.sync_obj.syncronize_sync.assert_has_calls([
-            call(ANY, self.uid, u'res.partner', 'sync', 2, context=context),
-            call(ANY, self.uid, u'res.country', 'sync', 2, context=context),
-            call(ANY, self.uid, u'res.country.state', 'sync', 5, context=context),
+            call(ANY, self.uid, u'res.partner', 'sync', partner_id, context=context),
+            call(ANY, self.uid, u'res.country', 'sync', country_id, context=context),
+            call(ANY, self.uid, u'res.country.state', 'sync', country_state_id, context=context),
         ])
 
     def test_action_sync__static_model(self):
@@ -95,7 +98,7 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context['is_static'] = True
         expected_context['odoo_id'] = 100
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
+            ANY, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
         )
 
     def test_action_sync__no_static_model_syncronize_sync(self):
@@ -133,7 +136,7 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context = context.copy()
         expected_context['is_static'] = False
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+            ANY, self.uid, 'res.partner', 'sync', 1, context=expected_context
         )
 
     def test_action_sync__no_static_model_syncronize_async(self):
@@ -171,5 +174,5 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context = context.copy()
         expected_context['is_static'] = False
         self.sync_obj.syncronize.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+            ANY, self.uid, 'res.partner', 'sync', 1, context=expected_context
         )

@@ -236,14 +236,12 @@ class OdooSync(osv.osv):
 
     @job(queue='sync_odoo', timeout=3600)
     def syncronize(self, cursor, uid,
-                   model, action, openerp_id, context={},
-                   check=True, update_check=True):
+                   model, action, openerp_id, context={}):
         context['update_last_sync'] = True
-        self.syncronize_sync(cursor, uid, model, action, openerp_id,
-                             context=context, check=check, update_check=update_check)
+        self.syncronize_sync(cursor, uid, model, action, openerp_id, context=context)
 
     def syncronize_sync(self, cursor, uid, model,
-                        action, openerp_id, context=None, check=True, update_check=True):
+                        action, openerp_id, context=None):
         """
         Synchronizes a record between ERP and Odoo.
         """
