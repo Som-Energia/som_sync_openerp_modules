@@ -13,6 +13,7 @@ FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 # Mapping of models entities to update erp_id in Odoo: key -> erp model, value -> odoo entity name
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
+    'account.invoice': 'invoice',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -42,6 +43,7 @@ MAPPING_MODELS_GET = {
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_POST = {
     'account.account': 'accounts',
+    'account.invoice': 'invoices',
     'account.move': 'entries',
     'res.country.state': 'states',
     'res.partner': 'partners',
@@ -369,6 +371,7 @@ class OdooSync(osv.osv):
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
+            # TODO: better exception information
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',

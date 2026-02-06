@@ -18,7 +18,7 @@ class AccountInvoiceLine(osv.osv):
         # 'tax_id': 'account.tax',
     }
     MAPPING_CONSTANTS = {
-        # 'extra_operations_erp': 1,
+        'extra_operations_erp': 1,
     }
 
     def get_related_values(self, cr, uid, id, context=None):

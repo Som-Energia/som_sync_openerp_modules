@@ -11,22 +11,21 @@ class AccountInvoice(osv.osv):
         "number": "number",
         "partner_id": "partner_id",
         # "journal_id": "journal_id",
-        "invoice_date": "invoice_date",
+        "date_invoice": "invoice_date",
         "amount_untaxed": "amount_untaxed",
         "amount_tax": "amount_tax",
         "amount_total": "amount_total",
         "type": "move_type",
-        "date": "date",
-        "invoice_payment_term_id": "invoice_payment_term_id",
-        "preferred_payment_method_line_id": "preferred_payment_method_line_id",
-        "fiscal_position_id": "fiscal_position_id",
+        "payment_term": "invoice_payment_term_id",
+        "payment_type": "preferred_payment_method_line_id",
+        "fiscal_position": "fiscal_position_id",
     }
     MAPPING_FK = {
         "partner_id": "res.partner",
         # 'journal_id': 'account.journal',
-        "invoice_payment_term_id": "account.payment.term",
-        "preferred_payment_method_line_id": "account.payment.method",
-        "fiscal_position_id": "account.fiscal.position",
+        "payment_term": "account.payment.term",
+        "payment_type": "payment.type",
+        "fiscal_position": "account.fiscal.position",
     }
     MAPPING_CONSTANTS = {
         'journal_id': 8,  # so far fixed as sales journal 'Factures de client'
@@ -42,7 +41,10 @@ class AccountInvoice(osv.osv):
             ail_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'account.invoice.line', line.id, context=context)
             res.append(ail_vals)
-        return {'invoice_line_ids': res}
+        return {
+            'date': account_invoice.date_invoice,
+            'invoice_line_ids': res
+        }
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         invoice = self.browse(cr, uid, _id, context=context)
