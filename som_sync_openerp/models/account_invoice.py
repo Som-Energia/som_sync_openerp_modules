@@ -48,24 +48,24 @@ class AccountInvoice(osv.osv):
         invoice = self.browse(cr, uid, _id, context=context)
         return invoice.journal_id and invoice.journal_id.som_sync_odoo_invoices
 
-    # def write(self, cr, uid, ids, vals, context=None):
-    #     if context is None:
-    #         context = {}
-    #     if not isinstance(ids, list):
-    #         ids = [ids]
+    def write(self, cr, uid, ids, vals, context=None):
+        if context is None:
+            context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
 
-    #     res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
+        res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
 
-    #     for _id in ids:
-    #         if self._journal_is_syncrozable(cr, uid, _id, context=context) and \
-    #             'state' in vals and \
-    #                 vals['state'] == 'posted':
-    #             sync_obj = self.pool.get('odoo.sync')
-    #             sync_obj.common_sync_model_create_update(
-    #                 cr, uid, self._name, _id, 'create', context=context
-    #             )
+        for _id in ids:
+            if self._journal_is_syncrozable(cr, uid, _id, context=context) and \
+                'state' in vals and \
+                    vals['state'] == 'open':
+                sync_obj = self.pool.get('odoo.sync')
+                sync_obj.common_sync_model_create_update(
+                    cr, uid, self._name, _id, 'create', context=context
+                )
 
-    #     return res
+        return res
 
 
 AccountInvoice()
