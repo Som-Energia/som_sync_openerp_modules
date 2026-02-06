@@ -40,7 +40,7 @@ class AccountMove(osv.osv):
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         move = self.browse(cr, uid, _id, context=context)
-        return move.journal_id and move.journal_id.som_sync_odoo
+        return move.journal_id and move.journal_id.som_sync_odoo_account_moves
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:

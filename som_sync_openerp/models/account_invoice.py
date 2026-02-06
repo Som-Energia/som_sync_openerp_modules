@@ -44,10 +44,9 @@ class AccountInvoice(osv.osv):
             res.append(ail_vals)
         return {'invoice_line_ids': res}
 
-    # def _journal_is_syncrozable(self, cr, uid, _id, context=None):
-    # TODO: OJO QUE AQUI REFACTOR PK SINCRONIZAR MOVES I INVOICES HA DE SER DIFERENT
-    #     move = self.browse(cr, uid, _id, context=context)
-    #     return move.journal_id and move.journal_id.som_sync_odoo
+    def _journal_is_syncrozable(self, cr, uid, _id, context=None):
+        invoice = self.browse(cr, uid, _id, context=context)
+        return invoice.journal_id and invoice.journal_id.som_sync_odoo_invoices
 
     # def write(self, cr, uid, ids, vals, context=None):
     #     if context is None:

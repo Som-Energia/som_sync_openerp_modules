@@ -44,7 +44,8 @@
             <field name="name">General Journal</field>
             <field name="code">General</field>
             <field name="type">general</field>
-            <field name="som_sync_odoo">True</field>
+            <field name="som_sync_odoo_account_moves">True</field>
+            <field name="som_sync_odoo_invoices">False</field>
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
@@ -52,7 +53,8 @@
             <field name="name">Sales Journal</field>
             <field name="code">SalesJournal</field>
             <field name="type">sale</field>
-            <field name="som_sync_odoo">True</field>
+            <field name="som_sync_odoo_invoices">True</field>
+            <field name="som_sync_odoo_account_moves">False</field>
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
