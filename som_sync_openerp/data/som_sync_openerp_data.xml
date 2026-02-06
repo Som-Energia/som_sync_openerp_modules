@@ -13,7 +13,7 @@
         </record>
         <record id="odoo_erp_models_to_sync" model="res.config">
             <field name="name">odoo_erp_models_to_sync</field>
-            <field name="value">[{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},{'model': 'account.move', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country.state', 'auto_sync': False, 'async_enabled': True},{'model': 'res.municipi', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.address', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.bank', 'auto_sync': False, 'async_enabled': True}]</field>
+            <field name="value">[{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},{'model': 'account.invoice', 'auto_sync': False, 'async_enabled': True},{'model': 'account.move', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country.state', 'auto_sync': False, 'async_enabled': True},{'model': 'res.municipi', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.address', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.bank', 'auto_sync': False, 'async_enabled': True}]</field>
             <field name="description">
                 OpenERP models to sync with Odoo.
                 auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
