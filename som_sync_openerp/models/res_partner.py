@@ -35,7 +35,9 @@ class ResPartner(osv.osv):
         'is_company': True,
     }
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         partner = self.browse(cr, uid, id, context=context)
         if partner.vat:
             res = 'company/{}'.format(partner.vat)
@@ -43,7 +45,9 @@ class ResPartner(osv.osv):
         else:
             return False
 
-    def create(self, cr, uid, vals, context={}):
+    def create(self, cr, uid, vals, context=None):
+        if context is None:
+            context = {}
         ids = super(ResPartner, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')

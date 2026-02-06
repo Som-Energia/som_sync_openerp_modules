@@ -12,7 +12,10 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
     def test_action_sync__res_partner(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -26,7 +29,7 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
         # Verify arguments of the last call
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 3, context=context
+            ANY, self.uid, 'res.partner', 'sync', 3, context=context
         )
 
     def test_action_sync__odoo_sync(self):
@@ -41,7 +44,10 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         )[1]
 
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'odoo.sync',
@@ -54,15 +60,21 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
 
         # Verify arguments of the calls
+        partner_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_1).res_id
+        country_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_2).res_id
+        country_state_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_3).res_id
         self.sync_obj.syncronize_sync.assert_has_calls([
-            call(ANY, self.uid, u'res.partner', 'sync', 2, context=context),
-            call(ANY, self.uid, u'res.country', 'sync', 2, context=context),
-            call(ANY, self.uid, u'res.country.state', 'sync', 5, context=context),
+            call(ANY, self.uid, u'res.partner', 'sync', partner_id, context=context),
+            call(ANY, self.uid, u'res.country', 'sync', country_id, context=context),
+            call(ANY, self.uid, u'res.country.state', 'sync', country_state_id, context=context),
         ])
 
     def test_action_sync__static_model(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
 
         context = {
             'from_model': 'account.fiscal.position',
@@ -86,17 +98,23 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context['is_static'] = True
         expected_context['odoo_id'] = 100
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
+            ANY, self.uid, 'account.fiscal.position', 'sync', 1, context=expected_context
         )
 
     def test_action_sync__no_static_model_syncronize_sync(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()  # synchronize async
-
-        self.sync_obj.sync_model_enabled_amplified = MagicMock()
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, False
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -118,17 +136,23 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context = context.copy()
         expected_context['is_static'] = False
         self.sync_obj.syncronize_sync.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+            ANY, self.uid, 'res.partner', 'sync', 1, context=expected_context
         )
 
     def test_action_sync__no_static_model_syncronize_async(self):
         # Mock syncronize_sync method
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock()  # syncronize_sync
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
         self.sync_obj.syncronize = MagicMock()  # synchronize async
-
-        self.sync_obj.sync_model_enabled_amplified = MagicMock()
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        self.sync_obj.sync_model_enabled_amplified.return_value = True, False, True
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -150,5 +174,5 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         expected_context = context.copy()
         expected_context['is_static'] = False
         self.sync_obj.syncronize.assert_called_with(
-            self.cursor, self.uid, 'res.partner', 'sync', 1, context=expected_context
+            ANY, self.uid, 'res.partner', 'sync', 1, context=expected_context
         )

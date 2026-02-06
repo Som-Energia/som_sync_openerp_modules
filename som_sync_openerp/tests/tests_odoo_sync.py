@@ -217,6 +217,16 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
         self.assertEqual(odoo_id, param_odoo_id)
 
+    def test__sync_model_enabled_amplified__setting_ok(self):
+        config_obj = self.openerp.pool.get('res.config')
+        dict_models_to_sync = eval(
+            config_obj.get(self.cursor, self.uid, 'odoo_erp_models_to_sync', '[]'))
+        for _dict in dict_models_to_sync:
+            self.assertIn('model', _dict)
+            self.assertIn('auto_sync', _dict)
+            self.assertIn('async_enabled', _dict)
+        self.assertIsInstance(dict_models_to_sync, list)
+
     def test__sync_model_enabled_amplified__enabled_async_disabled_auto(self):
         for model in [
             'account.account',
@@ -283,7 +293,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def test__get_model_vals_to_sync__partner(self):
         # Ensure the mocked syncronize_sync returns a 2-tuple (odoo_id, erp_id)
         # so the caller can unpack it without raising ValueError.
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock(return_value=(2, 2))
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
         )[1]
@@ -318,7 +331,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def test__get_model_vals_to_sync__partner_address(self):
         # Ensure the mocked syncronize_sync returns a 2-tuple (odoo_id, erp_id)
         # so the caller can unpack it without raising ValueError.
+        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
         self.sync_obj.syncronize_sync = MagicMock(return_value=(3, 3))
+        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
+            self.sync_obj, 'syncronize_sync', orig))
         address_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_address_8'
         )[1]

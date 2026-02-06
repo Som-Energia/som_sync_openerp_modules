@@ -1,0 +1,24 @@
+<openerp>
+    <data>
+        <record id="view_account_journal_form_inherit_som_sync" model="ir.ui.view">
+            <field name="name">account.journal.form.inherit.som.sync</field>
+            <field name="model">account.journal</field>
+            <field name="inherit_id" ref="account.view_account_journal_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='type']" position="after">
+                    <field name="som_sync_odoo"/>
+                </xpath>
+            </field>
+        </record>
+        <record id="view_account_journal_tree_inherit_som_sync" model="ir.ui.view">
+            <field name="name">account.journal.tree.inherit.som.sync</field>
+            <field name="model">account.journal</field>
+            <field name="inherit_id" ref="account.view_account_journal_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='type']" position="after">
+                    <field name="som_sync_odoo"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</openerp>

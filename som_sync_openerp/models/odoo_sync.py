@@ -42,6 +42,7 @@ MAPPING_MODELS_GET = {
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_POST = {
     'account.account': 'accounts',
+    'account.move': 'entries',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
@@ -87,8 +88,16 @@ class OdooSync(osv.osv):
                 return True, dict_model['auto_sync'], dict_model['async_enabled']
         return False, False, False
 
-    def common_sync_model_create_update(self, cursor, uid, model, ids, action, context={}):
+    def common_sync_model_create_update(self, cursor, uid, model, ids, action, context=None):
+        if context is None:
+            context = {}
+        """
+            Common method to sync model records on create or update actions.
+            Allows multiple ids to be processed.
+        """
         try:
+            if not isinstance(ids, list):
+                ids = [ids]
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
             if action == 'sync':
@@ -96,18 +105,22 @@ class OdooSync(osv.osv):
             if sync_enabled and auto_sync:
                 if async_enabled:
                     # Use job queue for async sync
-                    self.syncronize(
-                        cursor, uid, model, action, ids, context=context)
+                    for openerp_id in ids:
+                        self.syncronize(
+                            cursor, uid, model, action, openerp_id, context=context)
                 else:
                     # Sync synchronously
-                    self.syncronize_sync(
-                        cursor, uid, model, action, ids, context=context)
+                    for openerp_id in ids:
+                        self.syncronize_sync(
+                            cursor, uid, model, action, openerp_id, context=context)
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
                 "Error during common_sync_model_create_update for model {}".format(model))
 
-    def _clean_context_update_data(self, cursor, uid, context={}):
+    def _clean_context_update_data(self, cursor, uid, context=None):
+        if context is None:
+            context = {}
         res = context.copy()
         res.pop('update_last_sync', False)
         res.pop('update_odoo_created_sync', False)
@@ -117,7 +130,9 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
-    def get_model_vals_to_sync(self, cursor, uid, model, id, context={}):
+    def get_model_vals_to_sync(self, cursor, uid, model, id, context=None):
+        if context is None:
+            context = {}
         rp_obj = self.pool.get(model)
 
         result_data = {}
@@ -221,14 +236,12 @@ class OdooSync(osv.osv):
 
     @job(queue='sync_odoo', timeout=3600)
     def syncronize(self, cursor, uid,
-                   model, action, openerp_id, context={},
-                   check=True, update_check=True):
+                   model, action, openerp_id, context={}):
         context['update_last_sync'] = True
-        self.syncronize_sync(cursor, uid, model, action, openerp_id,
-                             context=context, check=check, update_check=update_check)
+        self.syncronize_sync(cursor, uid, model, action, openerp_id, context=context)
 
     def syncronize_sync(self, cursor, uid, model,
-                        action, openerp_id, context=None, check=True, update_check=True):
+                        action, openerp_id, context=None):
         """
         Synchronizes a record between ERP and Odoo.
         """
@@ -281,10 +294,16 @@ class OdooSync(osv.osv):
                 })
                 # We continue to check existence even if the specific update action isn't ready
 
-            # Check if the record already exists in Odoo
-            endpoint_suffix = rp_obj.get_endpoint_suffix(cursor, uid, openerp_id, context=context)
-            odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
-                cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+            has_get = hasattr(rp_obj, 'get_endpoint_suffix')
+            if not has_get:
+                # If no method to get endpoint suffix, we cannot check if record exists in Odoo
+                odoo_id = False
+            else:
+                # Check if the record already exists in Odoo
+                endpoint_suffix = rp_obj.get_endpoint_suffix(
+                    cursor, uid, openerp_id, context=context)
+                odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
+                    cursor, uid, model, endpoint_suffix, openerp_id, context=context)
 
             if odoo_id:
                 if not erp_id:
@@ -366,7 +385,9 @@ class OdooSync(osv.osv):
         return odoo_id, erp_id
 
     def get_or_create_static_odoo_id(
-            self, cursor, uid, model, openerp_id, odoo_id=False, context={}):
+            self, cursor, uid, model, openerp_id, odoo_id=False, context=None):
+        if context is None:
+            context = {}
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
             ('res_id', '=', openerp_id),
@@ -397,7 +418,9 @@ class OdooSync(osv.osv):
         }, context=context)
         return odoo_id
 
-    def create_odoo_record(self, cursor, uid, model, data, context={}):
+    def create_odoo_record(self, cursor, uid, model, data, context=None):
+        if context is None:
+            context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         post_sufix = MAPPING_MODELS_POST.get(model, False)
         if post_sufix:
@@ -420,7 +443,9 @@ class OdooSync(osv.osv):
             raise CreationNotSupportedException(model)
         return False, ''
 
-    def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context={}):
+    def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
+        if context is None:
+            context = {}
         # TODO: needs an endpoint with PATCH operation to implement this
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = '{}{}/{}/{}'.format(
@@ -437,7 +462,9 @@ class OdooSync(osv.osv):
                 return True, ''
         return False, response.text
 
-    def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context={}):
+    def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
+        if context is None:
+            context = {}
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
         if not data:
             return False, False, False
@@ -452,7 +479,9 @@ class OdooSync(osv.osv):
         metadata = data.get('metadata', [{}])[0]
         return data.get('odoo_id', False), data.get('erp_id', False), metadata
 
-    def get_odoo_data(self, cursor, uid, model, url_sufix, context={}):
+    def get_odoo_data(self, cursor, uid, model, url_sufix, context=None):
+        if context is None:
+            context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = '{}{}/{}'.format(odoo_url_api, MAPPING_MODELS_GET.get(model), url_sufix)
         headers = {
@@ -568,7 +597,9 @@ class OdooSync(osv.osv):
 
         return vals, update
 
-    def update_erp_id(self, cursor, uid, model, odoo_id, erp_id, context={}):
+    def update_erp_id(self, cursor, uid, model, odoo_id, erp_id, context=None):
+        if context is None:
+            context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = "{}entity/{}/{}/{}".format(
             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), odoo_id, erp_id
@@ -585,19 +616,23 @@ class OdooSync(osv.osv):
         print("ERROR UPDATING ERP_ID IN ODOO:", response.status_code, response.text)
         return False
 
-    def get_erp_data(self, cursor, uid, model, erp_id, context={}):
+    def get_erp_data(self, cursor, uid, model, erp_id, context=None):
+        if context is None:
+            context = {}
         rp_obj = self.pool.get(model)
         fields = list(rp_obj.MAPPING_FIELDS_TO_SYNC.keys())
         data = rp_obj.read(cursor, uid, erp_id, fields)
         return data
 
-    def check_update_odoo_data(self, cursor, uid, model, odoo_id, erp_id, context={}):
+    def check_update_odoo_data(self, cursor, uid, model, odoo_id, erp_id, context=None):
+        if context is None:
+            context = {}
         rp_obj = self.pool.get(model)
         # get odoo data
         url_sufix = rp_obj.get_endpoint_suffix(
             cursor, uid, erp_id, context=context
         )
-        odoo_data = self.get_odoo_data(cursor, uid, model, url_sufix, context={})
+        odoo_data = self.get_odoo_data(cursor, uid, model, url_sufix, context=context)
         odoo_data.pop('odoo_id', None)
         odoo_data.pop('erp_id', None)
 

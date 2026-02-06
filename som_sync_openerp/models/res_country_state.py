@@ -18,7 +18,9 @@ class ResCountryState(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         state = self.browse(cr, uid, id, context=context)
         if state.ree_code and state.country_id:
             res = '{}/{}'.format(state.country_id.code, state.ree_code)
@@ -26,7 +28,9 @@ class ResCountryState(osv.osv):
         else:
             return False
 
-    def create(self, cr, uid, vals, context={}):
+    def create(self, cr, uid, vals, context=None):
+        if context is None:
+            context = {}
         ids = super(ResCountryState, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')

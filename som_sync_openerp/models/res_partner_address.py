@@ -40,7 +40,9 @@ class ResPartnerAddress(osv.osv):
         'is_company': False,
     }
 
-    def get_related_values(self, cr, uid, id, context={}):
+    def get_related_values(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         address = self.browse(cr, uid, id, context=context)
         res = {
             'is_customer': address.partner_id.customer,
@@ -49,7 +51,9 @@ class ResPartnerAddress(osv.osv):
         }
         return res
 
-    def get_endpoint_suffix(self, cr, uid, id, context={}):
+    def get_endpoint_suffix(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
         # /contact/{parent_id}/{ttype}
         address = self.browse(cr, uid, id, context=context)
         sync_obj = self.pool.get('odoo.sync')
@@ -65,7 +69,9 @@ class ResPartnerAddress(osv.osv):
         else:
             return False
 
-    def create(self, cr, uid, vals, context={}):
+    def create(self, cr, uid, vals, context=None):
+        if context is None:
+            context = {}
         ids = super(ResPartnerAddress, self).create(cr, uid, vals, context=context)
 
         sync_obj = self.pool.get('odoo.sync')
@@ -75,7 +81,7 @@ class ResPartnerAddress(osv.osv):
 
         return ids
 
-    def write(self, cr, uid, ids, vals, context={}):
+    def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}
         if not isinstance(ids, list):

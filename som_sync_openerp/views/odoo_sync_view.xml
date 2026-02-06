@@ -128,5 +128,12 @@
             res_model="odoo.sync"
             src_model="payment.type"/>
 
+        <!-- Action to get synced records with Odoo for account.move -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.move')]"
+            id="get_synced_records_odoo_action_account_move"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.move"/>
     </data>
 </openerp>
