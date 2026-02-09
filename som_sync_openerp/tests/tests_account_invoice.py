@@ -10,10 +10,12 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
 
     def setUp(self):
         self.ai_obj = self.openerp.pool.get("account.invoice")
+        self.ail_obj = self.openerp.pool.get("account.invoice.line")
         self.aj_obj = self.openerp.pool.get("account.journal")
         self.imd_obj = self.openerp.pool.get("ir.model.data")
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         self.wf_service = netsvc.LocalService('workflow')
+        self.maxDiff = None
         super(TestAccountInvoice, self).setUp()
 
     @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
@@ -42,6 +44,71 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 }
             ]
         }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__get_related_values_with_taxes(self, mock_syncronize_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0002"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        self.ai_obj.button_reset_taxes(self.cursor, self.uid, [invoice_id])
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'date': '2026-01-16',
+            'invoice_line_ids': [
+                {
+                    'account_id': 99,
+                    'extra_operations_erp': 1,
+                    'name': u'Product A',
+                    'price_unit': 1000.0,
+                    'quantity': 1.0,
+                    'quantity_erp': 1.0
+                },
+                {
+                    'account_id': 99,
+                    'extra_operations_erp': 1,
+                    'name': u'Product B',
+                    'price_unit': 1000.0,
+                    'quantity': 1.0,
+                    'quantity_erp': 1.0
+                },
+                {
+                    'account_id': 99,
+                    'extra_operations_erp': 1,
+                    'name': u'Product C',
+                    'price_unit': 1000.0,
+                    'quantity': 1.0,
+                    'quantity_erp': 1.0
+                },
+                {
+                    'account_id': 99,
+                    'extra_operations_erp': 1,
+                    'name': u'Product D',
+                    'price_unit': 3948.87,  # Not shure
+                    'quantity': 1.0,
+                    'quantity_erp': 1.0
+                }, {
+                    'name': u'Import IESE',
+                    'price_unit': 51.13,  # Not shure
+                    'quantity': 1
+                }, {
+                    'name': u'Base IESE',
+                    'price_unit': 4000.0,  # Not shure
+                    'quantity': -1
+                }
+            ]
+        }
+
         self.assertEqual(related_values, expected_values)
 
     def test__journal_is_syncrozable_True(self):

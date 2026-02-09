@@ -121,6 +121,72 @@
             <field name="odoo_last_sync_at">2023-01-01 10:00:00</field>
             <field name="sync_state">synced</field>
         </record>
+        <record model="account.tax.code" id="account_tax_code_iva">
+            <field name="name">IVA 21%</field>
+            <field name="code">IVA</field>
+            <field name="company_id" model="res.company"  search="[]"/>
+        </record>
+        <record id="account_tax_iva" model="account.tax">
+            <field eval="1" name="sequence"/>
+            <field eval="1.0" name="base_sign"/>
+            <field name="applicable_type">true</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field eval="# price_unit
+                # address : res.partner.address object or False
+                # product : product.product object or False
+
+                result = price_unit * 0.21" name="python_compute_inv"/>
+            <field eval="1.0" name="ref_tax_sign"/>
+            <field eval="percent" name="type"/>
+            <field eval="1.0" name="ref_base_sign"/>
+            <field eval="vat" name="tax_group"/>
+            <field eval="1" name="active"/>
+            <field eval="iva testing tax" name="name"/>
+            <field eval="0.21" name="amount"/>
+            <field eval="# price_unit
+                # address : res.partner.address object or False
+                # product : product.product object or None
+                # partner : res.partner object or None
+
+                result = price_unit * 0.21" name="python_compute"/>
+            <field eval="1.0" name="tax_sign"/>
+            <field name="description">IVA</field>
+            <field name="tax_code_id" ref="account_tax_code_iva"/>
+            <field name="base_code_id" ref="account_tax_code_iva"/>
+        </record>
+        <record model="account.tax.code" id="account_tax_code_iese">
+            <field name="name">iese 5.1130%</field>
+            <field name="code">iese</field>
+            <field name="company_id" model="res.company"  search="[]"/>
+        </record>
+        <record id="account_tax_iese" model="account.tax">
+            <field eval="1" name="sequence"/>
+            <field eval="1.0" name="base_sign"/>
+            <field name="applicable_type">true</field>
+            <field name="company_id" ref="base.main_company"/>
+            <field eval="# price_unit
+                # address : res.partner.address object or False
+                # product : product.product object or False
+
+                result = price_unit * 0.051130" name="python_compute_inv"/>
+            <field eval="1.0" name="ref_tax_sign"/>
+            <field eval="percent" name="type"/>
+            <field eval="1.0" name="ref_base_sign"/>
+            <field eval="other" name="tax_group"/>
+            <field eval="1" name="active"/>
+            <field eval="Impuesto especial iese testing tax" name="name"/>
+            <field eval="0.051130" name="amount"/>
+            <field eval="# price_unit
+                # address : res.partner.address object or False
+                # product : product.product object or None
+                # partner : res.partner object or None
+
+                result = price_unit * 0.051130" name="python_compute"/>
+            <field eval="1.0" name="tax_sign"/>
+            <field name="description">Impuesto especial IESE</field>
+            <field name="base_code_id" ref="account_tax_code_iese"/>
+            <field name="tax_code_id" ref="account_tax_code_iese"/>
+        </record>
         <record id="invoice_0001" model="account.invoice">
             <field name="name">Pol 000001</field>
             <field name="type">out_invoice</field>
@@ -139,6 +205,52 @@
         <record id="invoice_0001_line_1" model="account.invoice.line">
             <field name="name">Product A</field>
             <field name="invoice_id" ref="invoice_0001"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
+        </record>
+        <record id="invoice_0002" model="account.invoice">
+            <field name="name">Pol 000002</field>
+            <field name="type">out_invoice</field>
+            <field name="number">INV0002</field>
+            <field name="state">draft</field>
+            <field name="date_invoice">2026-01-16</field>
+            <field name="partner_id" ref="base.res_partner_9"/>
+            <field name="address_invoice_id" ref="base.res_partner_address_1"/>
+            <field name="period_id" ref="period_012026"/>
+            <field name="account_id" ref="account.a_recv"/>
+            <field name="amount_untaxed">1000.0</field>
+            <field name="amount_tax">210.0</field>
+            <field name="amount_total">1210.0</field>
+            <field name="journal_id" ref="account_journal_sales_syncronizable"/>
+        </record>
+        <record id="invoice_0002_line_1" model="account.invoice.line">
+            <field name="name">Product A</field>
+            <field name="invoice_id" ref="invoice_0002"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
+            <field name="invoice_line_tax_id" eval="[(6,0,[ref('account_tax_iva')])]"/>
+        </record>
+        <record id="invoice_0002_line_2" model="account.invoice.line">
+            <field name="name">Product B</field>
+            <field name="invoice_id" ref="invoice_0002"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
+            <field name="invoice_line_tax_id" eval="[(6,0,[ref('account_tax_iese')])]"/>
+        </record>
+        <record id="invoice_0002_line_3" model="account.invoice.line">
+            <field name="name">Product C</field>
+            <field name="invoice_id" ref="invoice_0002"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
+            <field name="invoice_line_tax_id" eval="[(6,0,[ref('account_tax_iva'),ref('account_tax_iese')])]"/>
+        </record>
+        <record id="invoice_0002_line_4" model="account.invoice.line">
+            <field name="name">Product D</field>
+            <field name="invoice_id" ref="invoice_0002"/>
             <field name="price_unit">1000.0</field>
             <field name="quantity">1</field>
             <field name="account_id" ref="account.a_sale"/>

@@ -41,6 +41,10 @@ class AccountInvoice(osv.osv):
             ail_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'account.invoice.line', line.id, context=context)
             res.append(ail_vals)
+
+        # Add tax lines needed for the sync with Odoo
+        res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
+
         return {
             'date': account_invoice.date_invoice,
             'invoice_line_ids': res
@@ -67,6 +71,47 @@ class AccountInvoice(osv.osv):
                     cr, uid, self._name, _id, 'create', context=context
                 )
 
+        return res
+
+    def add_taxes_lines_needed_for_sync(self, cr, uid, invoice_id, context=None):
+        """
+        This method is called from account.invoice to add the tax lines
+        needed for the sync with Odoo.
+        Lines to add if we have IESE tax lines:
+        * Extra line 1:
+            - quantity = 1
+            - price_unit = amount of the tax IESE line
+        * Extra line 2:
+            - quantity = 1
+            - price_unit = amount base of the tax IESE line
+        * Extra line 3:
+            - quantity = -1
+            - price_unit = amount base general
+        """
+        if context is None:
+            context = {}
+        tax_line_obj = self.pool.get('account.invoice.tax')
+        tax_line_ids = tax_line_obj.search(
+            cr, uid, [('invoice_id', '=', invoice_id)], context=context)
+        res = []
+        for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
+            if 'Impuesto especial' in tax_line.name:
+                res.append({
+                    'name': 'Import IESE',
+                    'quantity': 1,
+                    'price_unit': tax_line.amount,
+                }, {
+                    'name': 'Base IESE',
+                    'quantity': 1,
+                    'price_unit': tax_line.base_amount,
+                })
+        invoice_base = self.read(cr, uid, invoice_id, ['amount_untaxed'], context=context)
+        if invoice_base and invoice_base.get('amount_untaxed'):
+            res.append({
+                'name': 'Base general',
+                'quantity': -1,
+                'price_unit': invoice_base['amount_untaxed'],
+            })
         return res
 
 
