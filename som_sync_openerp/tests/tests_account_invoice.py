@@ -34,6 +34,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             'invoice_line_ids': [
                 {
                     'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
                     'name': u'Product A',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
