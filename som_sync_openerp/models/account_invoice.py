@@ -97,14 +97,18 @@ class AccountInvoice(osv.osv):
         iese_tax_id = 0
         iese_base_amount = 0
         iese_amount = 0
+        iese_account_id = 0
         iva_tax_id = 0
+        iva_account_id = 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
                 iese_tax_id = tax_line.tax_id.id
                 iese_amount = tax_line.amount
                 iese_base_amount = tax_line.base_amount
+                iese_account_id = tax_line.tax_id.account_id.id
             elif 'IVA' in tax_line.name:
                 iva_tax_id = tax_line.tax_id.id
+                iva_account_id = tax_line.tax_id.account_id.id
 
         if iese_tax_id:
             res = [
@@ -113,16 +117,25 @@ class AccountInvoice(osv.osv):
                     'quantity': 1,
                     'price_unit': iese_amount,
                     'tax_ids': [iva_tax_id],
+                    'extra_operations_erp': 1,
+                    'quantity_erp': 1,
+                    'account_id': iva_account_id,
                 }, {
                     'name': 'Base IESE',
                     'quantity': 1,
                     'price_unit': iese_base_amount,
                     'tax_ids': [iese_tax_id],
+                    'extra_operations_erp': 1,
+                    'quantity_erp': 1,
+                    'account_id': iese_account_id,
                 }, {
                     'name': 'Base general',
                     'quantity': -1,
                     'price_unit': amount_untaxed,
                     'tax_ids': [],
+                    'extra_operations_erp': 1,
+                    'quantity_erp': -1,
+                    'account_id': iva_account_id,
                 }
             ]
         return res

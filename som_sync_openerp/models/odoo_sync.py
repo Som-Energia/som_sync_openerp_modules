@@ -24,7 +24,9 @@ MAPPING_MODELS_ENTITIES = {
 
 STATIC_MODELS = [
     'account.fiscal.position',
+    'account.journal',
     'account.payment.term',
+    'account.tax',
     'payment.type',
     'res.country',
 ]
