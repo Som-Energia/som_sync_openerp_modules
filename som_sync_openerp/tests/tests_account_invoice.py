@@ -112,15 +112,18 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'name': u'Import IESE',
                     'price_unit': 102.2,
-                    'quantity': 1
+                    'quantity': 1,
+                    'tax_ids': [iva_tax_id],
                 }, {
                     'name': u'Base IESE',
                     'price_unit': 2000.0,
-                    'quantity': 1
+                    'quantity': 1,
+                    'tax_ids': [iese_tax_id],
                 }, {
                     'name': u'Base general',
                     'price_unit': 4000.0,
-                    'quantity': -1
+                    'quantity': -1,
+                    'tax_ids': [],
                 }
             ]
         }

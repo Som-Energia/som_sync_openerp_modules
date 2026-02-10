@@ -94,25 +94,37 @@ class AccountInvoice(osv.osv):
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
         amount_untaxed = self.read(cr, uid, invoice_id, ['amount_untaxed'])['amount_untaxed']
         res = []
+        iese_tax_id = 0
+        iese_base_amount = 0
+        iese_amount = 0
+        iva_tax_id = 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
-                res = [
-                    {
-                        'name': 'Import IESE',
-                        'quantity': 1,
-                        'price_unit': tax_line.amount,
-                    }, {
-                        'name': 'Base IESE',
-                        'quantity': 1,
-                        'price_unit': tax_line.base_amount,
-                    }, {
-                        'name': 'Base general',
-                        'quantity': -1,
-                        'price_unit': amount_untaxed,
-                    }
-                ]
-                break
+                iese_tax_id = tax_line.tax_id.id
+                iese_amount = tax_line.amount
+                iese_base_amount = tax_line.base_amount
+            elif 'IVA' in tax_line.name:
+                iva_tax_id = tax_line.tax_id.id
 
+        if iese_tax_id:
+            res = [
+                {
+                    'name': 'Import IESE',
+                    'quantity': 1,
+                    'price_unit': iese_amount,
+                    'tax_ids': [iva_tax_id],
+                }, {
+                    'name': 'Base IESE',
+                    'quantity': 1,
+                    'price_unit': iese_base_amount,
+                    'tax_ids': [iese_tax_id],
+                }, {
+                    'name': 'Base general',
+                    'quantity': -1,
+                    'price_unit': amount_untaxed,
+                    'tax_ids': [],
+                }
+            ]
         return res
 
 
