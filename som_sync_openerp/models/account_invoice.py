@@ -121,7 +121,7 @@ class AccountInvoice(osv.osv):
         if iese_tax_id:
             res = [
                 {
-                    'name': 'Import IESE',
+                    'name': u'Import IESE',
                     'quantity': 1,
                     'price_unit': iese_amount,
                     'tax_ids': [odoo_iva_tax_id],
@@ -129,7 +129,7 @@ class AccountInvoice(osv.osv):
                     'quantity_erp': 1,
                     'account_id': odoo_iva_account_id,
                 }, {
-                    'name': 'Base IESE',
+                    'name': u'Base IESE',
                     'quantity': 1,
                     'price_unit': iese_base_amount,
                     'tax_ids': [odoo_iese_tax_id],
@@ -137,10 +137,10 @@ class AccountInvoice(osv.osv):
                     'quantity_erp': 1,
                     'account_id': odoo_iese_account_id,
                 }, {
-                    'name': 'Base general',
+                    'name': u'Base general',
                     'quantity': -1,
                     'price_unit': amount_untaxed,
-                    'tax_ids': [],
+                    'tax_ids': None,
                     'extra_operations_erp': 1,
                     'quantity_erp': -1,
                     'account_id': odoo_iva_account_id,

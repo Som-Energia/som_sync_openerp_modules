@@ -142,6 +142,7 @@
             <field name="description">IVA</field>
             <field name="tax_code_id" ref="account_tax_code_iva"/>
             <field name="base_code_id" ref="account_tax_code_iva"/>
+            <field name="account_collected_id" ref="account.a_sale"/>
         </record>
         <record model="account.tax.code" id="account_tax_code_iese">
             <field name="name">iese 5.1130%</field>
@@ -164,6 +165,7 @@
             <field name="description">Impuesto especial IESE</field>
             <field name="base_code_id" ref="account_tax_code_iese"/>
             <field name="tax_code_id" ref="account_tax_code_iese"/>
+            <field name="account_collected_id" ref="account.a_sale"/>
         </record>
         <record id="invoice_0001" model="account.invoice">
             <field name="name">Pol 000001</field>

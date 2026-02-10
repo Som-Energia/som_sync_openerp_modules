@@ -41,7 +41,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0,
-                    'tax_ids': [],
+                    'tax_ids': None,
                 }
             ]
         }
@@ -58,6 +58,9 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         iese_tax_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_tax_iese"
         )[1]
+        sales_account_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "account", "a_sale"
+        )[1]
         odoo_account_id = 99
         erp_account_id = 1
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
@@ -70,64 +73,81 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, invoice_id
         )
 
+        odoo_iva_tax_id = self.sync_obj.get_odoo_id_by_erp_id(
+            self.cursor, self.uid, 'account.tax', iva_tax_id
+        )
+        odoo_iese_tax_id = self.sync_obj.get_odoo_id_by_erp_id(
+            self.cursor, self.uid, 'account.tax', iese_tax_id
+        )
+        odoo_sales_account_id = self.sync_obj.get_odoo_id_by_erp_id(
+            self.cursor, self.uid, 'account.account', sales_account_id
+        )
         expected_values = {
             'date': '2026-01-16',
             'invoice_line_ids': [
                 {
-                    'account_id': 99,
+                    'account_id': odoo_sales_account_id,
                     'extra_operations_erp': 1,
                     'name': u'Product A',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0,
-                    'tax_ids': [iva_tax_id],
+                    'tax_ids': [odoo_iva_tax_id],
                 },
                 {
-                    'account_id': 99,
+                    'account_id': odoo_sales_account_id,
                     'extra_operations_erp': 1,
                     'name': u'Product B',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0,
-                    'tax_ids': [iese_tax_id],
+                    'tax_ids': [odoo_iese_tax_id],
                 },
                 {
-                    'account_id': 99,
+                    'account_id': odoo_sales_account_id,
                     'extra_operations_erp': 1,
                     'name': u'Product C',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0,
-                    'tax_ids': [iva_tax_id, iese_tax_id],
+                    'tax_ids': [odoo_iva_tax_id, odoo_iese_tax_id],
                 },
                 {
-                    'account_id': 99,
+                    'account_id': odoo_sales_account_id,
                     'extra_operations_erp': 1,
                     'name': u'Product D',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0,
-                    'tax_ids': [],
+                    'tax_ids': None,
                 },
                 {
                     'name': u'Import IESE',
                     'price_unit': 102.2,
                     'quantity': 1,
-                    'tax_ids': [iva_tax_id],
+                    'tax_ids': [odoo_iva_tax_id],
+                    'account_id': odoo_sales_account_id,
+                    'extra_operations_erp': 1,
+                    'quantity_erp': 1,
                 }, {
                     'name': u'Base IESE',
                     'price_unit': 2000.0,
                     'quantity': 1,
-                    'tax_ids': [iese_tax_id],
+                    'tax_ids': [odoo_iese_tax_id],
+                    'account_id': odoo_sales_account_id,
+                    'extra_operations_erp': 1,
+                    'quantity_erp': 1,
                 }, {
                     'name': u'Base general',
                     'price_unit': 4000.0,
                     'quantity': -1,
-                    'tax_ids': [],
+                    'tax_ids': None,
+                    'account_id': odoo_sales_account_id,
+                    'extra_operations_erp': 1,
+                    'quantity_erp': -1,
                 }
             ]
         }
-
         self.assertEqual(related_values, expected_values)
 
     def test__journal_is_syncrozable_True(self):
