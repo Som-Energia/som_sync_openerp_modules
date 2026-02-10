@@ -131,24 +131,13 @@
             <field eval="1.0" name="base_sign"/>
             <field name="applicable_type">true</field>
             <field name="company_id" ref="base.main_company"/>
-            <field eval="# price_unit
-                # address : res.partner.address object or False
-                # product : product.product object or False
-
-                result = price_unit * 0.21" name="python_compute_inv"/>
             <field eval="1.0" name="ref_tax_sign"/>
-            <field eval="percent" name="type"/>
+            <field name="type">percent</field>
             <field eval="1.0" name="ref_base_sign"/>
-            <field eval="vat" name="tax_group"/>
+            <field name="tax_group">vat</field>
             <field eval="1" name="active"/>
-            <field eval="iva testing tax" name="name"/>
+            <field name="name">IVA testing tax</field>
             <field eval="0.21" name="amount"/>
-            <field eval="# price_unit
-                # address : res.partner.address object or False
-                # product : product.product object or None
-                # partner : res.partner object or None
-
-                result = price_unit * 0.21" name="python_compute"/>
             <field eval="1.0" name="tax_sign"/>
             <field name="description">IVA</field>
             <field name="tax_code_id" ref="account_tax_code_iva"/>
@@ -164,24 +153,13 @@
             <field eval="1.0" name="base_sign"/>
             <field name="applicable_type">true</field>
             <field name="company_id" ref="base.main_company"/>
-            <field eval="# price_unit
-                # address : res.partner.address object or False
-                # product : product.product object or False
-
-                result = price_unit * 0.051130" name="python_compute_inv"/>
             <field eval="1.0" name="ref_tax_sign"/>
-            <field eval="percent" name="type"/>
+            <field name="type">percent</field>
             <field eval="1.0" name="ref_base_sign"/>
-            <field eval="other" name="tax_group"/>
+            <field name="tax_group">vat</field>
             <field eval="1" name="active"/>
-            <field eval="Impuesto especial iese testing tax" name="name"/>
+            <field name="name">Impuesto especial iese testing tax</field>
             <field eval="0.051130" name="amount"/>
-            <field eval="# price_unit
-                # address : res.partner.address object or False
-                # product : product.product object or None
-                # partner : res.partner object or None
-
-                result = price_unit * 0.051130" name="python_compute"/>
             <field eval="1.0" name="tax_sign"/>
             <field name="description">Impuesto especial IESE</field>
             <field name="base_code_id" ref="account_tax_code_iese"/>

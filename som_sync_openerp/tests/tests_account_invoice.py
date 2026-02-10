@@ -94,16 +94,21 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': 99,
                     'extra_operations_erp': 1,
                     'name': u'Product D',
-                    'price_unit': 3948.87,  # Not shure
+                    'price_unit': 1000.0,
                     'quantity': 1.0,
                     'quantity_erp': 1.0
-                }, {
+                },
+                {
                     'name': u'Import IESE',
-                    'price_unit': 51.13,  # Not shure
+                    'price_unit': 102.2,
                     'quantity': 1
                 }, {
                     'name': u'Base IESE',
-                    'price_unit': 4000.0,  # Not shure
+                    'price_unit': 2000.0,
+                    'quantity': 1
+                }, {
+                    'name': u'Base general',
+                    'price_unit': 4000.0,
                     'quantity': -1
                 }
             ]

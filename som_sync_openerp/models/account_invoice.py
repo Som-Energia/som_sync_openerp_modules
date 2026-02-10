@@ -93,25 +93,27 @@ class AccountInvoice(osv.osv):
         tax_line_obj = self.pool.get('account.invoice.tax')
         tax_line_ids = tax_line_obj.search(
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
+        amount_untaxed = self.read(cr, uid, invoice_id, ['amount_untaxed'])['amount_untaxed']
         res = []
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
-                res.append({
-                    'name': 'Import IESE',
-                    'quantity': 1,
-                    'price_unit': tax_line.amount,
-                }, {
-                    'name': 'Base IESE',
-                    'quantity': 1,
-                    'price_unit': tax_line.base_amount,
-                })
-        invoice_base = self.read(cr, uid, invoice_id, ['amount_untaxed'], context=context)
-        if invoice_base and invoice_base.get('amount_untaxed'):
-            res.append({
-                'name': 'Base general',
-                'quantity': -1,
-                'price_unit': invoice_base['amount_untaxed'],
-            })
+                res = [
+                    {
+                        'name': 'Import IESE',
+                        'quantity': 1,
+                        'price_unit': tax_line.amount,
+                    }, {
+                        'name': 'Base IESE',
+                        'quantity': 1,
+                        'price_unit': tax_line.base_amount,
+                    }, {
+                        'name': 'Base general',
+                        'quantity': -1,
+                        'price_unit': amount_untaxed,
+                    }
+                ]
+                break
+
         return res
 
 
