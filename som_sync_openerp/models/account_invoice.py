@@ -19,6 +19,7 @@ class AccountInvoice(osv.osv):
         "payment_term": "invoice_payment_term_id",
         "payment_type": "preferred_payment_method_line_id",
         "fiscal_position": "fiscal_position_id",
+        "reference": "ref",
     }
     MAPPING_FK = {
         "partner_id": "res.partner",
