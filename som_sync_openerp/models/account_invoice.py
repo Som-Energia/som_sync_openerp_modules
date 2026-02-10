@@ -90,6 +90,8 @@ class AccountInvoice(osv.osv):
         if context is None:
             context = {}
         tax_line_obj = self.pool.get('account.invoice.tax')
+        sync_obj = self.pool.get('odoo.sync')
+
         tax_line_ids = tax_line_obj.search(
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
         amount_untaxed = self.read(cr, uid, invoice_id, ['amount_untaxed'])['amount_untaxed']
@@ -105,29 +107,35 @@ class AccountInvoice(osv.osv):
                 iese_tax_id = tax_line.tax_id.id
                 iese_amount = tax_line.amount
                 iese_base_amount = tax_line.base_amount
-                iese_account_id = tax_line.tax_id.account_id.id
+                iese_account_id = tax_line.tax_id.account_collected_id.id
             elif 'IVA' in tax_line.name:
                 iva_tax_id = tax_line.tax_id.id
-                iva_account_id = tax_line.tax_id.account_id.id
+                iva_account_id = tax_line.tax_id.account_collected_id.id
 
+        odoo_iese_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iese_tax_id)
+        odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
+        odoo_iese_account_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.account', iese_account_id)
+        odoo_iva_account_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.account', iva_account_id)
         if iese_tax_id:
             res = [
                 {
                     'name': 'Import IESE',
                     'quantity': 1,
                     'price_unit': iese_amount,
-                    'tax_ids': [iva_tax_id],
+                    'tax_ids': [odoo_iva_tax_id],
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
-                    'account_id': iva_account_id,
+                    'account_id': odoo_iva_account_id,
                 }, {
                     'name': 'Base IESE',
                     'quantity': 1,
                     'price_unit': iese_base_amount,
-                    'tax_ids': [iese_tax_id],
+                    'tax_ids': [odoo_iese_tax_id],
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
-                    'account_id': iese_account_id,
+                    'account_id': odoo_iese_account_id,
                 }, {
                     'name': 'Base general',
                     'quantity': -1,
@@ -135,7 +143,7 @@ class AccountInvoice(osv.osv):
                     'tax_ids': [],
                     'extra_operations_erp': 1,
                     'quantity_erp': -1,
-                    'account_id': iva_account_id,
+                    'account_id': odoo_iva_account_id,
                 }
             ]
         return res

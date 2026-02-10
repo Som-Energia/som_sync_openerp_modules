@@ -174,14 +174,24 @@ class OdooSync(osv.osv):
             for fk_field in keys_fk:
                 model_fk = rp_obj.MAPPING_FK[fk_field]
                 id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
-                if id_fk:
-                    odoo_id, erp_id = self.syncronize_sync(
-                        cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
-                    if not odoo_id:
-                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
-                    data[fk_field] = odoo_id
-                else:
+
+                if not id_fk:
                     data[fk_field] = None
+                else:
+                    if isinstance(id_fk, tuple):
+                        odoo_id, _ = self.syncronize_sync(
+                            cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                        if not odoo_id:
+                            raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                        data[fk_field] = odoo_id
+                    else:
+                        data[fk_field] = []
+                        for id_fk_elem in id_fk:
+                            odoo_id, _ = self.syncronize_sync(
+                                cursor, uid, model_fk, 'sync', id_fk_elem, context_copy)
+                            if not odoo_id:
+                                raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk_elem))
+                            data[fk_field].append(odoo_id)
 
         # Map fields to sync
         for erp_key, odoo_key in rp_obj.MAPPING_FIELDS_TO_SYNC.items():
@@ -675,6 +685,18 @@ class OdooSync(osv.osv):
             result[sync.id] = erp_name
 
         return result
+
+    def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', erp_id),
+        ])
+        if sync_ids:
+            sync = self.browse(cursor, uid, sync_ids[0])
+            return sync.odoo_id
+        else:
+            odoo_id, _ = self.syncronize_sync(cursor, uid, model, 'sync', erp_id)
+            return odoo_id
 
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),

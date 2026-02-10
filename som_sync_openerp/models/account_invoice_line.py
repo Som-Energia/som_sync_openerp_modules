@@ -15,7 +15,7 @@ class AccountInvoiceLine(osv.osv):
     }
     MAPPING_FK = {
         'account_id': 'account.account',
-        'tax_id': 'account.tax',
+        'invoice_line_tax_id': 'account.tax',
     }
     MAPPING_CONSTANTS = {
         'extra_operations_erp': 1,
@@ -28,6 +28,8 @@ class AccountInvoiceLine(osv.osv):
         tax_ids = []
         if account_invoice_line.invoice_line_tax_id:
             tax_ids = [tax.id for tax in account_invoice_line.invoice_line_tax_id]
+        if not isinstance(tax_ids, list):
+            tax_ids = [tax_ids]
         res = {
             'quantity_erp': account_invoice_line.quantity,
             'tax_ids': tax_ids,
