@@ -11,11 +11,11 @@ class AccountInvoiceLine(osv.osv):
         'quantity': 'quantity',
         'price_unit': 'price_unit',
         'account_id': 'account_id',
-        # 'tax_id': 'tax_ids',
+        'invoice_line_tax_id': 'tax_ids',
     }
     MAPPING_FK = {
         'account_id': 'account.account',
-        # 'tax_id': 'account.tax',
+        'tax_id': 'account.tax',
     }
     MAPPING_CONSTANTS = {
         'extra_operations_erp': 1,
@@ -25,9 +25,12 @@ class AccountInvoiceLine(osv.osv):
         if context is None:
             context = {}
         account_invoice_line = self.browse(cr, uid, id, context=context)
+        tax_ids = []
+        if account_invoice_line.invoice_line_tax_id:
+            tax_ids = [tax.id for tax in account_invoice_line.invoice_line_tax_id]
         res = {
             'quantity_erp': account_invoice_line.quantity,
-            # 'tax_ids': [1]
+            'tax_ids': tax_ids,
         }
         return res
 

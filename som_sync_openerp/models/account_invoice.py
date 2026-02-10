@@ -10,7 +10,7 @@ class AccountInvoice(osv.osv):
         "id": "pnt_erp_id",
         "number": "number",
         "partner_id": "partner_id",
-        # "journal_id": "journal_id",
+        "journal_id": "journal_id",
         "date_invoice": "invoice_date",
         "amount_untaxed": "amount_untaxed",
         "amount_tax": "amount_tax",
@@ -22,13 +22,12 @@ class AccountInvoice(osv.osv):
     }
     MAPPING_FK = {
         "partner_id": "res.partner",
-        # 'journal_id': 'account.journal',
+        'journal_id': 'account.journal',
         "payment_term": "account.payment.term",
         "payment_type": "payment.type",
         "fiscal_position": "account.fiscal.position",
     }
     MAPPING_CONSTANTS = {
-        'journal_id': 8,  # so far fixed as sales journal 'Factures de client'
     }
 
     def get_related_values(self, cr, uid, id, context=None):

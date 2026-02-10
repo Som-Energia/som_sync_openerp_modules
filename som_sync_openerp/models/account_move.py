@@ -9,15 +9,14 @@ class AccountMove(osv.osv):
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'name',
-        # 'journal_id': 'journal_id',
+        'journal_id': 'journal_id',
         'ref': 'ref',
         'date': 'date',
     }
     MAPPING_FK = {
-        # 'journal_id': 'account.journal',
+        'journal_id': 'account.journal',
     }
     MAPPING_CONSTANTS = {
-        'journal_id': 10,
     }
 
     def get_related_values(self, cr, uid, id, context=None):

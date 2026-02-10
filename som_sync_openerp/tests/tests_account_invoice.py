@@ -40,7 +40,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'name': u'Product A',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
-                    'quantity_erp': 1.0
+                    'quantity_erp': 1.0,
+                    'tax_ids': [],
                 }
             ]
         }
@@ -50,6 +51,12 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
     def test__get_related_values_with_taxes(self, mock_syncronize_sync):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0002"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        iese_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iese"
         )[1]
         odoo_account_id = 99
         erp_account_id = 1
@@ -72,7 +79,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'name': u'Product A',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
-                    'quantity_erp': 1.0
+                    'quantity_erp': 1.0,
+                    'tax_ids': [iva_tax_id],
                 },
                 {
                     'account_id': 99,
@@ -80,7 +88,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'name': u'Product B',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
-                    'quantity_erp': 1.0
+                    'quantity_erp': 1.0,
+                    'tax_ids': [iese_tax_id],
                 },
                 {
                     'account_id': 99,
@@ -88,7 +97,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'name': u'Product C',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
-                    'quantity_erp': 1.0
+                    'quantity_erp': 1.0,
+                    'tax_ids': [iva_tax_id, iese_tax_id],
                 },
                 {
                     'account_id': 99,
@@ -96,7 +106,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'name': u'Product D',
                     'price_unit': 1000.0,
                     'quantity': 1.0,
-                    'quantity_erp': 1.0
+                    'quantity_erp': 1.0,
+                    'tax_ids': [],
                 },
                 {
                     'name': u'Import IESE',
