@@ -226,6 +226,12 @@ class OdooSync(osv.osv):
             if field_obj and field_obj._type == 'char':
                 result_data[key] = ''
 
+        # Hook last modifications
+        has_hook_last_modifications = hasattr(rp_obj, 'hook_last_modifications')
+        if has_hook_last_modifications and callable(getattr(rp_obj, 'hook_last_modifications')):
+            hook_data = rp_obj.hook_last_modifications(cursor, uid, id, context=context)
+            result_data.update(hook_data)
+
         return result_data
 
     def check_erp_record_exist(self, cursor, uid, model, openerp_id):

@@ -151,5 +151,22 @@ class AccountInvoice(osv.osv):
             ]
         return res
 
+    def hook_last_modifications(self, cr, uid, data, context=None):
+        """
+        Modify the data to sync with a constant:
+        - payment_type = 375
+
+        :param self: Description
+        :param cr: Description
+        :param uid: Description
+        :param data: Description
+        :param context: Description
+        """
+        if context is None:
+            context = {}
+        if data['type'] in ['in_refund', 'in_invoice']:
+            data['payment_type'] = 375
+        return data
+
 
 AccountInvoice()
