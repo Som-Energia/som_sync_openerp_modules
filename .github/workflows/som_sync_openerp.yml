@@ -9,7 +9,7 @@ jobs:
     uses: Som-Energia/openerp_som_addons/.github/workflows/reusable_workflow.yml@main
     with:
       module: som_sync_openerp
-      pyversion: '["2.7", "3.11"]'
+      pyversion: '["2.7"]'
     secrets:
       ACCESS_TOKEN_GA: ${{ secrets.ACCESS_TOKEN_GA }}
       ESIOS_TOKEN: ${{ secrets.ESIOS_TOKEN }}
