@@ -50,6 +50,11 @@ class AccountInvoice(osv.osv):
             'invoice_line_ids': res
         }
 
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        return self._journal_is_syncrozable(cr, uid, id, context=context)
+
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         invoice = self.browse(cr, uid, _id, context=context)
         return invoice.journal_id and invoice.journal_id.som_sync_odoo_invoices
@@ -62,14 +67,11 @@ class AccountInvoice(osv.osv):
 
         res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
 
-        for _id in ids:
-            if self._journal_is_syncrozable(cr, uid, _id, context=context) and \
-                'state' in vals and \
-                    vals['state'] == 'open':
-                sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, _id, 'create', context=context
-                )
+        if 'state' in vals and vals['state'] == 'open':
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, ids, 'create', context=context
+            )
 
         return res
 

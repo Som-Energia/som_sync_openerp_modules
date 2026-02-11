@@ -107,16 +107,27 @@ class OdooSync(osv.osv):
             if action == 'sync':
                 auto_sync = True  # force sync for on-demand
             if sync_enabled and auto_sync:
-                if async_enabled:
-                    # Use job queue for async sync
-                    for openerp_id in ids:
+                # check special restriction for some models
+                has_special_restrictions = hasattr(
+                    self.pool.get(model), 'check_special_restrictions')
+                for _id in ids:
+                    if has_special_restrictions and not \
+                            self.pool.get(model).check_special_restrictions(
+                                cursor, uid, _id, context=context):
+                        logger = logging.getLogger('openerp.odoo.sync')
+                        logger.info(
+                            "Special restrictions not passed for record {} of model {}, "
+                            "skipping sync".format(_id, model))
+                        continue
+                    if async_enabled:
+                        # Use job queue for async sync
                         self.syncronize(
-                            cursor, uid, model, action, openerp_id, context=context)
-                else:
-                    # Sync synchronously
-                    for openerp_id in ids:
+                            cursor, uid, model, action, _id, context=context)
+                    else:
+                        # Sync synchronously
                         self.syncronize_sync(
-                            cursor, uid, model, action, openerp_id, context=context)
+                            cursor, uid, model, action, _id, context=context)
+
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
