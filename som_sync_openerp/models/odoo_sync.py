@@ -229,7 +229,7 @@ class OdooSync(osv.osv):
         # Hook last modifications
         has_hook_last_modifications = hasattr(rp_obj, 'hook_last_modifications')
         if has_hook_last_modifications and callable(getattr(rp_obj, 'hook_last_modifications')):
-            hook_data = rp_obj.hook_last_modifications(cursor, uid, id, context=context)
+            hook_data = rp_obj.hook_last_modifications(cursor, uid, result_data, context=context)
             result_data.update(hook_data)
 
         return result_data

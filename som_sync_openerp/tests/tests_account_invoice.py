@@ -221,3 +221,25 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         mock_syncronize_sync.assert_not_called()
+
+    def test__hook_last_modifications(self):
+        result_data = {
+            'move_type': u'out_invoice',
+            'preferred_payment_method_line_id': 400,
+        }
+        _ = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, result_data
+        )
+
+        self.assertEqual(result_data, result_data)
+
+        result_data = {
+            'move_type': u'in_invoice',
+            'preferred_payment_method_line_id': 375,
+        }
+
+        hook_data = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, result_data
+        )
+
+        self.assertEqual(hook_data, result_data)

@@ -164,7 +164,7 @@ class AccountInvoice(osv.osv):
         """
         if context is None:
             context = {}
-        if data['type'] in ['in_refund', 'in_invoice']:
+        if data['move_type'] in ['in_refund', 'in_invoice']:
             data['payment_type'] = 375
         return data
 

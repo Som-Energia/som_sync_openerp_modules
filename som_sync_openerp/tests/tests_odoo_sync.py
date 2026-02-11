@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
-from mock import MagicMock, call, ANY
+from mock import MagicMock, call, ANY, patch
 
 from destral import testing
+from ..models import odoo_sync
 from som_sync_openerp.models.odoo_exceptions import (
     CreationNotSupportedException, ERPObjectNotExistsException
 )
@@ -362,6 +363,45 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'street': u'69 rue de Chimay',
             'type': 'invoice',
             'zip': u'5478'
+        }
+        self.assertEqual(vals, expected_vals)
+
+    @patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__get_model_vals_to_sync__invoice(self, mock_syncronize_sync):
+        mock_syncronize_sync.return_value = (2, 2)
+
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+
+        vals = self.sync_obj.get_model_vals_to_sync(
+            self.cursor, self.uid, 'account.invoice', invoice_id
+        )
+
+        expected_vals = {
+            'amount_tax': 0.0,
+            'amount_total': 1000.0,
+            'amount_untaxed': 1000.0,
+            'date': '2026-01-16',
+            'fiscal_position_id': None,
+            'invoice_date': '2026-01-16',
+            'invoice_line_ids': [{
+                'account_id': 2,
+                'extra_operations_erp': 1,
+                'name': u'Product A',
+                'price_unit': 1000.0,
+                'quantity': 1.0,
+                'quantity_erp': 1.0,
+                'tax_ids': None
+            }],
+            'invoice_payment_term_id': None,
+            'journal_id': 2,
+            'move_type': u'out_invoice',
+            'number': u'INV0001',
+            'partner_id': 2,
+            'pnt_erp_id': 12L,
+            'preferred_payment_method_line_id': None,
+            'ref': False
         }
         self.assertEqual(vals, expected_vals)
 
