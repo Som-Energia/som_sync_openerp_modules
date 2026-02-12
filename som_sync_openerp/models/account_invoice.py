@@ -53,11 +53,15 @@ class AccountInvoice(osv.osv):
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
             context = {}
-        return self._journal_is_syncrozable(cr, uid, id, context=context)
+        return self._journal_is_syncrozable(cr, uid, id, context=context) and \
+            self._is_invoice_syncrozable(cr, uid, id, context)
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         invoice = self.browse(cr, uid, _id, context=context)
         return invoice.journal_id and invoice.journal_id.som_sync_odoo_invoices
+
+    def _is_invoice_syncrozable(self, cr, uid, id, context=None):
+        return self.read(cr, uid, id, ['state'])['state'] in ['open', 'paid']
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
@@ -165,7 +169,9 @@ class AccountInvoice(osv.osv):
         if context is None:
             context = {}
         if data['move_type'] in ['in_refund', 'in_invoice']:
-            data['payment_type'] = 375
+            data['preferred_payment_method_line_id'] = 375
+        if data['ref'] is False:
+            data['ref'] = ''
         return data
 
 
