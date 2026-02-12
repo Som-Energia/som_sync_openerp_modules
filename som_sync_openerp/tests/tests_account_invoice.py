@@ -18,7 +18,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestAccountInvoice, self).setUp()
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values(self, mock_syncronize_sync):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
@@ -47,7 +47,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(related_values, expected_values)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_with_taxes(self, mock_syncronize_sync):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0002"

@@ -295,9 +295,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(cleaned_context, expected_context)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
-    def test__get_model_vals_to_sync__partner(self, mock_syncronize_sync):
-        mock_syncronize_sync.return_value = (2, 2)
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_model_vals_to_sync__partner(self, mock_common_sync_model_create_update):
+        mock_common_sync_model_create_update.return_value = (2, 2)
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
         )[1]
@@ -306,10 +306,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'res.partner', partner_id
         )
 
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
-        self.sync_obj.syncronize_sync.assert_has_calls([
-            mock.call(mock.ANY, self.uid, u'account.account', 'sync', 2, {'from_fk_sync': True}),
-            mock.call(mock.ANY, self.uid, u'account.account', 'sync', 3, {'from_fk_sync': True}),
+        self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 2)
+        self.sync_obj.common_sync_model_create_update.assert_has_calls([
+            mock.call(mock.ANY, self.uid, u'account.account', 2, 'sync', {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.account', 3, 'sync', {'from_fk_sync': True}),
         ])
         expected_vals = {
             'is_company': True,
@@ -329,9 +329,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
-    def test__get_model_vals_to_sync__partner_address(self, mock_syncronize_sync):
-        mock_syncronize_sync.return_value = (3, 3)
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_model_vals_to_sync__partner_address(self, mock_common_sync_model_create_update):
+        mock_common_sync_model_create_update.return_value = (3, 3)
         address_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_address_8'
         )[1]
@@ -340,9 +340,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'res.partner.address', address_id
         )
 
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
-        self.sync_obj.syncronize_sync.assert_has_calls([
-            mock.call(mock.ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
+        self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 1)
+        self.sync_obj.common_sync_model_create_update.assert_has_calls([
+            mock.call(mock.ANY, self.uid, u'res.partner', 3, 'sync', {'from_fk_sync': True}),
         ])
         expected_vals = {
             'city': u'Wavre',
@@ -362,7 +362,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_model_vals_to_sync__invoice(self, mock_syncronize_sync):
         mock_syncronize_sync.return_value = (2, 2)
         invoice_id = self.imd_obj.get_object_reference(

@@ -14,7 +14,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values(self, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
