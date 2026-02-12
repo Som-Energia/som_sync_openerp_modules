@@ -92,7 +92,7 @@ class OdooSync(osv.osv):
                 return True, dict_model['auto_sync'], dict_model['async_enabled']
         return False, False, False
 
-    def common_sync_model_create_update(self, cursor, uid, model, ids, action, context=None):
+    def common_sync_model_create_update(self, cursor, uid, model, action, ids, context=None):
         if context is None:
             context = {}
         """
@@ -190,7 +190,7 @@ class OdooSync(osv.osv):
                 else:
                     if isinstance(id_fk, tuple):
                         odoo_id, _ = self.common_sync_model_create_update(
-                            cursor, uid, model_fk, id_fk[0], 'sync', context_copy)
+                            cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
                         if not odoo_id:
                             raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
                         data[fk_field] = odoo_id
@@ -198,7 +198,7 @@ class OdooSync(osv.osv):
                         data[fk_field] = []
                         for id_fk_elem in id_fk:
                             odoo_id, _ = self.common_sync_model_create_update(
-                                cursor, uid, model_fk, id_fk_elem, 'sync', context_copy)
+                                cursor, uid, model_fk, 'sync', id_fk_elem, context_copy)
                             if not odoo_id:
                                 raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk_elem))
                             data[fk_field].append(odoo_id)
@@ -716,7 +716,7 @@ class OdooSync(osv.osv):
             sync = self.browse(cursor, uid, sync_ids[0])
             return sync.odoo_id
         else:
-            odoo_id, _ = self.common_sync_model_create_update(cursor, uid, model, erp_id, 'sync')
+            odoo_id, _ = self.common_sync_model_create_update(cursor, uid, model, 'sync', erp_id)
             return odoo_id
 
     _columns = {

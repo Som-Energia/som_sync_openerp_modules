@@ -308,8 +308,8 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 2)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
-            mock.call(mock.ANY, self.uid, u'account.account', 2, 'sync', {'from_fk_sync': True}),
-            mock.call(mock.ANY, self.uid, u'account.account', 3, 'sync', {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, 'account.account', 'sync', 2, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, 'account.account', 'sync', 3, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'is_company': True,
@@ -342,7 +342,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 1)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
-            mock.call(mock.ANY, self.uid, u'res.partner', 3, 'sync', {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'city': u'Wavre',
@@ -394,7 +394,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'move_type': u'out_invoice',
             'number': u'INV0001',
             'partner_id': 2,
-            'pnt_erp_id': 12L,
+            'pnt_erp_id': invoice_id,
             'preferred_payment_method_line_id': None,
             'ref': '',
         }
@@ -430,7 +430,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )[1]
 
         self.sync_obj.common_sync_model_create_update(
-            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+            self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
         mock_syncronize_sync.assert_not_called()
 
@@ -447,7 +447,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
 
         self.sync_obj.common_sync_model_create_update(
-            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+            self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
         # Check 2 calls to syncronize.
         # Open invoice (write) and sync (common_sync_model_create_update)
@@ -485,7 +485,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
 
         self.sync_obj.common_sync_model_create_update(
-            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+            self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
         # Check 3 calls to syncronize.
         # Open invoice (write), Pay invoice (write) and sync (common_sync_model_create_update)
