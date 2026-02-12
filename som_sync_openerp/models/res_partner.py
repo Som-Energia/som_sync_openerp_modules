@@ -40,7 +40,7 @@ class ResPartner(osv.osv):
             context = {}
         partner = self.browse(cr, uid, id, context=context)
         if partner.vat:
-            res = 'company/{}'.format(partner.vat)
+            res = 'company/{}'.format(partner.vat.upper())
             return res
         else:
             return False
@@ -56,6 +56,22 @@ class ResPartner(osv.osv):
         )
 
         return ids
+
+    def hook_last_modifications(self, cr, uid, data, context=None):
+        """
+        Modify the data to ensure vat lettres are uppercase
+
+        :param self: Description
+        :param cr: Description
+        :param uid: Description
+        :param data: Description
+        :param context: Description
+        """
+        if context is None:
+            context = {}
+        if data['vat']:
+            data['vat'] = data['vat'].upper()
+        return data
 
 
 ResPartner()

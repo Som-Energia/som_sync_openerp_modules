@@ -370,7 +370,7 @@ class OdooSync(osv.osv):
                         if not success:
                             sync_vals.update({
                                 'sync_state': 'error',
-                                'odoo_last_update_result': msg,
+                                'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
                                 'update_last_sync': True,
                             })
             else:
@@ -386,7 +386,7 @@ class OdooSync(osv.osv):
                 else:
                     sync_vals.update({
                         'sync_state': 'error',
-                        'odoo_last_update_result': msg,
+                        'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
                         'update_last_sync': True,
                     })
 
@@ -395,7 +395,7 @@ class OdooSync(osv.osv):
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
                 'update_last_sync': True,
             })
         except Exception as e:
@@ -404,7 +404,7 @@ class OdooSync(osv.osv):
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
                 'update_last_sync': True,
             })
         finally:
@@ -497,6 +497,11 @@ class OdooSync(osv.osv):
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
             context = {}
+        if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+            odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+            if odoo_id:
+                return odoo_id, erp_id, {}
+
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
         if not data:
             return False, False, False
