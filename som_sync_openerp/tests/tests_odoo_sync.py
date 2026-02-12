@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
-from mock import MagicMock, call, ANY, patch
+import mock
 
+import netsvc
 from destral import testing
 from ..models import odoo_sync
 from som_sync_openerp.models.odoo_exceptions import (
@@ -14,6 +15,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def setUp(self):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         self.imd_obj = self.openerp.pool.get("ir.model.data")
+        self.ai_obj = self.openerp.pool.get("account.invoice")
+        self.wf_service = netsvc.LocalService("workflow")
+        self.maxDiff = None
         super(TestOdooSync, self).setUp()
 
     def test_create_odoo_record__notSupported(self):
@@ -291,13 +295,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(cleaned_context, expected_context)
 
-    def test__get_model_vals_to_sync__partner(self):
-        # Ensure the mocked syncronize_sync returns a 2-tuple (odoo_id, erp_id)
-        # so the caller can unpack it without raising ValueError.
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock(return_value=(2, 2))
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__get_model_vals_to_sync__partner(self, mock_syncronize_sync):
+        mock_syncronize_sync.return_value = (2, 2)
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
         )[1]
@@ -308,8 +308,8 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
         self.sync_obj.syncronize_sync.assert_has_calls([
-            call(ANY, self.uid, u'account.account', 'sync', 2, {'from_fk_sync': True}),
-            call(ANY, self.uid, u'account.account', 'sync', 3, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.account', 'sync', 2, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.account', 'sync', 3, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'is_company': True,
@@ -329,13 +329,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
 
-    def test__get_model_vals_to_sync__partner_address(self):
-        # Ensure the mocked syncronize_sync returns a 2-tuple (odoo_id, erp_id)
-        # so the caller can unpack it without raising ValueError.
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock(return_value=(3, 3))
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__get_model_vals_to_sync__partner_address(self, mock_syncronize_sync):
+        mock_syncronize_sync.return_value = (3, 3)
         address_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_address_8'
         )[1]
@@ -346,7 +342,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 1)
         self.sync_obj.syncronize_sync.assert_has_calls([
-            call(ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'city': u'Wavre',
@@ -366,10 +362,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
 
-    @patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
     def test__get_model_vals_to_sync__invoice(self, mock_syncronize_sync):
         mock_syncronize_sync.return_value = (2, 2)
-
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
@@ -401,7 +396,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'partner_id': 2,
             'pnt_erp_id': 12L,
             'preferred_payment_method_line_id': None,
-            'ref': False
+            'ref': '',
         }
         self.assertEqual(vals, expected_vals)
 
@@ -427,3 +422,79 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'name': 'Test Name modified',
         }
         self.assertEqual(dict_to_patch, modified_fields)
+
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_draft_invoice(self, mock_syncronize_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+
+        self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+
+        mock_syncronize_sync.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_open_invoice(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+
+        self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+
+        # Check 2 calls to syncronize.
+        # Open invoice (write) and sync (common_sync_model_create_update)
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
+        self.sync_obj.syncronize_sync.assert_has_calls([
+            mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
+                      invoice_id, context={'update_last_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
+                      invoice_id, context={'update_last_sync': True}),
+        ])
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_paid_invoice(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+        period_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'period_012026'
+        )[1]
+        account_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_account_cash'
+        )[1]
+        journal_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_journal_sales_syncronizable'
+        )[1]
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+        self.ai_obj.pay_and_reconcile(
+            self.cursor, self.uid, invoice_id, 1000,
+            account_id, period_id, journal_id, account_id, period_id, journal_id
+        )
+
+        self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.invoice', invoice_id, 'sync', {})
+
+        # Check 3 calls to syncronize.
+        # Open invoice (write), Pay invoice (write) and sync (common_sync_model_create_update)
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
+        self.sync_obj.syncronize_sync.assert_has_calls([
+            mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
+                      invoice_id, context={'update_last_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
+                      invoice_id, context={'update_last_sync': True}),
+            mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
+                      invoice_id, context={'update_last_sync': True}),
+        ])

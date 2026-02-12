@@ -58,6 +58,19 @@
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
+        <record id="financieras" model="account.account.type">
+            <field name="name">Financieras</field>
+            <field name="code">financieras</field>
+            <field name="close_method">balance</field>
+        </record>
+        <record id="account_account_cash" model="account.account">
+            <field name="name">Caixa</field>
+            <field name="code">570000</field>
+            <field name="user_type" ref="financieras"/>
+            <field name="company_id">1</field>
+            <field name="currency_mode">current</field>
+            <field name="type">other</field>
+        </record>
         <record id="account_move_001" model="account.move">
             <field name="partner_id" ref="base.res_partner_agrolait"/>
             <field name="date">2026-01-15</field>

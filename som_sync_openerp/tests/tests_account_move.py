@@ -1,7 +1,9 @@
 
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
 from destral import testing
-from mock import MagicMock
+import mock
+from som_sync_openerp.models import odoo_sync
 
 
 class TestAccountMove(testing.OOTestCaseWithCursor):
@@ -12,14 +14,12 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
 
-    def test__get_related_values(self):
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__get_related_values(self, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock(return_value=(99, 1))
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+        mock_syncronize_sync.return_value = (99, 1)
 
         related_values = self.am_obj.get_related_values(
             self.cursor, self.uid, move_id
@@ -66,19 +66,13 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertFalse(is_syncrozable)
 
-    def test__write_triggers_async(self):
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__write_triggers_async(self, mock_sync_model_enabled_amplified, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        _orig_sync_model_enabled_amplified = getattr(
-            self.sync_obj, 'sync_model_enabled_amplified', None)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
-        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
-            self.sync_obj, 'sync_model_enabled_amplified', orig))
-        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
-        self.sync_obj.syncronize = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
 
         # Perform write operation
         self.am_obj.write(
@@ -88,21 +82,16 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             {'state': 'posted'},
         )
 
-        self.sync_obj.syncronize.assert_called_once()
+        mock_syncronize_sync.assert_called_once()
 
-    def test__write_no_triggers_async_journal_disabled_sync(self):
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__write_no_triggers_async_journal_disabled_sync(
+            self, mock_sync_model_enabled_amplified, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_002"
         )[1]
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        _orig_sync_model_enabled_amplified = getattr(
-            self.sync_obj, 'sync_model_enabled_amplified', None)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
-        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
-            self.sync_obj, 'sync_model_enabled_amplified', orig))
-        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
-        self.sync_obj.syncronize = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
 
         # Perform write operation
         self.am_obj.write(
@@ -112,25 +101,16 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             {'state': 'posted'},
         )
 
-        self.sync_obj.syncronize.assert_not_called()
+        mock_syncronize_sync.assert_not_called()
 
-    def test__write__autosync_not_enabled_no_trigger(self):
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__write__autosync_not_enabled_no_trigger(
+            self, mock_sync_model_enabled_amplified, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
         )[1]
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        _orig_sync_model_enabled_amplified = getattr(
-            self.sync_obj, 'sync_model_enabled_amplified', None)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
-        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
-            self.sync_obj, 'sync_model_enabled_amplified', orig))
-        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
-        self.sync_obj.syncronize = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+        mock_sync_model_enabled_amplified.return_value = (True, False, False)
 
         # Perform write operation on a field that does not trigger sync
         self.am_obj.write(
@@ -141,5 +121,5 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )
 
         # Assert that the sync method was not called
-        self.sync_obj.syncronize.assert_not_called()
-        self.sync_obj.syncronize_sync.assert_not_called()
+        mock_syncronize_sync.assert_not_called()
+        mock_syncronize_sync.assert_not_called()
