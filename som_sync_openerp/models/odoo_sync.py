@@ -104,6 +104,7 @@ class OdooSync(osv.osv):
                 ids = [ids]
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
+            force_sync = context.get('force_sync', False)
             if action == 'sync':
                 auto_sync = True  # force sync for on-demand
             if sync_enabled and auto_sync:
@@ -119,13 +120,14 @@ class OdooSync(osv.osv):
                             "Special restrictions not passed for record {} of model {}, "
                             "skipping sync".format(_id, model))
                         continue
-                    if async_enabled:
+                    if async_enabled and not force_sync:
                         # Use job queue for async sync
                         self.syncronize(
                             cursor, uid, model, action, _id, context=context)
+                        return None, None
                     else:
                         # Sync synchronously
-                        self.syncronize_sync(
+                        return self.syncronize_sync(
                             cursor, uid, model, action, _id, context=context)
 
         except Exception:
@@ -182,6 +184,7 @@ class OdooSync(osv.osv):
             if keys_fk:
                 context_copy = self._clean_context_update_data(cursor, uid, context)
                 context_copy['from_fk_sync'] = True
+                context_copy['force_sync'] = True
             for fk_field in keys_fk:
                 model_fk = rp_obj.MAPPING_FK[fk_field]
                 id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
