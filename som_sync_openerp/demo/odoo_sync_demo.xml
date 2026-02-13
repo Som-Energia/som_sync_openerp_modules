@@ -71,6 +71,14 @@
             <field name="currency_mode">current</field>
             <field name="type">other</field>
         </record>
+        <record id="account_account_iva" model="account.account">
+            <field name="name">Compte IVA per linia IESE</field>
+            <field name="code">475600</field>
+            <field name="user_type" ref="financieras"/>
+            <field name="company_id">1</field>
+            <field name="currency_mode">current</field>
+            <field name="type">other</field>
+        </record>
         <record id="account_move_001" model="account.move">
             <field name="partner_id" ref="base.res_partner_agrolait"/>
             <field name="date">2026-01-15</field>

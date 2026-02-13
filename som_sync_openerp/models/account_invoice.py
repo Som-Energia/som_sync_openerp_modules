@@ -87,42 +87,29 @@ class AccountInvoice(osv.osv):
         * Extra line 1:
             - quantity = 1
             - price_unit = amount of the tax IESE line
-        * Extra line 2:
-            - quantity = 1
-            - price_unit = amount base of the tax IESE line
-        * Extra line 3:
-            - quantity = -1
-            - price_unit = amount base general
+            - tax = IVA
         """
         if context is None:
             context = {}
         tax_line_obj = self.pool.get('account.invoice.tax')
+        account_obj = self.pool.get('account.account')
         sync_obj = self.pool.get('odoo.sync')
 
         tax_line_ids = tax_line_obj.search(
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
-        amount_untaxed = self.read(cr, uid, invoice_id, ['amount_untaxed'])['amount_untaxed']
         res = []
         iese_tax_id = 0
-        iese_base_amount = 0
         iese_amount = 0
-        iese_account_id = 0
         iva_tax_id = 0
-        iva_account_id = 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
                 iese_tax_id = tax_line.tax_id.id
                 iese_amount = tax_line.amount
-                iese_base_amount = tax_line.base_amount
-                iese_account_id = tax_line.tax_id.account_collected_id.id
             elif 'IVA' in tax_line.name:
                 iva_tax_id = tax_line.tax_id.id
-                iva_account_id = tax_line.tax_id.account_collected_id.id
 
-        odoo_iese_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iese_tax_id)
         odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
-        odoo_iese_account_id = sync_obj.get_odoo_id_by_erp_id(
-            cr, uid, 'account.account', iese_account_id)
+        iva_account_id = account_obj.search(cr, uid, [('code', 'like', '47560%0')])[0]
         odoo_iva_account_id = sync_obj.get_odoo_id_by_erp_id(
             cr, uid, 'account.account', iva_account_id)
         if iese_tax_id:
@@ -134,22 +121,6 @@ class AccountInvoice(osv.osv):
                     'tax_ids': [odoo_iva_tax_id],
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
-                    'account_id': odoo_iva_account_id,
-                }, {
-                    'name': u'Base IESE',
-                    'quantity': 1,
-                    'price_unit': iese_base_amount,
-                    'tax_ids': [odoo_iese_tax_id],
-                    'extra_operations_erp': 1,
-                    'quantity_erp': 1,
-                    'account_id': odoo_iese_account_id,
-                }, {
-                    'name': u'Base general',
-                    'quantity': -1,
-                    'price_unit': amount_untaxed,
-                    'tax_ids': None,
-                    'extra_operations_erp': 1,
-                    'quantity_erp': -1,
                     'account_id': odoo_iva_account_id,
                 }
             ]

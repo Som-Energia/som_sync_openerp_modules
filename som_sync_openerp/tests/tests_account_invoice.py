@@ -129,23 +129,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': odoo_sales_account_id,
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
-                }, {
-                    'name': u'Base IESE',
-                    'price_unit': 2000.0,
-                    'quantity': 1,
-                    'tax_ids': [odoo_iese_tax_id],
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
-                    'quantity_erp': 1,
-                }, {
-                    'name': u'Base general',
-                    'price_unit': 4000.0,
-                    'quantity': -1,
-                    'tax_ids': None,
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
-                    'quantity_erp': -1,
-                }
+                },
             ]
         }
         self.assertEqual(related_values, expected_values)
