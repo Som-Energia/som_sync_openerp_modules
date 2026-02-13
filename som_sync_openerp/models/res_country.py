@@ -32,7 +32,7 @@ class ResCountry(osv.osv):
 
         sync_obj = self.pool.get('odoo.sync')
         sync_obj.common_sync_model_create_update(
-            cr, uid, self._name, ids, 'create', context=context
+            cr, uid, self._name, 'create', ids, context=context
         )
 
         return ids

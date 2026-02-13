@@ -9,15 +9,14 @@ class AccountMove(osv.osv):
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'name',
-        # 'journal_id': 'journal_id',
+        'journal_id': 'journal_id',
         'ref': 'ref',
         'date': 'date',
     }
     MAPPING_FK = {
-        # 'journal_id': 'account.journal',
+        'journal_id': 'account.journal',
     }
     MAPPING_CONSTANTS = {
-        'journal_id': 10,
     }
 
     def get_related_values(self, cr, uid, id, context=None):
@@ -38,9 +37,14 @@ class AccountMove(osv.osv):
             res.append(aml_vals)
         return {'lines': res}
 
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        return self._journal_is_syncrozable(cr, uid, id, context=context)
+
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         move = self.browse(cr, uid, _id, context=context)
-        return move.journal_id and move.journal_id.som_sync_odoo
+        return move.journal_id and move.journal_id.som_sync_odoo_account_moves
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
@@ -50,14 +54,11 @@ class AccountMove(osv.osv):
 
         res = super(AccountMove, self).write(cr, uid, ids, vals, context=context)
 
-        for _id in ids:
-            if self._journal_is_syncrozable(cr, uid, _id, context=context) and \
-                'state' in vals and \
-                    vals['state'] == 'posted':
-                sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, _id, 'create', context=context
-                )
+        if 'state' in vals and vals['state'] == 'posted':
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, 'create', ids, context=context
+            )
 
         return res
 

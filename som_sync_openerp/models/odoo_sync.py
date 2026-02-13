@@ -13,6 +13,7 @@ FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 # Mapping of models entities to update erp_id in Odoo: key -> erp model, value -> odoo entity name
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
+    'account.invoice': 'invoice',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -23,7 +24,9 @@ MAPPING_MODELS_ENTITIES = {
 
 STATIC_MODELS = [
     'account.fiscal.position',
+    'account.journal',
     'account.payment.term',
+    'account.tax',
     'payment.type',
     'res.country',
 ]
@@ -42,6 +45,7 @@ MAPPING_MODELS_GET = {
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_POST = {
     'account.account': 'accounts',
+    'account.invoice': 'invoices',
     'account.move': 'entries',
     'res.country.state': 'states',
     'res.partner': 'partners',
@@ -88,7 +92,7 @@ class OdooSync(osv.osv):
                 return True, dict_model['auto_sync'], dict_model['async_enabled']
         return False, False, False
 
-    def common_sync_model_create_update(self, cursor, uid, model, ids, action, context=None):
+    def common_sync_model_create_update(self, cursor, uid, model, action, ids, context=None):
         if context is None:
             context = {}
         """
@@ -100,19 +104,32 @@ class OdooSync(osv.osv):
                 ids = [ids]
             sync_enabled, auto_sync, async_enabled = (
                 self.sync_model_enabled_amplified(cursor, uid, model))
+            force_sync = context.get('force_sync', False)
             if action == 'sync':
                 auto_sync = True  # force sync for on-demand
             if sync_enabled and auto_sync:
-                if async_enabled:
-                    # Use job queue for async sync
-                    for openerp_id in ids:
+                # check special restriction for some models
+                has_special_restrictions = hasattr(
+                    self.pool.get(model), 'check_special_restrictions')
+                for _id in ids:
+                    if has_special_restrictions and not \
+                            self.pool.get(model).check_special_restrictions(
+                                cursor, uid, _id, context=context):
+                        logger = logging.getLogger('openerp.odoo.sync')
+                        logger.info(
+                            "Special restrictions not passed for record {} of model {}, "
+                            "skipping sync".format(_id, model))
+                        continue
+                    if async_enabled and not force_sync:
+                        # Use job queue for async sync
                         self.syncronize(
-                            cursor, uid, model, action, openerp_id, context=context)
-                else:
-                    # Sync synchronously
-                    for openerp_id in ids:
-                        self.syncronize_sync(
-                            cursor, uid, model, action, openerp_id, context=context)
+                            cursor, uid, model, action, _id, context=context)
+                        return None, None
+                    else:
+                        # Sync synchronously
+                        return self.syncronize_sync(
+                            cursor, uid, model, action, _id, context=context)
+
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
@@ -167,17 +184,27 @@ class OdooSync(osv.osv):
             if keys_fk:
                 context_copy = self._clean_context_update_data(cursor, uid, context)
                 context_copy['from_fk_sync'] = True
+                context_copy['force_sync'] = True
             for fk_field in keys_fk:
                 model_fk = rp_obj.MAPPING_FK[fk_field]
                 id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
-                if id_fk:
-                    odoo_id, erp_id = self.syncronize_sync(
-                        cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
-                    if not odoo_id:
-                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
-                    data[fk_field] = odoo_id
-                else:
+                if not id_fk:
                     data[fk_field] = None
+                else:
+                    if isinstance(id_fk, tuple):
+                        odoo_id, _ = self.common_sync_model_create_update(
+                            cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                        if not odoo_id:
+                            raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                        data[fk_field] = odoo_id
+                    else:
+                        data[fk_field] = []
+                        for id_fk_elem in id_fk:
+                            odoo_id, _ = self.common_sync_model_create_update(
+                                cursor, uid, model_fk, 'sync', id_fk_elem, context_copy)
+                            if not odoo_id:
+                                raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk_elem))
+                            data[fk_field].append(odoo_id)
 
         # Map fields to sync
         for erp_key, odoo_key in rp_obj.MAPPING_FIELDS_TO_SYNC.items():
@@ -200,6 +227,12 @@ class OdooSync(osv.osv):
             field_obj = rp_obj._columns.get(key, False)
             if field_obj and field_obj._type == 'char':
                 result_data[key] = ''
+
+        # Hook last modifications
+        has_hook_last_modifications = hasattr(rp_obj, 'hook_last_modifications')
+        if has_hook_last_modifications and callable(getattr(rp_obj, 'hook_last_modifications')):
+            hook_data = rp_obj.hook_last_modifications(cursor, uid, result_data, context=context)
+            result_data.update(hook_data)
 
         return result_data
 
@@ -339,7 +372,7 @@ class OdooSync(osv.osv):
                         if not success:
                             sync_vals.update({
                                 'sync_state': 'error',
-                                'odoo_last_update_result': msg,
+                                'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
                                 'update_last_sync': True,
                             })
             else:
@@ -355,7 +388,7 @@ class OdooSync(osv.osv):
                 else:
                     sync_vals.update({
                         'sync_state': 'error',
-                        'odoo_last_update_result': msg,
+                        'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
                         'update_last_sync': True,
                     })
 
@@ -364,15 +397,16 @@ class OdooSync(osv.osv):
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
                 'update_last_sync': True,
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
+            # TODO: better exception information
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
                 'update_last_sync': True,
             })
         finally:
@@ -465,6 +499,11 @@ class OdooSync(osv.osv):
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
             context = {}
+        if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+            odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+            if odoo_id:
+                return odoo_id, erp_id, {}
+
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
         if not data:
             return False, False, False
@@ -670,6 +709,29 @@ class OdooSync(osv.osv):
             result[sync.id] = erp_name
 
         return result
+
+    def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', erp_id),
+        ])
+        if sync_ids:
+            sync = self.browse(cursor, uid, sync_ids[0])
+            return sync.odoo_id
+        else:
+            odoo_id, _ = self.common_sync_model_create_update(cursor, uid, model, 'sync', erp_id)
+            return odoo_id
+
+    def get_erp_id_by_odoo_id(self, cursor, uid, model, odoo_id):
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('odoo_id', '=', odoo_id),
+        ])
+        if sync_ids:
+            sync = self.browse(cursor, uid, sync_ids[0])
+            return sync.res_id
+        else:
+            return False
 
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),

@@ -76,7 +76,7 @@ class ResPartnerAddress(osv.osv):
 
         sync_obj = self.pool.get('odoo.sync')
         sync_obj.common_sync_model_create_update(
-            cr, uid, self._name, ids, 'create', context=context
+            cr, uid, self._name, 'create', ids, context=context
         )
 
         return ids
@@ -94,7 +94,7 @@ class ResPartnerAddress(osv.osv):
                 or any(field in vals.keys() for field in self.MAPPING_TRIGGER_WRITE.keys())):
             sync_obj = self.pool.get('odoo.sync')
             sync_obj.common_sync_model_create_update(
-                cr, uid, self._name, ids, 'write', context=context
+                cr, uid, self._name, 'write', ids, context=context
             )
 
         return res

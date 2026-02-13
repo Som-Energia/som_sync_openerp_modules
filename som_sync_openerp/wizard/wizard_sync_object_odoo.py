@@ -46,7 +46,7 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                     )
                 else:
                     sync_obj.common_sync_model_create_update(
-                        cursor, uid, from_res_model, erp_id, 'sync', context=context
+                        cursor, uid, from_res_model, 'sync', erp_id, context=context
                     )
             return {'type': 'ir.actions.act_window_close'}
 
@@ -58,7 +58,7 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                 )
             else:
                 sync_obj.common_sync_model_create_update(
-                    cursor, uid, from_model, record_id, 'sync', context=context
+                    cursor, uid, from_model, 'sync', record_id, context=context
                 )
 
         return {'type': 'ir.actions.act_window_close'}
