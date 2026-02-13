@@ -362,9 +362,14 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_model_vals_to_sync__invoice(self, mock_syncronize_sync):
+    def test__get_model_vals_to_sync__invoice(self, mock_syncronize_sync, mock_erp_id):
         mock_syncronize_sync.return_value = (2, 2)
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        mock_erp_id.return_value = iva_tax_id
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
@@ -383,11 +388,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'invoice_line_ids': [{
                 'account_id': 2,
                 'extra_operations_erp': 1,
-                'name': u'Product A',
+                'name': 'Agrupaci\xc3\xb3 x 570000',
                 'price_unit': 1000.0,
-                'quantity': 1.0,
-                'quantity_erp': 1.0,
-                'tax_ids': None
+                'quantity': 1,
+                'quantity_erp': 1,
+                'tax_ids': None,
             }],
             'invoice_payment_term_id': None,
             'journal_id': 2,

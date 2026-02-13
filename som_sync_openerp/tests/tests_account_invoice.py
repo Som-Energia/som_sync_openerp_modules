@@ -18,14 +18,19 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestAccountInvoice, self).setUp()
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_related_values(self, mock_syncronize_sync):
+    def test__get_related_values(self, mock_syncronize_sync, mock_erp_id):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
         )[1]
         odoo_account_id = 99
         erp_account_id = 1
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
 
         related_values = self.ai_obj.get_related_values(
             self.cursor, self.uid, invoice_id
@@ -37,33 +42,29 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': u'Product A',
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
                     'price_unit': 1000.0,
-                    'quantity': 1.0,
-                    'quantity_erp': 1.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
                     'tax_ids': None,
                 }
             ]
         }
         self.assertEqual(related_values, expected_values)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_related_values_with_taxes(self, mock_syncronize_sync):
+    def test__get_related_values_with_taxes(self, mock_syncronize_sync, mock_erp_id):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0002"
         )[1]
         iva_tax_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
         )[1]
-        iese_tax_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "som_sync_openerp", "account_tax_iese"
-        )[1]
-        sales_account_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "account", "a_sale"
-        )[1]
         odoo_account_id = 99
         erp_account_id = 1
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
         self.ai_obj.button_reset_taxes(self.cursor, self.uid, [invoice_id])
         self.wf_service.trg_validate(
             self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
@@ -73,66 +74,39 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, invoice_id
         )
 
-        odoo_iva_tax_id = self.sync_obj.get_odoo_id_by_erp_id(
-            self.cursor, self.uid, 'account.tax', iva_tax_id
-        )
-        odoo_iese_tax_id = self.sync_obj.get_odoo_id_by_erp_id(
-            self.cursor, self.uid, 'account.tax', iese_tax_id
-        )
-        odoo_sales_account_id = self.sync_obj.get_odoo_id_by_erp_id(
-            self.cursor, self.uid, 'account.account', sales_account_id
-        )
         expected_values = {
             'date': '2026-01-16',
             'invoice_line_ids': [
                 {
-                    'account_id': odoo_sales_account_id,
+                    'account_id': 99,
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'price_unit': 2000.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
                     'extra_operations_erp': 1,
-                    'name': u'Product A',
-                    'price_unit': 1000.0,
-                    'quantity': 1.0,
-                    'quantity_erp': 1.0,
-                    'tax_ids': [odoo_iva_tax_id],
-                },
-                {
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
-                    'name': u'Product B',
-                    'price_unit': 1000.0,
-                    'quantity': 1.0,
-                    'quantity_erp': 1.0,
-                    'tax_ids': [odoo_iese_tax_id],
-                },
-                {
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
-                    'name': u'Product C',
-                    'price_unit': 1000.0,
-                    'quantity': 1.0,
-                    'quantity_erp': 1.0,
-                    'tax_ids': [odoo_iva_tax_id, odoo_iese_tax_id],
-                },
-                {
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
-                    'name': u'Product D',
-                    'price_unit': 1000.0,
-                    'quantity': 1.0,
-                    'quantity_erp': 1.0,
                     'tax_ids': None,
-                },
-                {
+                }, {
+                    'account_id': 99,
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'price_unit': 2000.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
+                    'extra_operations_erp': 1,
+                    'tax_ids': [99],
+                }, {
+                    'account_id': 99,
+                    'extra_operations_erp': 1,
                     'name': u'Import IESE',
                     'price_unit': 102.2,
                     'quantity': 1,
-                    'tax_ids': [odoo_iva_tax_id],
-                    'account_id': odoo_sales_account_id,
-                    'extra_operations_erp': 1,
                     'quantity_erp': 1,
-                },
+                    'tax_ids': [99],
+                }
             ]
         }
         self.assertEqual(related_values, expected_values)
+        self.sync_obj.common_sync_model_create_update.assert_has_calls([
+        ])
 
     def test__journal_is_syncrozable_True(self):
         invoice_id = self.imd_obj.get_object_reference(

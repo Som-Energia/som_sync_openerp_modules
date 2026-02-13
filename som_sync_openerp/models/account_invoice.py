@@ -35,12 +35,46 @@ class AccountInvoice(osv.osv):
         if context is None:
             context = {}
         account_invoice = self.browse(cr, uid, id, context=context)
+        original_res = {}
         res = []
+
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
+            tax_obj = self.pool.get('account.tax')
+            account_obj = self.pool.get('account.account')
             ail_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'account.invoice.line', line.id, context=context)
-            res.append(ail_vals)
+            account_id = ail_vals['account_id']
+            erp_account_id = sync_obj.get_erp_id_by_odoo_id(cr, uid, 'account.account', account_id)
+            account_code = account_obj.read(cr, uid, erp_account_id, ['code'])['code']
+
+            # Remove IESE taxes
+            new_tax_ids = []
+            for tax in line.invoice_line_tax_id:
+                if 'Impuesto especial' not in tax_obj.read(cr, uid, tax.id, ['name'])['name']:
+                    odoo_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', tax.id)
+                    new_tax_ids.append(odoo_tax_id)
+            ail_vals['tax_ids'] = new_tax_ids if new_tax_ids else None
+
+            # Agrupate lines by account_id and taxes
+            dict_key = "{}_{}".format(ail_vals['account_id'], ail_vals['tax_ids'])
+            if original_res.get(dict_key, False) and \
+                    original_res[dict_key]['tax_ids'] == ail_vals['tax_ids']:
+                original_res[dict_key]['price_unit'] = original_res[dict_key]['price_unit'] + \
+                    ail_vals['price_subtotal']
+            else:
+                original_res[dict_key] = {
+                    'account_id': account_id,
+                    'quantity': 1,
+                    'name': "Agrupació {}".format(account_code),
+                    'tax_ids': ail_vals['tax_ids'],
+                    'price_unit': ail_vals['price_subtotal'],
+                    'extra_operations_erp': 1,
+                    'quantity_erp': 1,
+                }
+        # Save agrupated lines
+        for k, v in original_res.items():
+            res.append(v)
 
         # Add tax lines needed for the sync with Odoo
         res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
