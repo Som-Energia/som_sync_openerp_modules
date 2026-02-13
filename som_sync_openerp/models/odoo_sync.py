@@ -729,7 +729,7 @@ class OdooSync(osv.osv):
         ])
         if sync_ids:
             sync = self.browse(cursor, uid, sync_ids[0])
-            return sync.erp_id
+            return sync.res_id
         else:
             return False
 

@@ -74,6 +74,7 @@ class AccountInvoice(osv.osv):
                 }
         # Save agrupated lines
         for k, v in original_res.items():
+            v['price_unit'] = round(v['price_unit'], 2)
             res.append(v)
 
         # Add tax lines needed for the sync with Odoo
