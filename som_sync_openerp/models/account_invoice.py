@@ -169,8 +169,8 @@ class AccountInvoice(osv.osv):
 
     def hook_last_modifications(self, cr, uid, data, context=None):
         """
-        Modify the data to sync with a constant:
-        - payment_type = 375
+        Modify the payment method for providers invoices with a config
+          variable odoo_provider_payment_method
 
         :param self: Description
         :param cr: Description
@@ -178,10 +178,12 @@ class AccountInvoice(osv.osv):
         :param data: Description
         :param context: Description
         """
+        config_obj = self.pool.get('res.config')
+        odoo_payment_method_id = config_obj.get(cr, uid, 'odoo_provider_payment_method', 375)
         if context is None:
             context = {}
         if data['move_type'] in ['in_refund', 'in_invoice']:
-            data['preferred_payment_method_line_id'] = 375
+            data['preferred_payment_method_line_id'] = odoo_payment_method_id
         if data['ref'] is False:
             data['ref'] = ''
         return data
