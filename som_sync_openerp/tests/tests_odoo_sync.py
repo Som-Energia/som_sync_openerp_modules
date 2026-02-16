@@ -342,7 +342,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 1)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
-            mock.call(mock.ANY, self.uid, u'res.partner', 'sync', 3, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, 'res.partner', 'sync', 3, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'city': u'Wavre',
