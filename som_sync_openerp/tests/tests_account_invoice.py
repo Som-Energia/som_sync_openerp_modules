@@ -37,6 +37,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         expected_values = {
+            'amount_tax': 0.0,
+            'amount_untaxed': 1000.0,
             'date': '2026-01-16',
             'invoice_line_ids': [
                 {
@@ -76,6 +78,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
 
         expected_values = {
             'date': '2026-01-16',
+            'amount_tax': 420.0,
+            'amount_untaxed': 4102.2,
             'invoice_line_ids': [
                 {
                     'account_id': 99,

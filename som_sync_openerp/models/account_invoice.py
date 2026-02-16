@@ -12,8 +12,6 @@ class AccountInvoice(osv.osv):
         "partner_id": "partner_id",
         "journal_id": "journal_id",
         "date_invoice": "invoice_date",
-        "amount_untaxed": "amount_untaxed",
-        "amount_tax": "amount_tax",
         "amount_total": "amount_total",
         "type": "move_type",
         "payment_term": "invoice_payment_term_id",
@@ -80,9 +78,17 @@ class AccountInvoice(osv.osv):
         # Add tax lines needed for the sync with Odoo
         res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
 
+        # Get corrected base untaxed and tax amount, only with IVA amounts
+        amount_tax = 0.0
+        for tax_line in account_invoice.tax_line:
+            if 'IVA' in tax_line.tax_id.name:
+                amount_tax = amount_tax + tax_line.amount
+
         return {
             'date': account_invoice.date_invoice,
-            'invoice_line_ids': res
+            'invoice_line_ids': res,
+            'amount_untaxed': account_invoice.amount_total - amount_tax,
+            'amount_tax': amount_tax,
         }
 
     def check_special_restrictions(self, cr, uid, id, context=None):
