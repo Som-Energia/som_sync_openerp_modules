@@ -53,3 +53,7 @@
 "5616",297,"IGIC 9,5% (Bienes corrientes)","Compras"
 "5630",299,"IGIC 9,5% (Bienes de inversión)","Compras"
 "5611",346,"IGIC Exento Soportado","Compras"
+"174",185,"21% IVA soportado (servicios corrientes)","Compras"
+"5657",348,"IGIC Exento Repercutido","Ventas"
+"244",98,"IVA 10% (Bienes)","Ventas"
+"271",349,"Retenciones IRPF 19%","Compras"
