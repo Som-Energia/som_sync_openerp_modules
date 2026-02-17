@@ -35,6 +35,7 @@ class AccountInvoice(osv.osv):
         account_invoice = self.browse(cr, uid, id, context=context)
         original_res = {}
         res = []
+        energy_tax_id = False
 
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
@@ -45,6 +46,14 @@ class AccountInvoice(osv.osv):
             account_id = ail_vals['account_id']
             erp_account_id = sync_obj.get_erp_id_by_odoo_id(cr, uid, 'account.account', account_id)
             account_code = account_obj.read(cr, uid, erp_account_id, ['code'])['code']
+
+            # Check if it's an energy line to get the tax
+            if not energy_tax_id and line.product_id and line.product_id.categ_id and \
+                    line.product_id.categ_id.name.lower() == 'energia':
+                for tax_line in line.invoice_line_tax_id:
+                    if 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
+                        energy_tax_id = tax_line.id
+                        break
 
             # Remove IESE taxes
             new_tax_ids = []
@@ -73,7 +82,9 @@ class AccountInvoice(osv.osv):
                 }
 
         # Add tax lines needed for the sync with Odoo
-        res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
+        res.extend(
+            self.add_taxes_lines_needed_for_sync(cr, uid, id, energy_tax_id, context=context)
+        )
 
         # Get corrected base untaxed and tax amount, only with IVA and IGIC amounts
         amount_tax = 0.0
@@ -124,7 +135,7 @@ class AccountInvoice(osv.osv):
 
         return res
 
-    def add_taxes_lines_needed_for_sync(self, cr, uid, invoice_id, context=None):
+    def add_taxes_lines_needed_for_sync(self, cr, uid, invoice_id, energy_tax_id, context=None):
         """
         This method is called from account.invoice to add the tax lines
         needed for the sync with Odoo.
@@ -144,13 +155,11 @@ class AccountInvoice(osv.osv):
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
         res = []
         iese_amount = 0
-        iva_tax_id = 0
+        iva_tax_id = energy_tax_id or 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
                 iese_amount = tax_line.amount
-            elif 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
-                # TODO: Get IVA or IGIC from energy lines, not from "lloguer comptador" FE2501053181
-                iva_tax_id = tax_line.tax_id.id
+                break
 
         odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
         iva_account_id = account_obj.search(cr, uid, [('code', 'like', '47560%0')])[0]
