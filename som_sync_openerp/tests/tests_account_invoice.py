@@ -48,7 +48,6 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'price_unit': 1000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
-                    'tax_ids': None,
                 }
             ]
         }
@@ -83,29 +82,29 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             'invoice_line_ids': [
                 {
                     'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 2000.0,
-                    'quantity': 1,
-                    'quantity_erp': 1,
-                    'extra_operations_erp': 1,
-                    'tax_ids': None,
-                }, {
-                    'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 2000.0,
-                    'quantity': 1,
-                    'quantity_erp': 1,
-                    'extra_operations_erp': 1,
-                    'tax_ids': [99],
-                }, {
-                    'account_id': 99,
                     'extra_operations_erp': 1,
                     'name': u'Import IESE',
                     'price_unit': 102.2,
                     'quantity': 1,
                     'quantity_erp': 1,
                     'tax_ids': [99],
-                }
+                },
+                {
+                    'account_id': 99,
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'price_unit': 2000.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
+                    'extra_operations_erp': 1,
+                }, {
+                    'account_id': 99,
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'price_unit': 2000.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
+                    'extra_operations_erp': 1,
+                    'tax_ids': [99],
+                },
             ]
         }
         self.assertEqual(related_values, expected_values)

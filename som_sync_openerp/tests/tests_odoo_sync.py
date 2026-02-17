@@ -392,7 +392,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
                 'price_unit': 1000.0,
                 'quantity': 1,
                 'quantity_erp': 1,
-                'tax_ids': None,
             }],
             'invoice_payment_term_id': None,
             'journal_id': 2,

@@ -52,10 +52,11 @@ class AccountInvoice(osv.osv):
                 if 'Impuesto especial' not in tax_obj.read(cr, uid, tax.id, ['name'])['name']:
                     odoo_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', tax.id)
                     new_tax_ids.append(odoo_tax_id)
-            ail_vals['tax_ids'] = new_tax_ids if new_tax_ids else None
+
+            ail_vals['tax_ids'] = new_tax_ids
+            dict_key = "{}_{}".format(ail_vals['account_id'], ail_vals['tax_ids'])
 
             # Agrupate lines by account_id and taxes
-            dict_key = "{}_{}".format(ail_vals['account_id'], ail_vals['tax_ids'])
             if original_res.get(dict_key, False) and \
                     original_res[dict_key]['tax_ids'] == ail_vals['tax_ids']:
                 original_res[dict_key]['price_unit'] = original_res[dict_key]['price_unit'] + \
@@ -65,15 +66,11 @@ class AccountInvoice(osv.osv):
                     'account_id': account_id,
                     'quantity': 1,
                     'name': "Agrupació {}".format(account_code),
-                    'tax_ids': ail_vals['tax_ids'],
                     'price_unit': ail_vals['price_subtotal'],
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
+                    'tax_ids': ail_vals['tax_ids'],
                 }
-        # Save agrupated lines
-        for k, v in original_res.items():
-            v['price_unit'] = round(v['price_unit'], 2)
-            res.append(v)
 
         # Add tax lines needed for the sync with Odoo
         res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
@@ -83,6 +80,13 @@ class AccountInvoice(osv.osv):
         for tax_line in account_invoice.tax_line:
             if 'IVA' in tax_line.tax_id.name:
                 amount_tax = amount_tax + tax_line.amount
+
+        # Save agrupated lines
+        for k, v in original_res.items():
+            v['price_unit'] = round(v['price_unit'], 2)
+            if v.get('tax_ids', False) == []:
+                v.pop('tax_ids')
+            res.append(v)
 
         return {
             'date': account_invoice.date_invoice,
