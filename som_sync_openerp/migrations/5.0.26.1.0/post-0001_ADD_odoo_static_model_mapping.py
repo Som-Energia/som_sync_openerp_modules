@@ -154,6 +154,14 @@ def migrate(cursor, installed_version):
             'model': 'account.payment.term',
             'csv': 'payment_term.csv',
         },
+        {
+            'model': 'account.tax',
+            'csv': 'account_tax.csv',
+        },
+        {
+            'model': 'account.journal',
+            'csv': 'account_journal.csv',
+        },
     ]
 
     for item in migrations:

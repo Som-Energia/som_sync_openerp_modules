@@ -23,7 +23,7 @@
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
             <field name="view_id" ref="view_wizard_open_related_record"/>
-            <field name="context" eval="{'from_model': 'odoo.sync'}"/>
+            <field name="context">{'from_model': 'odoo.sync'}</field>
             <field name="target">new</field>
         </record>
 

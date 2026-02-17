@@ -6,7 +6,8 @@
             <field name="inherit_id" ref="account.view_account_journal_form"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='type']" position="after">
-                    <field name="som_sync_odoo"/>
+                    <field name="som_sync_odoo_account_moves"/>
+                    <field name="som_sync_odoo_invoices"/>
                 </xpath>
             </field>
         </record>
@@ -16,7 +17,8 @@
             <field name="inherit_id" ref="account.view_account_journal_tree"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='type']" position="after">
-                    <field name="som_sync_odoo"/>
+                    <field name="som_sync_odoo_account_moves"/>
+                    <field name="som_sync_odoo_invoices"/>
                 </xpath>
             </field>
         </record>

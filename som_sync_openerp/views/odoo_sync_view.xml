@@ -135,5 +135,14 @@
             name="Get synced records with Odoo"
             res_model="odoo.sync"
             src_model="account.move"/>
+
+        <!-- Action to get synced records with Odoo for account.invoice -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.invoice')]"
+            id="get_synced_records_odoo_action_account_invoice"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.invoice"/>
+
     </data>
 </openerp>

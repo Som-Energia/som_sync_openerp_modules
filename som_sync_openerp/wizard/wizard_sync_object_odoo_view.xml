@@ -27,7 +27,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'account.account'}"/>
+            <field name="context" eval="{b'from_model':b'account.account'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_account_account" model="ir.values">
@@ -45,7 +45,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.partner'}"/>
+            <field name="context" eval="{b'from_model':b'res.partner'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_partner" model="ir.values">
@@ -63,7 +63,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.partner.address'}"/>
+            <field name="context" eval="{b'from_model':b'res.partner.address'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_partner_address" model="ir.values">
@@ -81,7 +81,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.country'}"/>
+            <field name="context" eval="{b'from_model':b'res.country'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_country" model="ir.values">
@@ -100,7 +100,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.country.state'}"/>
+            <field name="context" eval="{b'from_model':b'res.country.state'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_country_state" model="ir.values">
@@ -119,7 +119,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.municipi'}"/>
+            <field name="context" eval="{b'from_model':b'res.municipi'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_municipi" model="ir.values">
@@ -138,7 +138,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'res.partner.bank'}"/>
+            <field name="context" eval="{b'from_model':b'res.partner.bank'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_res_partner_bank" model="ir.values">
@@ -157,7 +157,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'odoo.sync'}"/>
+            <field name="context" eval="{b'from_model':b'odoo.sync'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_odoo_sync" model="ir.values">
@@ -176,7 +176,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'account.move'}"/>
+            <field name="context" eval="{b'from_model':b'account.move'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_account_move" model="ir.values">
@@ -188,6 +188,25 @@
             <field name="value"
                    eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_move'))"/>
         </record>
+        <!-- action and value for account.invoice -->
+        <record id="action_wizard_sync_odoo_from_account_invoice" model="ir.actions.act_window">
+            <field name="name">Synchronize with Odoo</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.sync.object.odoo</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="context" eval="{b'from_model':b'account.invoice'}" />
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_sync_odoo_from_account_invoice" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Synchronize with Odoo</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">account.invoice</field>
+            <field name="value"
+                   eval="'ir.actions.act_window,'+str(ref('action_wizard_sync_odoo_from_account_invoice'))"/>
+        </record>
 
         <!-- Wizard in static models -->
         <record id="action_wizard_sync_odoo_from_account_fiscal_position" model="ir.actions.act_window">
@@ -196,7 +215,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'account.fiscal.position'}"/>
+            <field name="context" eval="{b'from_model':b'account.fiscal.position'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_account_fiscal_position" model="ir.values">
@@ -215,7 +234,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'account.payment.term'}"/>
+            <field name="context" eval="{b'from_model':b'account.payment.term'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_account_payment_term" model="ir.values">
@@ -234,7 +253,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'payment.type'}"/>
+            <field name="context" eval="{b'from_model':b'payment.type'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_payment_type" model="ir.values">
@@ -253,7 +272,7 @@
             <field name="res_model">wizard.sync.object.odoo</field>
             <field name="view_type">form</field>
             <field name="view_mode">form</field>
-            <field name="context" eval="{'from_model': 'account.journal'}"/>
+            <field name="context" eval="{b'from_model':b'account.journal'}" />
             <field name="target">new</field>
         </record>
         <record id="value_wizard_sync_odoo_from_account_journal" model="ir.values">
