@@ -75,10 +75,10 @@ class AccountInvoice(osv.osv):
         # Add tax lines needed for the sync with Odoo
         res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
 
-        # Get corrected base untaxed and tax amount, only with IVA amounts
+        # Get corrected base untaxed and tax amount, only with IVA and IGIC amounts
         amount_tax = 0.0
         for tax_line in account_invoice.tax_line:
-            if 'IVA' in tax_line.tax_id.name:
+            if 'IVA' in tax_line.tax_id.name or 'IGIC' in tax_line.name:
                 amount_tax = amount_tax + tax_line.amount
 
         # Save agrupated lines
@@ -132,7 +132,7 @@ class AccountInvoice(osv.osv):
         * Extra line 1:
             - quantity = 1
             - price_unit = amount of the tax IESE line
-            - tax = IVA
+            - tax = IVA from energy lines
         """
         if context is None:
             context = {}
@@ -143,21 +143,20 @@ class AccountInvoice(osv.osv):
         tax_line_ids = tax_line_obj.search(
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
         res = []
-        iese_tax_id = 0
         iese_amount = 0
         iva_tax_id = 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
-                iese_tax_id = tax_line.tax_id.id
                 iese_amount = tax_line.amount
             elif 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
+                # TODO: Get IVA or IGIC from energy lines, not from "lloguer comptador" FE2501053181
                 iva_tax_id = tax_line.tax_id.id
 
         odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
         iva_account_id = account_obj.search(cr, uid, [('code', 'like', '47560%0')])[0]
         odoo_iva_account_id = sync_obj.get_odoo_id_by_erp_id(
             cr, uid, 'account.account', iva_account_id)
-        if iese_tax_id:
+        if iese_amount:
             res = [
                 {
                     'name': u'Import IESE',
