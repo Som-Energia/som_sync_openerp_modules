@@ -150,7 +150,7 @@ class AccountInvoice(osv.osv):
             if 'Impuesto especial' in tax_line.name:
                 iese_tax_id = tax_line.tax_id.id
                 iese_amount = tax_line.amount
-            elif 'IVA' in tax_line.name:
+            elif 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
                 iva_tax_id = tax_line.tax_id.id
 
         odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
