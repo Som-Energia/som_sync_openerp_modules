@@ -189,20 +189,11 @@ class OdooSync(osv.osv):
                 if not id_fk:
                     data[fk_field] = None
                 else:
-                    if isinstance(id_fk, tuple):
-                        odoo_id, _ = self.common_sync_model_create_update(
-                            cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
-                        if not odoo_id:
-                            raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
-                        data[fk_field] = odoo_id
-                    else:
-                        data[fk_field] = []
-                        for id_fk_elem in id_fk:
-                            odoo_id, _ = self.common_sync_model_create_update(
-                                cursor, uid, model_fk, 'sync', id_fk_elem, context_copy)
-                            if not odoo_id:
-                                raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk_elem))
-                            data[fk_field].append(odoo_id)
+                    odoo_id, _ = self.common_sync_model_create_update(
+                        cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                    if not odoo_id:
+                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                    data[fk_field] = odoo_id
 
         # Map fields to sync
         for erp_key, odoo_key in rp_obj.MAPPING_FIELDS_TO_SYNC.items():
