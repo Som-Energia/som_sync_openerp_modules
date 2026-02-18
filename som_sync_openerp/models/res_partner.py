@@ -35,6 +35,15 @@ class ResPartner(osv.osv):
         'is_company': True,
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - /odoo/contacts/160440
+        """
+        if context is None:
+            context = {}
+        return '/contacts/{}'.format(odoo_id)
+
     def get_endpoint_suffix(self, cr, uid, id, context=None):
         if context is None:
             context = {}

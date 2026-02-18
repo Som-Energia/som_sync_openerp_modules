@@ -16,6 +16,7 @@
                     <field name="odoo_updated_at" />
                     <field name="odoo_last_update_result" />
                     <field name="sync_state" />
+                    <field name="odoo_url_record" />
                 </form>
             </field>
         </record>
@@ -34,6 +35,7 @@
                     <field name="odoo_updated_at" select="2"/>
                     <field name="sync_state" select="1"/>
                     <field name="odoo_last_update_result" select="2"/>
+                    <field name="odoo_url_record" />
                 </tree>
             </field>
         </record>

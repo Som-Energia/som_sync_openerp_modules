@@ -29,6 +29,27 @@ class AccountInvoice(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - for customer invoices: : /odoo/customer-invoices/160440
+        - for customer invoices with type 'out_refund': /odoo/credit-notes/160440
+        - for provider invoices: /odoo/vendor-bills/160440
+        - for provider invoices with type 'in_refund': no way /odoo/action-247/160440
+        """
+        type_endpoint_mapping = {
+            'out_invoice': 'customer-invoices',
+            'out_refund': 'credit-notes',
+            'in_invoice': 'vendor-bills',
+        }
+        if context is None:
+            context = {}
+        account_invoice = self.browse(cr, uid, id, context=context)
+        if account_invoice.type in type_endpoint_mapping:
+            return '/{}/{}'.format(type_endpoint_mapping[account_invoice.type], odoo_id)
+        else:
+            return False
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}

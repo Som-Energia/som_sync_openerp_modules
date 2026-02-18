@@ -699,6 +699,46 @@ class OdooSync(osv.osv):
 
         return result
 
+    def _compute_url_odoo_record(self, cursor, uid, ids, name, args, context=None):
+        """
+        Computes the URL to the Odoo record for each sync record.
+        - If the model has the method get_endpoint_odoo_record_suffix,
+        it will be used to get the suffix of the URL and then concatenated with the base URL.
+        - If not, it will return False and the URL cannot be computed.
+
+        url_api: http://odoo_url/api/v1
+        given model: account.invoice
+        url_result: http://odoo_url/odoo/customer-invoices/160440 for customer invoices
+
+        """
+        if context is None:
+            context = {}
+
+        result = {}
+        odoo_url_api, _ = self._get_conn_params(cursor, uid)
+        # get url base
+        odoo_url_base = odoo_url_api.split('/api')[0] if '/api' in odoo_url_api else odoo_url_api
+        odoo_url_base = '{}/odoo'.format(odoo_url_base)
+        for sync in self.browse(cursor, uid, ids, context=context):
+            odoo_url_record_suffix = False
+            odoo_url_record = False
+            if sync.model and sync.res_id and sync.odoo_id:
+                try:
+                    model_name = sync.model.model
+                    model_obj = self.pool.get(model_name)
+
+                    if model_obj and hasattr(model_obj, 'get_endpoint_odoo_record_suffix') \
+                            and callable(getattr(model_obj, 'get_endpoint_odoo_record_suffix')):
+                        odoo_url_record_suffix = model_obj.get_endpoint_odoo_record_suffix(
+                            cursor, uid, sync.res_id, sync.odoo_id)
+                    odoo_url_record = '{}{}'.format(odoo_url_base, odoo_url_record_suffix) \
+                        if odoo_url_record_suffix else False
+                except Exception:
+                    odoo_url_record = False
+            result[sync.id] = odoo_url_record
+
+        return result
+
     def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
@@ -744,6 +784,14 @@ class OdooSync(osv.osv):
             type='char',
             size=256,
             string='ERP Name',
+            method=True,
+            store=False,
+        ),
+        'odoo_url_record': fields.function(
+            _compute_url_odoo_record,
+            type='char',
+            size=512,
+            string='Odoo URL record',
             method=True,
             store=False,
         ),
