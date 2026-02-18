@@ -681,16 +681,19 @@ class OdooSync(osv.osv):
         result = {}
         for sync in self.browse(cursor, uid, ids, context=context):
             erp_name = False
+            field_name = 'name'
 
             if sync.model and sync.res_id:
                 try:
                     model_name = sync.model.model
+                    if model_name == 'account.invoice':
+                        field_name = 'number'
                     rp_obj = self.pool.get(model_name)
                     if rp_obj:
                         rec = rp_obj.read(
-                            cursor, uid, sync.res_id, ['name'], context=context
+                            cursor, uid, sync.res_id, [field_name], context=context
                         )
-                        erp_name = rec and rec.get('name') or False
+                        erp_name = rec and rec.get(field_name) or False
                 except Exception:
                     # Registro borrado, modelo no cargado, etc.
                     erp_name = False
