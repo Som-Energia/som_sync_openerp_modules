@@ -110,10 +110,11 @@ class AccountInvoice(osv.osv):
                 cr, uid, id, energy_tax_id, factor_reverse=factor_reverse, context=context)
         )
 
-        # Get corrected base untaxed and tax amount, only with IVA and IGIC amounts
+        # Get corrected base untaxed and tax amount, only with IVA, IGIC and Retenciones amounts
         amount_tax = 0.0
         for tax_line in account_invoice.tax_line:
-            if 'IVA' in tax_line.tax_id.name or 'IGIC' in tax_line.name:
+            if 'IVA' in tax_line.tax_id.name or 'IGIC' in tax_line.name \
+                    or 'Retenciones' in tax_line.name:
                 amount_tax = amount_tax + tax_line.amount
 
         # Save agrupated lines
