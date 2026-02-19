@@ -12,8 +12,6 @@ class AccountInvoice(osv.osv):
         "partner_id": "partner_id",
         "journal_id": "journal_id",
         "date_invoice": "invoice_date",
-        "amount_total": "amount_total",
-        "type": "move_type",
         "payment_term": "invoice_payment_term_id",
         "payment_type": "preferred_payment_method_line_id",
         "fiscal_position": "fiscal_position_id",
@@ -57,6 +55,10 @@ class AccountInvoice(osv.osv):
         original_res = {}
         res = []
         energy_tax_id = False
+        invoice_type = account_invoice.type
+        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
+
+        amount_total = factor_reverse * account_invoice.amount_total
 
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
@@ -94,7 +96,7 @@ class AccountInvoice(osv.osv):
             else:
                 original_res[dict_key] = {
                     'account_id': account_id,
-                    'quantity': 1,
+                    'quantity': factor_reverse * 1,
                     'name': "Agrupació {}".format(account_code),
                     'price_unit': ail_vals['price_subtotal'],
                     'extra_operations_erp': 1,
@@ -104,7 +106,8 @@ class AccountInvoice(osv.osv):
 
         # Add tax lines needed for the sync with Odoo
         res.extend(
-            self.add_taxes_lines_needed_for_sync(cr, uid, id, energy_tax_id, context=context)
+            self.add_taxes_lines_needed_for_sync(
+                cr, uid, id, energy_tax_id, factor_reverse=factor_reverse, context=context)
         )
 
         # Get corrected base untaxed and tax amount, only with IVA and IGIC amounts
@@ -120,18 +123,31 @@ class AccountInvoice(osv.osv):
                 v.pop('tax_ids')
             res.append(v)
 
+        # type invoice treatment whem total amount_total < 0
+        if factor_reverse < 0:
+            if invoice_type == 'out_invoice':
+                invoice_type = 'out_refund'
+            elif invoice_type == 'in_invoice':
+                invoice_type = 'in_refund'
+            elif invoice_type == 'out_refund':
+                invoice_type = 'out_invoice'
+            elif invoice_type == 'in_refund':
+                invoice_type = 'in_invoice'
+
         return {
             'date': account_invoice.date_invoice,
+            'move_type': invoice_type,
             'invoice_line_ids': res,
-            'amount_untaxed': account_invoice.amount_total - amount_tax,
-            'amount_tax': amount_tax,
+            'amount_untaxed': factor_reverse * (account_invoice.amount_total - amount_tax),
+            'amount_tax': factor_reverse * amount_tax,
+            'amount_total': amount_total,
         }
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
             context = {}
         return self._journal_is_syncrozable(cr, uid, id, context=context) and \
-            self._is_invoice_syncrozable(cr, uid, id, context)
+            self._is_invoice_syncrozable(cr, uid, id, context=context)
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         invoice = self.browse(cr, uid, _id, context=context)
@@ -156,7 +172,8 @@ class AccountInvoice(osv.osv):
 
         return res
 
-    def add_taxes_lines_needed_for_sync(self, cr, uid, invoice_id, energy_tax_id, context=None):
+    def add_taxes_lines_needed_for_sync(
+            self, cr, uid, invoice_id, energy_tax_id, factor_reverse=1, context=None):
         """
         This method is called from account.invoice to add the tax lines
         needed for the sync with Odoo.
@@ -190,7 +207,7 @@ class AccountInvoice(osv.osv):
             res = [
                 {
                     'name': u'Import IESE',
-                    'quantity': 1,
+                    'quantity': factor_reverse * 1,
                     'price_unit': iese_amount,
                     'tax_ids': [odoo_iva_tax_id],
                     'extra_operations_erp': 1,
