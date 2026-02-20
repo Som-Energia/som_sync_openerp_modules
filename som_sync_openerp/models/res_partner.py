@@ -81,6 +81,8 @@ class ResPartner(osv.osv):
             context = {}
         if data['vat']:
             data['vat'] = data['vat'].upper()
+        if data.get('lang', False) and data['lang'] == 'en_US':
+            data['lang'] = 'en_GB'
         return data
 
     def hook_odoo_api_data_post_modifications(self, cr, uid, data, context=None):
