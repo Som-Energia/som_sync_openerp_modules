@@ -83,5 +83,18 @@ class ResPartner(osv.osv):
             data['vat'] = data['vat'].upper()
         return data
 
+    def hook_odoo_api_data_post_modifications(self, cr, uid, data, context=None):
+        """
+            Post-hook because issue https://github.com/puntsistemes/som-energia_odoo/issues/51
+            is_customer and is_supplier are int and should be booleans
+        """
+        if context is None:
+            context = {}
+        if not isinstance(data.get('is_customer', False), bool):
+            data['is_customer'] = bool(data['is_customer'])
+        if not isinstance(data.get('is_supplier', False), bool):
+            data['is_supplier'] = bool(data['is_supplier'])
+        return data
+
 
 ResPartner()
