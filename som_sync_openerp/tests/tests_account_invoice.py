@@ -39,7 +39,9 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         expected_values = {
             'amount_tax': 0.0,
             'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
             'date': '2026-01-16',
+            'move_type': 'out_invoice',
             'invoice_line_ids': [
                 {
                     'account_id': odoo_account_id,
@@ -49,7 +51,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'quantity': 1,
                     'quantity_erp': 1,
                 }
-            ]
+            ],
         }
         self.assertEqual(related_values, expected_values)
 
@@ -79,6 +81,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             'date': '2026-01-16',
             'amount_tax': 420.0,
             'amount_untaxed': 4102.2,
+            'amount_total': 4522.2,
+            'move_type': 'out_invoice',
             'invoice_line_ids': [
                 {
                     'account_id': 99,
@@ -105,7 +109,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'extra_operations_erp': 1,
                     'tax_ids': [99],
                 },
-            ]
+            ],
         }
         self.assertEqual(related_values, expected_values)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
