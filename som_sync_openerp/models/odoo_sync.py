@@ -580,6 +580,11 @@ class OdooSync(osv.osv):
                 'sync_state': 'error',
             })
 
+        if context.get('odoo_last_sync_request'):
+            vals.update({
+                'odoo_last_sync_request': context['odoo_last_sync_request'],
+            })
+
         return self.create(cursor, uid, vals)
 
     def _build_update_vals(self, cursor, uid, id, odoo_id, str_now, context):
@@ -613,6 +618,12 @@ class OdooSync(osv.osv):
 
         if context.get('sync_state'):
             vals['sync_state'] = context['sync_state']
+            update = True
+
+        if context.get('odoo_last_sync_request'):
+            vals.update({
+                'odoo_last_sync_request': context['odoo_last_sync_request'],
+            })
             update = True
 
         # Special case: error → synced
