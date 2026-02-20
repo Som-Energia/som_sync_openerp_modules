@@ -7,6 +7,7 @@ import requests
 from datetime import datetime
 from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
+import json
 
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 
@@ -363,7 +364,8 @@ class OdooSync(osv.osv):
                                 'sync_state': 'error',
                                 'odoo_last_update_result': msg,
                                 'update_last_sync': True,
-                                'odoo_last_sync_request': str(dict_to_patch),
+                                'odoo_last_sync_request': json.dumps(
+                                    dict_to_patch, ensure_ascii=False, indent=2),
                             })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
@@ -374,13 +376,15 @@ class OdooSync(osv.osv):
                     sync_vals.update({
                         'sync_state': 'synced',
                         'update_odoo_created_sync': True,
-                        'odoo_last_sync_request': str(erp_data),
+                        'odoo_last_sync_request': json.dumps(
+                            erp_data, ensure_ascii=False, indent=2),
                     })
                 else:
                     sync_vals.update({
                         'sync_state': 'error',
                         'odoo_last_update_result': msg,
-                        'odoo_last_sync_request': str(erp_data),
+                        'odoo_last_sync_request': json.dumps(
+                            erp_data, ensure_ascii=False, indent=2),
                         'update_last_sync': True,
                     })
 
@@ -391,7 +395,7 @@ class OdooSync(osv.osv):
                 'sync_state': 'error',
                 'odoo_last_update_result': str(e),
                 'update_last_sync': True,
-                'odoo_last_sync_request': str(erp_data),
+                'odoo_last_sync_request': json.dumps(erp_data, ensure_ascii=False, indent=2),
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
@@ -401,7 +405,7 @@ class OdooSync(osv.osv):
                 'sync_state': 'error',
                 'odoo_last_update_result': str(e),
                 'update_last_sync': True,
-                'odoo_last_sync_request': str(erp_data),
+                'odoo_last_sync_request': json.dumps(erp_data, ensure_ascii=False, indent=2),
             })
         finally:
             # Single point of persistence for the sync log
