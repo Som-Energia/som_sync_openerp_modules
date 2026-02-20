@@ -96,9 +96,9 @@ class AccountInvoice(osv.osv):
             else:
                 original_res[dict_key] = {
                     'account_id': account_id,
-                    'quantity': 1,
+                    'quantity': 1 * factor_reverse,
                     'name': "Agrupació {}".format(account_code),
-                    'price_unit': ail_vals['price_subtotal'] * factor_reverse,
+                    'price_unit': ail_vals['price_subtotal'],
                     'extra_operations_erp': 1,
                     'quantity_erp': 1,
                     'tax_ids': ail_vals['tax_ids'],

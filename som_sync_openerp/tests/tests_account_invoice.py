@@ -74,7 +74,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         expected_values = {
-            'amount_tax': 0.0,
+            'amount_tax': -0.0,
             'amount_untaxed': 1000.0,
             'amount_total': 1000.0,
             'date': '2026-01-16',
@@ -84,8 +84,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
                     'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 1000.0,
-                    'quantity': 1,
+                    'price_unit': -1000.0,
+                    'quantity': -1,
                     'quantity_erp': 1,
                 }
             ],
@@ -113,7 +113,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         expected_values = {
-            'amount_tax': 0.0,
+            'amount_tax': -0.0,
             'amount_untaxed': 1000.0,
             'amount_total': 1000.0,
             'date': '2026-01-16',
@@ -123,8 +123,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
                     'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 1000.0,
-                    'quantity': 1,
+                    'price_unit': -1000.0,
+                    'quantity': -1,
                     'quantity_erp': 1,
                 }
             ],
@@ -152,7 +152,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         expected_values = {
-            'amount_tax': 0.0,
+            'amount_tax': -0.0,
             'amount_untaxed': 1000.0,
             'amount_total': 1000.0,
             'date': '2026-01-16',
@@ -162,8 +162,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
                     'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 1000.0,
-                    'quantity': 1,
+                    'price_unit': -1000.0,
+                    'quantity': -1,
                     'quantity_erp': 1,
                 }
             ],
@@ -200,8 +200,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
                     'name': 'Agrupaci\xc3\xb3 x 570000',
-                    'price_unit': 1000.0,
-                    'quantity': 1,
+                    'price_unit': -1000.0,
+                    'quantity': -1,
                     'quantity_erp': 1,
                 }
             ],
