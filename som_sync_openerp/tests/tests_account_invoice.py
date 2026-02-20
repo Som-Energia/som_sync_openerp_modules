@@ -57,6 +57,43 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_negative_invoice(self, mock_syncronize_sync, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'amount_tax': 0.0,
+            'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
+            'date': '2026-01-16',
+            'move_type': 'out_refund',
+            'invoice_line_ids': [
+                {
+                    'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
+                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'price_unit': 1000.0,
+                    'quantity': 1,
+                    'quantity_erp': 1,
+                }
+            ],
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_with_taxes(self, mock_syncronize_sync, mock_erp_id):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0002"

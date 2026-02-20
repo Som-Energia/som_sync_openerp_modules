@@ -256,5 +256,27 @@
             <field name="quantity">1</field>
             <field name="account_id" ref="account.a_sale"/>
         </record>
+        <record id="invoice_0003" model="account.invoice">
+            <field name="name">Pol 000003</field>
+            <field name="type">out_invoice</field>
+            <field name="number">INV0001</field>
+            <field name="state">draft</field>
+            <field name="date_invoice">2026-01-16</field>
+            <field name="partner_id" ref="base.res_partner_9"/>
+            <field name="address_invoice_id" ref="base.res_partner_address_1"/>
+            <field name="period_id" ref="period_012026"/>
+            <field name="account_id" ref="account.a_recv"/>
+            <field name="amount_untaxed">-1000.0</field>
+            <field name="amount_tax">-210.0</field>
+            <field name="amount_total">-1210.0</field>
+            <field name="journal_id" ref="account_journal_sales_syncronizable"/>
+        </record>
+        <record id="invoice_0003_line_1" model="account.invoice.line">
+            <field name="name">Product A</field>
+            <field name="invoice_id" ref="invoice_0003"/>
+            <field name="price_unit">-1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_sale"/>
+        </record>
     </data>
 </openerp>
