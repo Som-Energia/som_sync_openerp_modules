@@ -361,8 +361,9 @@ class OdooSync(osv.osv):
                         if not success:
                             sync_vals.update({
                                 'sync_state': 'error',
-                                'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
+                                'odoo_last_update_result': msg,
                                 'update_last_sync': True,
+                                'odoo_last_sync_request': str(dict_to_patch),
                             })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
@@ -373,11 +374,13 @@ class OdooSync(osv.osv):
                     sync_vals.update({
                         'sync_state': 'synced',
                         'update_odoo_created_sync': True,
+                        'odoo_last_sync_request': str(erp_data),
                     })
                 else:
                     sync_vals.update({
                         'sync_state': 'error',
-                        'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
+                        'odoo_last_update_result': msg,
+                        'odoo_last_sync_request': str(erp_data),
                         'update_last_sync': True,
                     })
 
@@ -386,8 +389,9 @@ class OdooSync(osv.osv):
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
+                'odoo_last_update_result': str(e),
                 'update_last_sync': True,
+                'odoo_last_sync_request': str(erp_data),
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
@@ -395,8 +399,9 @@ class OdooSync(osv.osv):
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
+                'odoo_last_update_result': str(e),
                 'update_last_sync': True,
+                'odoo_last_sync_request': str(erp_data),
             })
         finally:
             # Single point of persistence for the sync log
@@ -776,6 +781,7 @@ class OdooSync(osv.osv):
         'odoo_updated_at': fields.datetime('Odoo updated at'),
         # Resultat de l'error de la última actualització
         'odoo_last_update_result': fields.text('Odoo last update error'),
+        'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
             ('synced', 'Synced'),
             ('pending', 'Pending'),
