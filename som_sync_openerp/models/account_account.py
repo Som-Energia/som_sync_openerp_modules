@@ -1,5 +1,6 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
 
 
 class AccountAccount(osv.osv):
@@ -31,10 +32,11 @@ class AccountAccount(osv.osv):
             context = {}
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
-        sync_obj = self.pool.get('odoo.sync')
-        sync_obj.common_sync_model_create_update(
-            cr, uid, self._name, 'create', ids, context=context
-        )
+        with Sudo(uid=1, gid=0):
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, 'create', ids, context=context
+            )
 
         return ids
 

@@ -1,5 +1,6 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
 
 
 class AccountMove(osv.osv):
@@ -55,10 +56,11 @@ class AccountMove(osv.osv):
         res = super(AccountMove, self).write(cr, uid, ids, vals, context=context)
 
         if 'state' in vals and vals['state'] == 'posted':
-            sync_obj = self.pool.get('odoo.sync')
-            sync_obj.common_sync_model_create_update(
-                cr, uid, self._name, 'create', ids, context=context
-            )
+            with Sudo(uid=1, gid=0):
+                sync_obj = self.pool.get('odoo.sync')
+                sync_obj.common_sync_model_create_update(
+                    cr, uid, self._name, 'create', ids, context=context
+                )
 
         return res
 
