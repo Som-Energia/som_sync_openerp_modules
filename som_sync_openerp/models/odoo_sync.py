@@ -35,13 +35,13 @@ STATIC_MODELS = [
 
 # Mapping of models: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_GET = {
-    'account.account': 'account',
-    'res.country.state': 'state',
-    'res.country': 'country',
-    'res.municipi': 'city',
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
-    'res.partner.bank': 'bank',
+    'account.account': 'accounts',
+    'res.country.state': 'states',
+    'res.country': 'countries',
+    'res.municipi': 'cities',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
+    'res.partner.bank': 'banks',
 }
 
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
@@ -58,8 +58,8 @@ MAPPING_MODELS_POST = {
 
 # Mapping of modles to patch
 MAPPING_MODELS_PATCH = {
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
 }
 
 
