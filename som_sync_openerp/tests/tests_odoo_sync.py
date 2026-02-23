@@ -388,7 +388,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'invoice_line_ids': [{
                 'account_id': 2,
                 'extra_operations_erp': 1,
-                'name': 'Agrupaci\xc3\xb3 x 570000',
+                'name': 'Agrupaci\xc3\xb3 x 570001',
                 'price_unit': 1000.0,
                 'quantity': 1,
                 'quantity_erp': 1,

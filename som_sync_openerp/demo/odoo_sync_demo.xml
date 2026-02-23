@@ -65,7 +65,7 @@
         </record>
         <record id="account_account_cash" model="account.account">
             <field name="name">Caixa</field>
-            <field name="code">570000</field>
+            <field name="code">570001</field>
             <field name="user_type" ref="financieras"/>
             <field name="company_id">1</field>
             <field name="currency_mode">current</field>
@@ -73,7 +73,7 @@
         </record>
         <record id="account_account_iva" model="account.account">
             <field name="name">Compte IVA per linia IESE</field>
-            <field name="code">475600</field>
+            <field name="code">475601</field>
             <field name="user_type" ref="financieras"/>
             <field name="company_id">1</field>
             <field name="currency_mode">current</field>

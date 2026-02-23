@@ -12,6 +12,7 @@
         'base_iban',
         'l10n_ES_partner',
         'partner_address_tipovia',
+        'remeses_base',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",

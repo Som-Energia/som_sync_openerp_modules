@@ -1,5 +1,6 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
 
 
 class PaymentOrder(osv.osv):
@@ -36,6 +37,31 @@ class PaymentOrder(osv.osv):
                 payment_order.mode.journal.id if payment_order.mode.journal else False),
             'lines': lines,
         }
+        return res
+
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        order = self.browse(cr, uid, id)
+        if order.state != 'done' or not order.mode.som_sync_odoo:
+            return False
+        return True
+
+    def write(self, cr, uid, ids, vals, context=None):
+        if context is None:
+            context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
+
+        res = super(PaymentOrder, self).write(cr, uid, ids, vals, context=context)
+
+        if 'state' in vals and vals['state'] == 'done':
+            with Sudo(uid=1, gid=0):
+                sync_obj = self.pool.get('odoo.sync')
+                sync_obj.common_sync_model_create_update(
+                    cr, uid, self._name, 'create', ids, context=context
+                )
+
         return res
 
 
