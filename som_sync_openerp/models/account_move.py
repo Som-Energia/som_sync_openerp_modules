@@ -25,8 +25,8 @@ class AccountMove(osv.osv):
             context = {}
         account_move = self.browse(cr, uid, id, context=context)
         res = []
+        sync_obj = self.pool.get('odoo.sync')
         for line in account_move.line_id:
-            sync_obj = self.pool.get('odoo.sync')
             aml_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'account.move.line', line.id, context=context)
             if aml_vals['debit'] == 0:

@@ -15,6 +15,7 @@ FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
     'account.invoice': 'invoice',
+    'payment.mode': 'payment_orders',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -48,6 +49,7 @@ MAPPING_MODELS_POST = {
     'account.account': 'accounts',
     'account.invoice': 'invoices',
     'account.move': 'entries',
+    'payment.mode': 'payment_orders',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',

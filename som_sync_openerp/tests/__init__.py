@@ -5,6 +5,7 @@ from .tests_account_account import *
 from .tests_account_invoice import *
 from .tests_account_move import *
 from .tests_odoo_sync import *
+from .tests_payment_order import *
 from .tests_res_country_state import *
 from .tests_res_partner import *
 from .tests_res_partner_address import *

@@ -502,3 +502,193 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
                       invoice_id, context={'update_last_sync': True}),
         ])
+
+
+class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
+    """Test cases for odoo_url_record computed field"""
+
+    def setUp(self):
+        self.sync_obj = self.openerp.pool.get("odoo.sync")
+        self.imd_obj = self.openerp.pool.get("ir.model.data")
+        super(TestOdooUrlRecord, self).setUp()
+
+    def test_odoo_url_record__no_model(self):
+        """Test odoo_url_record returns False when model is not set"""
+        # Create sync record without model
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'res_id': 1,
+            'odoo_id': 100,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertFalse(sync_record.odoo_url_record)
+
+    def test_odoo_url_record__no_res_id(self):
+        """Test odoo_url_record returns False when res_id is not set"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+        model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'odoo_id': 100,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertFalse(sync_record.odoo_url_record)
+
+    def test_odoo_url_record__no_odoo_id(self):
+        """Test odoo_url_record returns False when odoo_id is not set"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+        model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+        )[1]
+
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': partner_id,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertFalse(sync_record.odoo_url_record)
+
+    def test_odoo_url_record__partner_with_valid_data(self):
+        """Test odoo_url_record returns correct URL for res.partner"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+        model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+        )[1]
+
+        odoo_id = 160440
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': partner_id,
+            'odoo_id': odoo_id,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        # Expected: http://odoo_url/odoo/contacts/160440
+        # Note: odoo_url is extracted from res.config 'odoo_url_api'
+        self.assertIsNotNone(sync_record.odoo_url_record)
+        self.assertIn('/odoo/contacts/{}'.format(odoo_id), sync_record.odoo_url_record)
+
+    def test_odoo_url_record__with_mock_odoo_url_api(self):
+        """Test odoo_url_record builds correct URL from odoo_url_api config"""
+        self.openerp.pool.get("res.config")
+
+        # Mock the _get_conn_params method to return a specific URL
+        with mock.patch.object(
+            self.sync_obj, '_get_conn_params'
+        ) as mock_get_conn:
+            mock_get_conn.return_value = ('http://localhost:8069/api/v1', 'test_key')
+
+            ir_model_obj = self.openerp.pool.get("ir.model")
+            model_id = ir_model_obj.search(
+                self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+            )[0]
+
+            partner_id = self.imd_obj.get_object_reference(
+                self.cursor, self.uid, 'base', 'res_partner_agrolait'
+            )[1]
+
+            odoo_id = 160440
+            sync_id = self.sync_obj.create(self.cursor, self.uid, {
+                'model': model_id,
+                'res_id': partner_id,
+                'odoo_id': odoo_id,
+                'sync_state': 'synced',
+            }, context={})
+
+            sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+            # Expected: http://localhost:8069/odoo/contacts/160440
+            expected_url = 'http://localhost:8069/odoo/contacts/{}'.format(odoo_id)
+            self.assertEqual(sync_record.odoo_url_record, expected_url)
+
+    def test_odoo_url_record__model_without_endpoint_method(self):
+        """Test odoo_url_record returns False for models without get_endpoint_odoo_record_suffix"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+        # res.country model doesn't have get_endpoint_odoo_record_suffix method
+        model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.country')], limit=1
+        )[0]
+
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 1,
+            'odoo_id': 200,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertFalse(sync_record.odoo_url_record)
+
+    def test_odoo_url_record__exception_handling(self):
+        """Test odoo_url_record returns False when exception occurs"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+        model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+
+        # Use invalid res_id to trigger exception in browse
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 999999,  # Non-existent record
+            'odoo_id': 160440,
+            'sync_state': 'synced',
+        }, context={})
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        # Should handle exception gracefully and return False
+        self.assertFalse(sync_record.odoo_url_record)
+
+    def test_odoo_url_record__multiple_records_different_types(self):
+        """Test odoo_url_record computation for multiple different sync records"""
+        ir_model_obj = self.openerp.pool.get("ir.model")
+
+        # Create partner sync record
+        partner_model_id = ir_model_obj.search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+        )[1]
+
+        partner_sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': partner_model_id,
+            'res_id': partner_id,
+            'odoo_id': 160440,
+            'sync_state': 'synced',
+        }, context={})
+
+        # Create another partner sync record without odoo_id
+        partner_sync_id_2 = self.sync_obj.create(self.cursor, self.uid, {
+            'model': partner_model_id,
+            'res_id': partner_id,
+            'odoo_id': False,
+            'sync_state': 'pending',
+        }, context={})
+
+        # Browse both records
+        sync_records = self.sync_obj.browse(
+            self.cursor, self.uid, [partner_sync_id, partner_sync_id_2]
+        )
+
+        # First record should have URL
+        self.assertIsNotNone(sync_records[0].odoo_url_record)
+        self.assertIn('/odoo/contacts/160440', sync_records[0].odoo_url_record)
+
+        # Second record should not have URL (no odoo_id)
+        self.assertFalse(sync_records[1].odoo_url_record)
