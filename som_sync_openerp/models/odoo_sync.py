@@ -35,13 +35,13 @@ STATIC_MODELS = [
 
 # Mapping of models: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_GET = {
-    'account.account': 'account',
-    'res.country.state': 'state',
-    'res.country': 'country',
-    'res.municipi': 'city',
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
-    'res.partner.bank': 'bank',
+    'account.account': 'accounts',
+    'res.country.state': 'states',
+    'res.country': 'countries',
+    'res.municipi': 'cities',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
+    'res.partner.bank': 'banks',
 }
 
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
@@ -58,8 +58,8 @@ MAPPING_MODELS_POST = {
 
 # Mapping of modles to patch
 MAPPING_MODELS_PATCH = {
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
 }
 
 
@@ -474,8 +474,18 @@ class OdooSync(osv.osv):
                 if data and 'success' in data and data.get('success', False):
                     odoo_id = data['data']['odoo_id']
                     return odoo_id, ''
+            elif response.status_code == 409 and model == 'account.invoice':
+                data = response.json()
+                if data and 'success' in data and not data.get('success', False) and \
+                        data.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
+                    # TODO: improve get odoo_id from Odoo
+                    odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
+                        cursor, uid, model, data.get('pnt_erp_id', False))
+                    if odoo_id:
+                        return odoo_id, ''
+                    else:
+                        return False, response.text
             else:
-                print("ERROR CREATING IN ODOO:", response.status_code, response.text)
                 return False, response.text
         else:
             raise CreationNotSupportedException(model)
@@ -655,7 +665,7 @@ class OdooSync(osv.osv):
         if context is None:
             context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
-        url_base = "{}entity/{}/{}/{}".format(
+        url_base = "{}entities/{}/{}/{}".format(
             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), odoo_id, erp_id
         )
         headers = {
@@ -767,6 +777,24 @@ class OdooSync(osv.osv):
             result[sync.id] = odoo_url_record
 
         return result
+
+    def get_odoo_id_by_erp_id_from_odoo(self, cursor, uid, model, erp_id):
+        # This method is used when we want to get the odoo_id from Odoo using the ERP id,
+        # in cases where we don't have the sync record created yet in OpenERP
+         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+         url_base = '{}entities/{}/{}'.format(
+             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), erp_id)
+         headers = {
+             "X-API-Key": odoo_api_key,
+             "Accept": "application/json",
+         }
+         response = requests.get(url_base, headers=headers)
+         if response.status_code == 200:
+             data = response.json()
+             if data and 'success' in data and data.get('success', False):
+                 odoo_id = data.get('data', {}).get('odoo_id', False)
+                 return odoo_id
+         return False
 
     def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
         sync_ids = self.search(cursor, uid, [
