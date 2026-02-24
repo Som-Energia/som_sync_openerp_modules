@@ -470,14 +470,16 @@ class OdooSync(osv.osv):
             }
             response = requests.post(url_base, json=data, headers=headers)
             if response.status_code == 201:
-                data = response.json()
-                if data and 'success' in data and data.get('success', False):
-                    odoo_id = data['data']['odoo_id']
+                data_response = response.json()
+                if data_response and 'success' in data_response and \
+                        data_response.get('success', False):
+                    odoo_id = data_response['data_response']['odoo_id']
                     return odoo_id, ''
             elif response.status_code == 409 and model == 'account.invoice':
-                data = response.json()
-                if data and 'success' in data and not data.get('success', False) and \
-                        data.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
+                data_response = response.json()
+                if data_response and 'success' in data_response and \
+                        not data_response.get('success', False) and \
+                        data_response.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
                     # TODO: improve get odoo_id from Odoo
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
