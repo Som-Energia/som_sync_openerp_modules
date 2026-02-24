@@ -12,9 +12,7 @@ class PaymentOrder(osv.osv):
         'name': 'name',
         'date_created': 'date',  # TODO: check if date_created is the one's
         'date_planned': 'sdd_required_collection_date',
-        'total': 'amount',
     }
-
     MAPPING_FK = {
     }
 
@@ -32,11 +30,13 @@ class PaymentOrder(osv.osv):
                 cr, uid, 'payment.line', line.id, context=context)
             lines.append(payment_line_vals)
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
-        journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, self._name, journal_erp_id)
+        journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
+        factor = -1 if payment_order.type == 'receivable' else 1
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
             'journal_destiny': journal_odoo_id,
             'lines': lines,
+            'amount': payment_order.total * factor,
         }
         return res
 
