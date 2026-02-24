@@ -368,10 +368,9 @@ class OdooSync(osv.osv):
                         if not success:
                             sync_vals.update({
                                 'sync_state': 'error',
-                                'odoo_last_update_result': msg,
+                                'odoo_last_update_result': self.format_response(msg),
                                 'update_last_sync': True,
-                                'odoo_last_sync_request': json.dumps(
-                                    dict_to_patch, ensure_ascii=False, indent=2),
+                                'odoo_last_sync_request': self.format_response(dict_to_patch),
                             })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
@@ -382,15 +381,13 @@ class OdooSync(osv.osv):
                     sync_vals.update({
                         'sync_state': 'synced',
                         'update_odoo_created_sync': True,
-                        'odoo_last_sync_request': json.dumps(
-                            erp_data, ensure_ascii=False, indent=2),
+                        'odoo_last_sync_request': self.format_response(erp_data),
                     })
                 else:
                     sync_vals.update({
                         'sync_state': 'error',
-                        'odoo_last_update_result': msg,
-                        'odoo_last_sync_request': json.dumps(
-                            erp_data, ensure_ascii=False, indent=2),
+                        'odoo_last_update_result': self.format_response(msg),
+                        'odoo_last_sync_request': self.format_response(erp_data),
                         'update_last_sync': True,
                     })
 
@@ -399,9 +396,9 @@ class OdooSync(osv.osv):
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': self.format_response(e),
                 'update_last_sync': True,
-                'odoo_last_sync_request': json.dumps(erp_data, ensure_ascii=False, indent=2),
+                'odoo_last_sync_request': self.format_response(erp_data),
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
@@ -409,9 +406,9 @@ class OdooSync(osv.osv):
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e),
+                'odoo_last_update_result': self.format_response(e),
                 'update_last_sync': True,
-                'odoo_last_sync_request': json.dumps(erp_data, ensure_ascii=False, indent=2),
+                'odoo_last_sync_request': self.format_response(erp_data),
             })
         finally:
             # Single point of persistence for the sync log
@@ -820,6 +817,9 @@ class OdooSync(osv.osv):
             return sync.res_id
         else:
             return False
+
+    def format_response(self, cursor, uid, data, context=None):
+        return json.dumps(data, ensure_ascii=False, indent=2)
 
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),
