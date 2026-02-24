@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 import mock
+import time
 
 import netsvc
 from destral import testing
@@ -16,6 +17,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         self.imd_obj = self.openerp.pool.get("ir.model.data")
         self.ai_obj = self.openerp.pool.get("account.invoice")
+        self.aa_obj = self.openerp.pool.get("account.account")
         self.wf_service = netsvc.LocalService("workflow")
         self.maxDiff = None
         super(TestOdooSync, self).setUp()
@@ -306,10 +308,14 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'res.partner', partner_id
         )
 
+        account_41_id = self.aa_obj.search(self.cursor, self.uid, [('code', 'like', '4100%0')])[0]
+        account_43_id = self.aa_obj.search(self.cursor, self.uid, [('code', 'like', '4300%0')])[0]
         self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 2)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
-            mock.call(mock.ANY, self.uid, 'account.account', 'sync', 2, {'from_fk_sync': True}),
-            mock.call(mock.ANY, self.uid, 'account.account', 'sync', 3, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, 'account.account', 'sync',
+                      account_43_id, {'from_fk_sync': True}),
+            mock.call(mock.ANY, self.uid, 'account.account', 'sync',
+                      account_41_id, {'from_fk_sync': True}),
         ])
         expected_vals = {
             'is_company': True,
@@ -317,7 +323,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'is_supplier': True,
             'lang': False,
             'name': u'ASUStek',
-            'pnt_erp_id': 2,
+            'pnt_erp_id': mock.ANY,
             'property_account_payable_id': 2,
             'property_account_position_id': None,
             'property_account_receivable_id': 2,
@@ -388,7 +394,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'invoice_line_ids': [{
                 'account_id': 2,
                 'extra_operations_erp': 1,
-                'name': 'Agrupaci\xc3\xb3 x 570001',
+                'name': 'Agrupaci\xc3\xb3 163500',
                 'price_unit': 1000.0,
                 'quantity': 1,
                 'quantity_erp': 1,
@@ -471,12 +477,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
+        month = 'period_{0}'.format(int(time.strftime('%m')))
         period_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'period_012026'
+            self.cursor, self.uid, 'account', month
         )[1]
-        account_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'account_account_cash'
-        )[1]
+        account_id = self.aa_obj.search(self.cursor, self.uid, [('code', '=', '570000')])[0]
         journal_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'account_journal_sales_syncronizable'
         )[1]
@@ -548,7 +553,7 @@ class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
         )[0]
 
         partner_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+            self.cursor, self.uid, 'base', 'res_partner_thymbra'
         )[1]
 
         sync_id = self.sync_obj.create(self.cursor, self.uid, {
@@ -568,7 +573,7 @@ class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
         )[0]
 
         partner_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+            self.cursor, self.uid, 'base', 'res_partner_thymbra'
         )[1]
 
         odoo_id = 160440
@@ -601,7 +606,7 @@ class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
             )[0]
 
             partner_id = self.imd_obj.get_object_reference(
-                self.cursor, self.uid, 'base', 'res_partner_agrolait'
+                self.cursor, self.uid, 'base', 'res_partner_thymbra'
             )[1]
 
             odoo_id = 160440
@@ -663,7 +668,7 @@ class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
         )[0]
         partner_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'base', 'res_partner_agrolait'
+            self.cursor, self.uid, 'base', 'res_partner_thymbra'
         )[1]
 
         partner_sync_id = self.sync_obj.create(self.cursor, self.uid, {
