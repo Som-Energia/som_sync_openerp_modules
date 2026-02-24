@@ -470,7 +470,7 @@ class OdooSync(osv.osv):
                 data_response = response.json()
                 if data_response and 'success' in data_response and \
                         data_response.get('success', False):
-                    odoo_id = data_response['data_response']['odoo_id']
+                    odoo_id = data_response['data']['odoo_id']
                     return odoo_id, ''
             elif response.status_code == 409 and model == 'account.invoice':
                 data_response = response.json()
@@ -818,8 +818,14 @@ class OdooSync(osv.osv):
         else:
             return False
 
-    def format_response(self, cursor, uid, data, context=None):
-        return json.dumps(data, ensure_ascii=False, indent=2)
+    def format_response(self, data, context=None):
+        if isinstance(data, dict):
+            return json.dumps(data, ensure_ascii=False, indent=2)
+        try:
+            data = json.dumps(json.loads(data), ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return data
 
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),

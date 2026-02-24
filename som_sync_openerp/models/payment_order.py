@@ -31,10 +31,11 @@ class PaymentOrder(osv.osv):
             payment_line_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'payment.line', line.id, context=context)
             lines.append(payment_line_vals)
+        journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
+        journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, self._name, journal_erp_id)
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
-            'journal_destiny': (
-                payment_order.mode.journal.id if payment_order.mode.journal else False),
+            'journal_destiny': journal_odoo_id,
             'lines': lines,
         }
         return res

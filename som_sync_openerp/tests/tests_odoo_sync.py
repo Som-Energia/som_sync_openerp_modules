@@ -639,3 +639,22 @@ class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
 
         sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
         self.assertFalse(sync_record.odoo_url_record)
+
+    def test_format_response(self):
+        response = {
+            'message': 'Error message',
+            'error_code': 'ERROR_CODE',
+        }
+        formatted_response = self.sync_obj.format_response(response)
+        expected_formatted_response = '{\n  "message": "Error message", \n  "error_code": "ERROR_CODE"\n}'  # noqa: E501
+        self.assertEqual(formatted_response, expected_formatted_response)
+
+        response = 'Not a dict'
+        formatted_response = self.sync_obj.format_response(response)
+        expected_formatted_response = 'Not a dict'
+        self.assertEqual(formatted_response, expected_formatted_response)
+
+        response = '{"success": false, "message": "Validation error in request parameters", "error_code": "INVALID_PARAMETERS", "data": {"validation_errors": [{"type": "extra_forbidden", "loc": ["vat"], "msg": "Extra inputs are not permitted", "input": "PS123456789\u00a0"}]}}'  # noqa: E501
+        formatted_response = self.sync_obj.format_response(response)
+        expected_formatted_response = u'{\n  "data": {\n    "validation_errors": [\n      {\n        "msg": "Extra inputs are not permitted", \n        "loc": [\n          "vat"\n        ], \n        "type": "extra_forbidden", \n        "input": "PS123456789\xa0"\n      }\n    ]\n  }, \n  "message": "Validation error in request parameters", \n  "error_code": "INVALID_PARAMETERS", \n  "success": false\n}'  # noqa: E501
+        self.assertEqual(expected_formatted_response, formatted_response)
