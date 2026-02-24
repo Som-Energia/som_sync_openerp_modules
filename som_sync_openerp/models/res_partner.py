@@ -43,6 +43,8 @@ class ResPartner(osv.osv):
         """
         if context is None:
             context = {}
+        if not odoo_id:
+            return False
         return '/contacts/{}'.format(odoo_id)
 
     def get_endpoint_suffix(self, cr, uid, id, context=None):

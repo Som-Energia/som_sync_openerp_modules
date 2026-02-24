@@ -8,6 +8,7 @@ from . import account_journal
 from . import account_move
 from . import account_move_line
 from . import payment_line
+from . import payment_mode
 from . import payment_order
 from . import res_country
 from . import res_country_state
