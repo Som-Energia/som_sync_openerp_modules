@@ -781,20 +781,20 @@ class OdooSync(osv.osv):
     def get_odoo_id_by_erp_id_from_odoo(self, cursor, uid, model, erp_id):
         # This method is used when we want to get the odoo_id from Odoo using the ERP id,
         # in cases where we don't have the sync record created yet in OpenERP
-         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
-         url_base = '{}entities/{}/{}'.format(
-             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), erp_id)
-         headers = {
-             "X-API-Key": odoo_api_key,
-             "Accept": "application/json",
-         }
-         response = requests.get(url_base, headers=headers)
-         if response.status_code == 200:
-             data = response.json()
-             if data and 'success' in data and data.get('success', False):
-                 odoo_id = data.get('data', {}).get('odoo_id', False)
-                 return odoo_id
-         return False
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        url_base = '{}entities/{}/{}'.format(
+            odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), erp_id)
+        headers = {
+            "X-API-Key": odoo_api_key,
+            "Accept": "application/json",
+        }
+        response = requests.get(url_base, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'success' in data and data.get('success', False):
+                odoo_id = data.get('data', {}).get('odoo_id', False)
+                return odoo_id
+        return False
 
     def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
         sync_ids = self.search(cursor, uid, [
