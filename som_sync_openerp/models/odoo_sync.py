@@ -171,7 +171,9 @@ class OdooSync(osv.osv):
             if key not in keys_no_direct_read
         ]
         # TODO: check in prod if record id is already created when async
-        data = rp_obj.read(cursor, uid, id, keys_to_read)
+        data = {}
+        if keys_to_read:
+            data = rp_obj.read(cursor, uid, id, keys_to_read)
 
         # Read related fields if any
         has_related_fields = hasattr(rp_obj, 'get_related_values')

@@ -58,6 +58,15 @@
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
+        <record id="account_journal_purchase_syncronizable" model="account.journal">
+            <field name="name">Purchase Journal</field>
+            <field name="code">PurchaseJournal</field>
+            <field name="type">purchase</field>
+            <field name="som_sync_odoo_invoices">True</field>
+            <field name="som_sync_odoo_account_moves">False</field>
+            <field name="view_id" ref="account.account_journal_view"/>
+            <field name="sequence_id" ref="account.sequence_journal"/>
+        </record>
         <record id="financieras" model="account.account.type">
             <field name="name">Financieras</field>
             <field name="code">financieras</field>
@@ -293,7 +302,7 @@
             <field name="mode" ref="payment_mode_0002"/>
         </record>
         <record id="invoice_0004" model="account.invoice">
-            <field name="name">Pol 000001</field>
+            <field name="name">Pol 000004</field>
             <field name="type">out_invoice</field>
             <field name="number">INV0001</field>
             <field name="state">draft</field>
@@ -314,6 +323,33 @@
             <field name="price_unit">1000.0</field>
             <field name="quantity">1</field>
             <field name="account_id" ref="account.a_sale"/>
+        </record>
+        <record id="invoice_0005" model="account.invoice">
+            <field name="name">Pol 000005</field>
+            <field name="type">in_invoice</field>
+            <field name="number">P_INV0005</field>
+            <field name="state">draft</field>
+            <field name="date_invoice">2026-01-16</field>
+            <field name="partner_id" ref="base.res_partner_9"/>
+            <field name="address_invoice_id" ref="base.res_partner_address_1"/>
+            <field name="period_id" ref="period_012026"/>
+            <field name="account_id" ref="account.a_recv"/>
+            <field name="amount_untaxed">1000.0</field>
+            <field name="amount_tax">210.0</field>
+            <field name="amount_total">1210.0</field>
+            <field name="check_total">1000.0</field>
+            <field name="journal_id" ref="account_journal_purchase_syncronizable"/>
+            <field name="origin">Purchase Order 0005</field>
+            <field name="reference">PO0005</field>
+            <field name="origin_date_invoice">2026-01-10</field>
+            <field name="payment_order_id" ref="remesa_0001"/>
+        </record>
+        <record id="invoice_0005_line_1" model="account.invoice.line">
+            <field name="name">Product A</field>
+            <field name="invoice_id" ref="invoice_0005"/>
+            <field name="price_unit">1000.0</field>
+            <field name="quantity">1</field>
+            <field name="account_id" ref="account.a_expense"/>
         </record>
     </data>
 </openerp>
