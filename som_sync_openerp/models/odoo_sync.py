@@ -359,10 +359,6 @@ class OdooSync(osv.osv):
                     erp_data.pop('pnt_erp_id', False)
                     odoo_metadata.pop('company_id', False)
                     odoo_metadata.pop('company_name', False)
-                    if hasattr(rp_obj, 'hook_odoo_api_data_post_modifications'):
-                        odoo_metadata = rp_obj.hook_odoo_api_data_post_modifications(
-                            cursor, uid, odoo_metadata)
-
                     dict_to_patch = self.get_dict_to_patch(cursor, uid, erp_data, odoo_metadata)
                     if dict_to_patch:
                         success, msg = self.update_odoo_record(
