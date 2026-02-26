@@ -131,7 +131,7 @@ class OdooSync(osv.osv):
                         # Sync synchronously
                         return self.syncronize_sync(
                             cursor, uid, model, action, _id, context=context)
-
+            return None, None
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
