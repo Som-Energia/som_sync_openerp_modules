@@ -308,18 +308,15 @@ class OdooSync(osv.osv):
             # Verify record existence in the local ERP database
             self.check_erp_record_exist(cursor, uid, model, openerp_id)
 
-            # Data preparation logic based on the action type
-            if action in ['create', 'sync', 'write']:
-                erp_data = self.get_model_vals_to_sync(
-                    cursor, uid, model, openerp_id, context=context)
-            elif action in ['unlink']:
-                # Log placeholder for future implementations (PATCH/DELETE)
-                logger.info("Action {} not implemented yet for model {}".format(action, model))
-                sync_vals.update({
-                    'sync_state': 'error',
-                    'odoo_last_update_result': 'Action not implemented'
-                })
-                # We continue to check existence even if the specific update action isn't ready
+            # If the sync is triggered from a FK sync and the model is not in the patch list,
+            # we can directly get the odoo_id by erp_id without checking endpoint suffix.
+            # If exists it means that the record in Odoo already exists and is linked with erp_id.
+            # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
+            if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+                erp_id = openerp_id
+                odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+                if odoo_id:
+                    return odoo_id, erp_id
 
             has_get = hasattr(rp_obj, 'get_endpoint_suffix')
             if not has_get:
@@ -331,6 +328,10 @@ class OdooSync(osv.osv):
                     cursor, uid, openerp_id, context=context)
                 odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
                     cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+
+            # ERP data preparation for sync
+            erp_data = self.get_model_vals_to_sync(
+                cursor, uid, model, openerp_id, context=context)
 
             if odoo_id:
                 if not erp_id:
@@ -510,10 +511,10 @@ class OdooSync(osv.osv):
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
             context = {}
-        if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
-            odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
-            if odoo_id:
-                return odoo_id, erp_id, {}
+        # if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+        #     odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+        #     if odoo_id:
+        #         return odoo_id, erp_id, {}
 
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
         if not data:
