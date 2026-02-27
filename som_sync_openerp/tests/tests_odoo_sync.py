@@ -508,6 +508,161 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
                       invoice_id, context={'update_last_sync': True}),
         ])
 
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__create_record_patched_api(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_exists_in_odoo, mock_create_odoo_record, mock_update_odoo_id):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': partner_id,
+            'name': u'ASUStek',
+        }
+        mock_exists_in_odoo.return_value = (False, False, False)
+        mock_create_odoo_record.return_value = (4321, '')
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'res.partner', 'sync', partner_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 4321)
+        self.assertEqual(erp_id, partner_id)
+        mock_create_odoo_record.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner',
+            {'pnt_erp_id': partner_id, 'name': u'ASUStek'}, context={}
+        )
+        mock_update_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', partner_id, 4321, context=mock.ANY
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_dict_to_patch")
+    @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__update_record_patched_api(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_exists_in_odoo, mock_get_dict_to_patch, mock_update_odoo_record,
+            mock_update_odoo_id):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': partner_id,
+            'name': u'ASUStek',
+        }
+        mock_exists_in_odoo.return_value = (9999, partner_id, {'name': u'Old'})
+        mock_get_dict_to_patch.return_value = {'name': u'ASUStek'}
+        mock_update_odoo_record.return_value = (True, '')
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'res.partner', 'write', partner_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 9999)
+        self.assertEqual(erp_id, partner_id)
+        mock_update_odoo_record.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', 9999, partner_id,
+            {'name': u'ASUStek'}, {}
+        )
+        mock_update_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', partner_id, 9999, context=mock.ANY
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "get_or_create_static_odoo_id")
+    def test__syncronize_sync__static_model(
+            self, mock_get_or_create_static_odoo_id, mock_sync_model_enabled_amplified):
+        afp_obj = self.openerp.pool.get("account.fiscal.position")
+        afp_id = afp_obj.create(self.cursor, self.uid, {'name': 'Test Static AFP 2'}, context={})
+        mock_get_or_create_static_odoo_id.return_value = 777
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.fiscal.position', 'sync', afp_id,
+            context={'odoo_id': 777}
+        )
+
+        self.assertEqual(odoo_id, 777)
+        self.assertEqual(erp_id, afp_id)
+        mock_get_or_create_static_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'account.fiscal.position', afp_id, 777, {'odoo_id': 777}
+        )
+        mock_sync_model_enabled_amplified.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__from_fk_sync_shortcut(
+            self, mock_sync_model_enabled_amplified, mock_get_odoo_id_by_erp_id,
+            mock_exists_in_odoo, mock_get_model_vals_to_sync):
+        account_id = self.aa_obj.search(
+            self.cursor, self.uid, [('code', 'like', '4300%0')])[0]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_odoo_id_by_erp_id.return_value = 555
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id,
+            context={'from_fk_sync': True}
+        )
+
+        self.assertEqual(odoo_id, 555)
+        self.assertEqual(erp_id, account_id)
+        mock_get_odoo_id_by_erp_id.assert_called_once_with(
+            mock.ANY, self.uid, 'account.account', account_id
+        )
+        mock_exists_in_odoo.assert_not_called()
+        mock_get_model_vals_to_sync.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__no_from_fk_sync(
+            self, mock_sync_model_enabled_amplified, mock_get_odoo_id_by_erp_id,
+            mock_exists_in_odoo, mock_get_model_vals_to_sync,
+            mock_create_odoo_record, mock_update_odoo_id):
+        account_id = self.aa_obj.search(
+            self.cursor, self.uid, [('code', 'like', '4300%0')])[0]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_exists_in_odoo.return_value = (False, False, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': account_id,
+            'code': u'4300TEST',
+            'name': u'Account Test'
+        }
+        mock_create_odoo_record.return_value = (321, '')
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 321)
+        self.assertEqual(erp_id, account_id)
+        mock_get_odoo_id_by_erp_id.assert_not_called()
+        mock_exists_in_odoo.assert_called_once()
+        mock_get_model_vals_to_sync.assert_called_once_with(
+            mock.ANY, self.uid, 'account.account', account_id, context={}
+        )
+        mock_create_odoo_record.assert_called_once_with(
+            mock.ANY, self.uid, 'account.account',
+            {'pnt_erp_id': account_id, 'code': u'4300TEST', 'name': u'Account Test'},
+            context={}
+        )
+        mock_update_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'account.account', account_id, 321, context=mock.ANY
+        )
+
 
 class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
     """Test cases for odoo_url_record computed field"""
