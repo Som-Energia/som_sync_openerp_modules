@@ -4,6 +4,7 @@ name: som_sync_openerp
 on:
   workflow_dispatch:
   pull_request: # PR
+
 jobs:
   erp-tests-module:
     uses: Som-Energia/openerp_som_addons/.github/workflows/reusable_workflow.yml@main
@@ -15,3 +16,33 @@ jobs:
       ESIOS_TOKEN: ${{ secrets.ESIOS_TOKEN }}
       SRID: ${{ secrets.SRID }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: erp-tests-module       # <-- Depèn del job que crida el reusable workflow
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download coverage.xml from tests
+        uses: actions/download-artifact@v3
+        with:
+          name: coverage-xml
+
+      - name: Set up Python 2.7
+        uses: actions/setup-python@v4
+        with:
+          python-version: '2.7'
+
+      - name: Install SonarCloud Scanner
+        run: python -m pip install --upgrade pip && pip install sonar-scanner
+
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@v2
+        with:
+          organization: som-energia
+          projectKey: Som-Energia_som_sync_openerp_modules
+          projectName: som_sync_openerp_modules
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
