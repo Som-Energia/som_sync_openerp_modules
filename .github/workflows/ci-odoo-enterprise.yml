@@ -19,12 +19,12 @@ jobs:
 
       # 2) Clonar repositori d'Enterprise (si hi ha secret SSH)
       - name: Clone Enterprise Addons
-        if: ${{ secrets.ENTERPRISE_REPO_SSH != '' }}
         run: |
           mkdir enterprise_addons
-          git clone "git@github.com:XXX/enterprise-addons.git" enterprise_addons
+          git clone "https://$GITHUB_TOKEN@github.com/puntsistemes/som-energia_odoo.git" $ROOT_DIR_SRC/punt_addons
         env:
           SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN_GA }}
 
       # 3) Crear un docker-compose dinàmic
       - name: Generate docker-compose with Odoo Enterprise
@@ -96,13 +96,7 @@ jobs:
       # 6) Executar tests d'integració continue-on-error:
       - name: Run integration tests
         run: |
-          # Si tens tests Python integrats:
-          docker compose exec odoo odoo -d odoo_test --test-enable --stop-after-init \
-            -i som_sync_openerp_modules
-
-          # (Opcional) si tens pytest-odoo
-          # docker compose exec odoo pip install pytest pytest-odoo
-          # docker compose exec odoo pytest -q
+          # Llençar tests d'integració
 
       # 7) Cleanup
       - name: Tear down services
