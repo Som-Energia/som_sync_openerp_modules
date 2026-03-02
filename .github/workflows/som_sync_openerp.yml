@@ -39,7 +39,7 @@ jobs:
         run: python -m pip install --upgrade pip && pip install sonar-scanner
 
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@v2
+        uses: sonarsource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e
         with:
           organization: som-energia
           projectKey: Som-Energia_som_sync_openerp_modules
