@@ -11,6 +11,7 @@ jobs:
     with:
       module: som_sync_openerp
       pyversion: '["2.7"]'
+      upload_coverage: true
     secrets:
       ACCESS_TOKEN_GA: ${{ secrets.ACCESS_TOKEN_GA }}
       ESIOS_TOKEN: ${{ secrets.ESIOS_TOKEN }}
