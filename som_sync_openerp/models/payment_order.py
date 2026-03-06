@@ -9,7 +9,6 @@ class PaymentOrder(osv.osv):
 
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
-        'name': 'name',
         'date_created': 'date',  # TODO: check if date_created is the one's
         'date_planned': 'sdd_required_collection_date',
     }
@@ -25,10 +24,14 @@ class PaymentOrder(osv.osv):
         payment_order = self.browse(cr, uid, id, context=context)
         lines = []
         sync_obj = self.pool.get('odoo.sync')
+        name = payment_order.name or ''
         for line in payment_order.line_ids:
             payment_line_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'payment.line', line.id, context=context)
             lines.append(payment_line_vals)
+            if line.invoice_id.type == 'out_invoice' and line.invoice_id.amount_total < 0:
+                # Factures FE negatives, les tractem diferent a Odoo
+                name = 'RECT_{}'.format(payment_order.name)
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
         factor = -1 if payment_order.type == 'receivable' else 1
@@ -37,6 +40,7 @@ class PaymentOrder(osv.osv):
             'journal_destiny': journal_odoo_id,
             'lines': lines,
             'amount': payment_order.total * factor,
+            'name': name,
         }
         return res
 
