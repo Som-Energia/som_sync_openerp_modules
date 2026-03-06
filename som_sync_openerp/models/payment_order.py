@@ -40,9 +40,11 @@ class PaymentOrder(osv.osv):
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
+        sync_obj = self.pool.get('odoo.sync')
+        imd_obj = self.pool.get('ir.model.data')
+
         payment_order = self.browse(cr, uid, id, context=context)
         lines = []
-        sync_obj = self.pool.get('odoo.sync')
         name = payment_order.name or ''
         for line in payment_order.line_ids:
             payment_line_vals = sync_obj.get_model_vals_to_sync(
@@ -54,9 +56,14 @@ class PaymentOrder(osv.osv):
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
         factor = -1 if payment_order.type == 'receivable' else 1
-        # TODO: avoid magic number
-        # 375: Transferència de crèdit SEPA, 373: Càrrec directe SEPA
-        metode_pagament_id = 375 if payment_order.type == 'payable' else 373
+
+        if payment_order.type == 'payable':
+            metode_pagament_id = imd_obj.get_object_reference(
+                cr, uid, 'som_sync_openerp', 'odoo_provider_payment_method')[1]
+        else:
+            metode_pagament_id = imd_obj.get_object_reference(
+                cr, uid, 'som_sync_openerp', 'odoo_customer_payment_method')[1]
+
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
             'journal_destiny': journal_odoo_id,

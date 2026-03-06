@@ -29,5 +29,13 @@
                 We create a general payment.method for providers in Odoo a this is the odoo_id of it.
             </field>
         </record>
+        <record id="odoo_customer_payment_method" model="res.config">
+            <field name="name">odoo_customer_payment_method</field>
+            <field name="value">373</field>
+            <field name="description">
+                Odoo has different payment.method for customers and providers but OpenERP only has one.
+                We create a general payment.method for customers in Odoo and this is the odoo_id of it.
+            </field>
+        </record>
     </data>
 </openerp>
