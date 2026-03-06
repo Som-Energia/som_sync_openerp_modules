@@ -41,7 +41,7 @@ class PaymentOrder(osv.osv):
         if context is None:
             context = {}
         sync_obj = self.pool.get('odoo.sync')
-        imd_obj = self.pool.get('ir.model.data')
+        conf_obj = self.pool.get('res.config')
 
         payment_order = self.browse(cr, uid, id, context=context)
         lines = []
@@ -58,11 +58,9 @@ class PaymentOrder(osv.osv):
         factor = -1 if payment_order.type == 'receivable' else 1
 
         if payment_order.type == 'payable':
-            metode_pagament_id = imd_obj.get_object_reference(
-                cr, uid, 'som_sync_openerp', 'odoo_provider_payment_method')[1]
+            metode_pagament_id = conf_obj.get(cr, uid, 'odoo_provider_payment_method', '0')
         else:
-            metode_pagament_id = imd_obj.get_object_reference(
-                cr, uid, 'som_sync_openerp', 'odoo_customer_payment_method')[1]
+            metode_pagament_id = conf_obj.get(cr, uid, 'odoo_customer_payment_method', '0')
 
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
