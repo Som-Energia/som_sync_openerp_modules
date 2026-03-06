@@ -18,6 +18,25 @@ class PaymentOrder(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - for customer: :/odoo/action-375/57
+        - for provider': /odoo/action-376/55
+        """
+        # TODO: action_name as a setting
+        type_endpoint_mapping = {
+            'receivable': 'action-375',
+            'payable': 'action-376',
+        }
+        if context is None:
+            context = {}
+        payment_order = self.browse(cr, uid, id, context=context)
+        if payment_order.type in type_endpoint_mapping:
+            return '/{}/{}'.format(type_endpoint_mapping[payment_order.type], odoo_id)
+        else:
+            return False
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -29,18 +48,22 @@ class PaymentOrder(osv.osv):
             payment_line_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'payment.line', line.id, context=context)
             lines.append(payment_line_vals)
-            if line.invoice_id.type == 'out_invoice' and line.invoice_id.amount_total < 0:
+            if line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
                 # Factures FE negatives, les tractem diferent a Odoo
                 name = 'RECT_{}'.format(payment_order.name)
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
         factor = -1 if payment_order.type == 'receivable' else 1
+        # TODO: avoid magic number
+        # 375: Transferència de crèdit SEPA, 373: Càrrec directe SEPA
+        metode_pagament_id = 375 if payment_order.type == 'payable' else 373
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
             'journal_destiny': journal_odoo_id,
             'lines': lines,
             'amount': payment_order.total * factor,
             'name': name,
+            'method_id': metode_pagament_id,
         }
         return res
 
