@@ -76,7 +76,9 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
                     'amount': 1000.0,
                     'invoice_id': 99,
                 }
-            ]
+            ],
+            'method_id': 373,
+            'name': u'Remesa 0001',
         }
         self.assertEqual(related_values, expected_values)
 
@@ -135,7 +137,9 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
                     'amount': 1000.0,
                     'invoice_id': 99,
                 }
-            ]
+            ],
+            'method_id': 375,
+            'name': u'Remesa 0002',
         }
         self.assertEqual(related_values, expected_values)
 

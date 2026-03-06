@@ -464,7 +464,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
         self.sync_obj.syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'update_last_sync': True}),
+                      invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
                       invoice_id, context={'update_last_sync': True}),
         ])
@@ -489,7 +489,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
         )
         self.ai_obj.pay_and_reconcile(
-            self.cursor, self.uid, invoice_id, 1000,
+            self.cursor, self.uid, [invoice_id], 1000,
             account_id, period_id, journal_id, account_id, period_id, journal_id
         )
 
@@ -501,7 +501,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
         self.sync_obj.syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'update_last_sync': True}),
+                      invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
                       invoice_id, context={'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
