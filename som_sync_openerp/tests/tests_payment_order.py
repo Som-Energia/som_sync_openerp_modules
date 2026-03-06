@@ -21,6 +21,30 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestPaymentOrder, self).setUp()
 
+    def utils_open_invoice_add_to_order(self, invoice_id, order_id, factor=1):
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
+        # Cercar la línia de receivable dins del moviment comptable
+        move_line_id = None
+        for line in invoice.move_id.line_id:
+            if line.account_id.type == 'receivable':
+                move_line_id = line.id
+                break
+
+        self.pl_obj.create(self.cursor, self.uid, {
+            'order_id': order_id,
+            'move_line_id': move_line_id,
+            'partner_id': invoice.partner_id.id,
+            'name': invoice.name or '/',
+            'date': invoice.date_invoice,
+            'state': 'normal',
+            'communication': invoice.name or '/',
+            'amount_currency': invoice.amount_total * factor,
+            'currency': invoice.currency_id.id,
+        })
+
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
@@ -41,27 +65,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
         mock_erp_id.return_value = iva_tax_id
         mock_odoo_id.return_value = odoo_journal_id
-        self.wf_service.trg_validate(
-            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
-        )
-        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
-        # Cercar la línia de receivable dins del moviment comptable
-        move_line_id = None
-        for line in invoice.move_id.line_id:
-            if line.account_id.type == 'receivable':
-                move_line_id = line.id
-                break
-        self.pl_obj.create(self.cursor, self.uid, {
-            'order_id': remesa_id,
-            'move_line_id': move_line_id,
-            'partner_id': invoice.partner_id.id,
-            'name': invoice.name or '/',
-            'date': invoice.date_invoice,
-            'state': 'normal',
-            'communication': invoice.name or '/',
-            'amount_currency': invoice.amount_total * -1,
-            'currency': invoice.currency_id.id,
-        })
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id, factor=-1)
 
         related_values = self.po_obj.get_related_values(
             self.cursor, self.uid, remesa_id
@@ -102,27 +106,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
         mock_erp_id.return_value = iva_tax_id
         mock_odoo_id.return_value = odoo_journal_id
-        self.wf_service.trg_validate(
-            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
-        )
-        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
-        # Cercar la línia de receivable dins del moviment comptable
-        move_line_id = None
-        for line in invoice.move_id.line_id:
-            if line.account_id.type == 'receivable':
-                move_line_id = line.id
-                break
-        self.pl_obj.create(self.cursor, self.uid, {
-            'order_id': remesa_id,
-            'move_line_id': move_line_id,
-            'partner_id': invoice.partner_id.id,
-            'name': invoice.name or '/',
-            'date': invoice.date_invoice,
-            'state': 'normal',
-            'communication': invoice.name or '/',
-            'amount_currency': invoice.amount_total,
-            'currency': invoice.currency_id.id,
-        })
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id)
 
         related_values = self.po_obj.get_related_values(
             self.cursor, self.uid, remesa_id
@@ -155,27 +139,8 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         odoo_account_id = 99
         erp_account_id = 1
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
-        self.wf_service.trg_validate(
-            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
-        )
-        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
-        # Cercar la línia de receivable dins del moviment comptable
-        move_line_id = None
-        for line in invoice.move_id.line_id:
-            if line.account_id.type == 'receivable':
-                move_line_id = line.id
-                break
-        self.pl_obj.create(self.cursor, self.uid, {
-            'order_id': remesa_id,
-            'move_line_id': move_line_id,
-            'partner_id': invoice.partner_id.id,
-            'name': invoice.name or '/',
-            'date': invoice.date_invoice,
-            'state': 'normal',
-            'communication': invoice.name or '/',
-            'amount_currency': invoice.amount_total,
-            'currency': invoice.currency_id.id,
-        })
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id)
+
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
         mock_sync_model_enabled_amplified.return_value = (True, True, True)
         # Pay payment order
