@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
 from service.security import Sudo
+import json
 
 
 class AccountInvoice(osv.osv):
@@ -240,6 +241,29 @@ class AccountInvoice(osv.osv):
         if data['ref'] is False:
             data['ref'] = ''
         return data
+
+    def hook_after_odoo_creation(self, cr, uid, response, sync_vals):
+        """
+        After create Invoice in Odoo, we check if we have amounts discrepancies
+        checking metadata in data response:
+        response['data']['metadata'][0]:
+        - "pnt_amount_untaxed_erp_difference" = float
+        - "pnt_amount_tax_erp_difference" = float
+        - "pnt_amount_total_erp_difference" = float
+        - "pnt_amount_untaxed_erp_discrepancy" = True/False
+        - "pnt_amount_tax_erp_discrepancy" = True/False
+        - "pnt_amount_total_erp_discrepancy" = True/False
+        """
+        if not response:
+            return
+        # response to dict if it's not already a dict
+        if not isinstance(response, dict):
+            response = json.loads(response)
+        if response and 'data' in response and 'metadata' in response['data']:
+            metadata = response['data']['metadata']
+            discrepancy_fields = [f for f in metadata if 'discrepancy' in f and metadata[f] is True]
+            if discrepancy_fields:
+                sync_vals['state'] = 'synced_with_warning'
 
 
 AccountInvoice()

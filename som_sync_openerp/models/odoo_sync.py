@@ -376,12 +376,17 @@ class OdooSync(osv.osv):
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
+                msg_formated = self.format_response(msg)
                 sync_vals.update({
                     'sync_state': 'synced' if odoo_id else 'error',
-                    'odoo_last_update_result': self.format_response(msg),
+                    'odoo_last_update_result': msg_formated,
                     'update_odoo_created_sync': True,
                     'odoo_last_sync_request': self.format_response(erp_data),
                 })
+
+                has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
+                if has_hook_after_odoo_creation:
+                    rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
             CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
@@ -463,17 +468,17 @@ class OdooSync(osv.osv):
                 if data_response and 'success' in data_response and \
                         data_response.get('success', False):
                     odoo_id = data_response['data']['odoo_id']
-                    return odoo_id, ''
+                    return odoo_id, response.text
             elif response.status_code == 409 and model == 'account.invoice':
+                # 409 Conflicto - ERP ID o número de factura duplicado: Actualitzem odoo_id.
                 data_response = response.json()
                 if data_response and 'success' in data_response and \
                         not data_response.get('success', False) and \
                         data_response.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
-                    # TODO: improve get odoo_id from Odoo
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
                     if odoo_id:
-                        return odoo_id, ''
+                        return odoo_id, response.text
                     else:
                         return False, response.text
             else:
@@ -823,10 +828,11 @@ class OdooSync(osv.osv):
         'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
-            ('synced', 'Synced'),
-            ('pending', 'Pending'),
             ('error', 'Error'),
+            ('pending', 'Pending'),
             ('static', 'Static'),
+            ('synced', 'Synced'),
+            ('synced_with_warning', 'Synced with warning'),
         ], 'Syncronization state', required=True),
         'erp_name': fields.function(
             _get_erp_name,
