@@ -260,10 +260,10 @@ class AccountInvoice(osv.osv):
         if not isinstance(response, dict):
             response = json.loads(response)
         if response and 'data' in response and 'metadata' in response['data']:
-            metadata = response['data']['metadata']
+            metadata = response['data']['metadata'][0]
             discrepancy_fields = [f for f in metadata if 'discrepancy' in f and metadata[f] is True]
             if discrepancy_fields:
-                sync_vals['state'] = 'synced_with_warning'
+                sync_vals['sync_state'] = 'synced_with_warning'
 
 
 AccountInvoice()

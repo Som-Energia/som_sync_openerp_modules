@@ -642,7 +642,6 @@ class OdooSync(osv.osv):
         if sync_record.odoo_id != odoo_id:
             vals.update({
                 'odoo_last_sync_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 

@@ -379,146 +379,146 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
     def test__hook_after_odoo_creation_with_discrepancies(self):
         """
         Test hook_after_odoo_creation with amount discrepancies
-        Should set state to 'synced_with_warning'
+        Should set sync_state to 'synced_with_warning'
         """
         response = {
             'data': {
-                'metadata': {
+                'metadata': [{
                     'pnt_amount_untaxed_erp_difference': 10.50,
                     'pnt_amount_tax_erp_difference': 2.21,
                     'pnt_amount_total_erp_difference': 12.71,
                     'pnt_amount_untaxed_erp_discrepancy': True,
                     'pnt_amount_tax_erp_discrepancy': False,
                     'pnt_amount_total_erp_discrepancy': True,
-                }
+                }]
             }
         }
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced_with_warning')
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
 
     def test__hook_after_odoo_creation_with_discrepancies_as_string(self):
         """
         Test hook_after_odoo_creation with response as JSON string
-        Should set state to 'synced_with_warning'
+        Should set sync_state to 'synced_with_warning'
         """
 
         response = json.dumps({
             'data': {
-                'metadata': {
+                'metadata': [{
                     'pnt_amount_untaxed_erp_difference': 5.0,
                     'pnt_amount_tax_erp_difference': 1.05,
                     'pnt_amount_total_erp_difference': 6.05,
                     'pnt_amount_untaxed_erp_discrepancy': False,
                     'pnt_amount_tax_erp_discrepancy': True,
                     'pnt_amount_total_erp_discrepancy': False,
-                }
+                }]
             }
         })
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced_with_warning')
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
 
     def test__hook_after_odoo_creation_without_discrepancies(self):
         """
         Test hook_after_odoo_creation without any discrepancies
-        Should NOT modify state
+        Should NOT modify sync_state
         """
         response = {
             'data': {
-                'metadata': {
+                'metadata': [{
                     'pnt_amount_untaxed_erp_difference': 0.0,
                     'pnt_amount_tax_erp_difference': 0.0,
                     'pnt_amount_total_erp_difference': 0.0,
                     'pnt_amount_untaxed_erp_discrepancy': False,
                     'pnt_amount_tax_erp_discrepancy': False,
                     'pnt_amount_total_erp_discrepancy': False,
-                }
+                }]
             }
         }
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'synced')
 
     def test__hook_after_odoo_creation_without_metadata(self):
         """
         Test hook_after_odoo_creation without metadata in response
-        Should NOT modify state
+        Should NOT modify sync_state
         """
         response = {
             'data': {
                 'id': 12345
             }
         }
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'synced')
 
     def test__hook_after_odoo_creation_with_empty_response(self):
         """
         Test hook_after_odoo_creation with empty response
-        Should NOT modify state
+        Should NOT modify sync_state
         """
         response = {}
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'synced')
 
     def test__hook_after_odoo_creation_with_none_response(self):
         """
         Test hook_after_odoo_creation with None response
-        Should NOT modify state
+        Should NOT modify sync_state
         """
         response = None
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'synced')
 
     def test__hook_after_odoo_creation_with_all_discrepancies(self):
         """
         Test hook_after_odoo_creation with all amount discrepancies
-        Should set state to 'synced_with_warning'
+        Should set sync_state to 'synced_with_warning'
         """
         response = {
             'data': {
-                'metadata': {
+                'metadata': [{
                     'pnt_amount_untaxed_erp_difference': 100.0,
                     'pnt_amount_tax_erp_difference': 21.0,
                     'pnt_amount_total_erp_difference': 121.0,
                     'pnt_amount_untaxed_erp_discrepancy': True,
                     'pnt_amount_tax_erp_discrepancy': True,
                     'pnt_amount_total_erp_discrepancy': True,
-                }
+                }]
             }
         }
-        sync_vals = {'state': 'synced'}
+        sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['state'], 'synced_with_warning')
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
