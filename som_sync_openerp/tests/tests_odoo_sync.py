@@ -156,7 +156,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         expected_vals = {
             'odoo_id': 1001,
             'odoo_last_sync_at': '2024-06-10 12:00:00',
-            'odoo_last_update_result': '',
             'sync_state': 'synced'
         }
         self.assertEqual(vals, expected_vals)

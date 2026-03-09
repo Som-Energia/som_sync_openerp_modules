@@ -364,31 +364,24 @@ class OdooSync(osv.osv):
                     if dict_to_patch:
                         success, msg = self.update_odoo_record(
                             cursor, uid, model, odoo_id, erp_id, dict_to_patch, context)
-                        if not success:
-                            sync_vals.update({
-                                'sync_state': 'error',
-                                'odoo_last_update_result': self.format_response(msg),
-                                'update_last_sync': True,
-                                'odoo_last_sync_request': self.format_response(dict_to_patch),
-                            })
+                        sync_vals.update({
+                            'sync_state': 'synced' if success else 'error',
+                            'odoo_last_update_result': self.format_response(msg),
+                            'update_last_sync': True,
+                            'odoo_last_sync_request': self.format_response(dict_to_patch),
+                        })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
                 odoo_id, msg = self.create_odoo_record(
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
-                    sync_vals.update({
-                        'sync_state': 'synced',
-                        'update_odoo_created_sync': True,
-                        'odoo_last_sync_request': self.format_response(erp_data),
-                    })
-                else:
-                    sync_vals.update({
-                        'sync_state': 'error',
-                        'odoo_last_update_result': self.format_response(msg),
-                        'odoo_last_sync_request': self.format_response(erp_data),
-                        'update_last_sync': True,
-                    })
+                sync_vals.update({
+                    'sync_state': 'synced' if odoo_id else 'error',
+                    'odoo_last_update_result': self.format_response(msg),
+                    'update_odoo_created_sync': True,
+                    'odoo_last_sync_request': self.format_response(erp_data),
+                })
 
         except (
             CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
@@ -505,7 +498,7 @@ class OdooSync(osv.osv):
         if response.status_code == 200:
             data = response.json()
             if data and 'success' in data and data.get('success', False):
-                return True, ''
+                return True, response.text
         return False, response.text
 
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
@@ -580,7 +573,7 @@ class OdooSync(osv.osv):
             'res_id': openerp_id,
             'odoo_id': odoo_id,
             'odoo_last_sync_at': str_now,
-            'sync_state': 'synced',
+            'sync_state': context.get('sync_state', 'pending'),
         }
 
         if context.get('update_odoo_created_sync'):
@@ -588,15 +581,14 @@ class OdooSync(osv.osv):
                 'odoo_created_at': str_now,
             })
 
-        if context.get('odoo_last_update_result'):
-            vals.update({
-                'odoo_last_update_result': context['odoo_last_update_result'],
-                'sync_state': 'error',
-            })
-
         if context.get('odoo_last_sync_request'):
             vals.update({
                 'odoo_last_sync_request': context['odoo_last_sync_request'],
+            })
+
+        if context.get('odoo_last_update_result'):
+            vals.update({
+                'odoo_last_update_result': context['odoo_last_update_result'],
             })
 
         return self.create(cursor, uid, vals)
@@ -640,16 +632,8 @@ class OdooSync(osv.osv):
             })
             update = True
 
-        # Special case: error → synced
+        # Case odoo_id change
         sync_record = self.browse(cursor, uid, id)
-        if sync_record.sync_state == 'error' and vals.get('sync_state') == 'synced':
-            vals.update({
-                'odoo_last_sync_at': str_now,
-                'odoo_last_update_result': '',
-            })
-            update = True
-
-        # Case Odoo_id change
         if sync_record.odoo_id != odoo_id:
             vals.update({
                 'odoo_last_sync_at': str_now,
@@ -836,7 +820,7 @@ class OdooSync(osv.osv):
         'odoo_created_at': fields.datetime('Odoo created at'),
         'odoo_updated_at': fields.datetime('Odoo updated at'),
         # Resultat de l'error de la última actualització
-        'odoo_last_update_result': fields.text('Odoo last update error'),
+        'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
             ('synced', 'Synced'),
