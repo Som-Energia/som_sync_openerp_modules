@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
 from service.security import Sudo
+import json
 
 
 class PaymentOrder(osv.osv):
@@ -37,6 +38,31 @@ class PaymentOrder(osv.osv):
         else:
             return False
 
+    def _get_total_amount_difference(self, inv_read_sync_record):
+        """
+        This method is used to get the total amount difference between Odoo and ERP
+        inv_read_sync_record format expected:
+        {
+            'id': 1,
+            'res_id': 20,
+            'odoo_id': 57,
+            'odoo_last_update_result': '{...}'
+        }
+        """
+        if not inv_read_sync_record or 'odoo_last_update_result' not in inv_read_sync_record:
+            return 0
+        odoo_last_update_result = inv_read_sync_record['odoo_last_update_result']
+        if not odoo_last_update_result:
+            return 0
+        if isinstance(odoo_last_update_result, str):
+            odoo_last_update_result = json.loads(odoo_last_update_result)
+        if 'data' in odoo_last_update_result \
+                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']:
+            discrepancy = odoo_last_update_result['data']['pnt_amount_total_erp_difference']
+            if discrepancy:
+                return odoo_last_update_result['data']['pnt_amount_total_erp_difference']
+        return 0
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -44,18 +70,45 @@ class PaymentOrder(osv.osv):
         conf_obj = self.pool.get('res.config')
 
         payment_order = self.browse(cr, uid, id, context=context)
-        lines = []
         name = payment_order.name or ''
-        for line in payment_order.line_ids:
-            payment_line_vals = sync_obj.get_model_vals_to_sync(
-                cr, uid, 'payment.line', line.id, context=context)
-            lines.append(payment_line_vals)
-            if line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
-                # Factures FE negatives, les tractem diferent a Odoo
-                name = 'RECT_{}'.format(payment_order.name)
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
         factor = -1 if payment_order.type == 'receivable' else 1
+
+        lines = []
+        pl_inv_ids = []
+        if payment_order.line_ids:
+            line = payment_order.line_ids[0]
+            if line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
+                # Factures FE negatives, les tractem diferent a Odoo
+                name = 'RECT_{}'.format(payment_order.name)
+        for line in payment_order.line_ids:
+            payment_line_vals = sync_obj.get_model_vals_to_sync(
+                cr, uid, 'payment.line', line.id, context=context)
+            payment_line_vals['amount'] = payment_line_vals['amount'] * factor
+            if line.ml_inv_ref:
+                pl_inv_ids.append(line.ml_inv_ref.id)
+            lines.append(payment_line_vals)
+
+        # at this point we're sure that invoices are synced
+        # we read sync records for invoices linked to payment lines with warning
+        # in order to get the amount difference between ERP and Odoo if exists
+        # and update the amount to sync in order to avoid discrepancies in Odoo
+        inv_sync_with_diff_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', 'account.invoice'),
+            ('res_id', 'in', pl_inv_ids),
+            ('sync_state', '=', 'synced_with_warning'),
+            ('odoo_last_update_result', '!=', False),
+        ])
+        if inv_sync_with_diff_ids:
+            # we read the sync records with specific fields to avoid performance issues
+            inv_read_sync_records = sync_obj.read(
+                cr, uid, inv_sync_with_diff_ids, ['res_id', 'odoo_id', 'odoo_last_update_result'])
+            for inv_read_sync_record in inv_read_sync_records:
+                # we get the amount difference from the last synchronization
+                amount_difference = self._get_total_amount_difference(inv_read_sync_record)
+                # we update the amount to sync of specific lines with discrepancy
+                lines[inv_read_sync_record['odoo_id']]['amount'] += amount_difference
 
         if payment_order.type == 'payable':
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
