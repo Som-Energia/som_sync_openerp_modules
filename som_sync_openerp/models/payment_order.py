@@ -58,9 +58,9 @@ class PaymentOrder(osv.osv):
         factor = -1 if payment_order.type == 'receivable' else 1
 
         if payment_order.type == 'payable':
-            metode_pagament_id = conf_obj.get(cr, uid, 'odoo_provider_payment_method', '0')
+            metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
         else:
-            metode_pagament_id = conf_obj.get(cr, uid, 'odoo_customer_payment_method', '0')
+            metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_customer_payment_method', 0))
 
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
