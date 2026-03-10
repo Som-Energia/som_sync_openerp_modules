@@ -54,13 +54,19 @@ class PaymentOrder(osv.osv):
         odoo_last_update_result = inv_read_sync_record['odoo_last_update_result']
         if not odoo_last_update_result:
             return 0
-        if isinstance(odoo_last_update_result, str):
-            odoo_last_update_result = json.loads(odoo_last_update_result)
-        if 'data' in odoo_last_update_result \
-                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']:
-            discrepancy = odoo_last_update_result['data']['pnt_amount_total_erp_difference']
+        if not isinstance(odoo_last_update_result, dict):
+            try:
+                odoo_last_update_result = json.loads(odoo_last_update_result)
+            except Exception:
+                return 0
+        if 'data' in odoo_last_update_result and 'metadata' in odoo_last_update_result['data'] \
+                and isinstance(odoo_last_update_result['data']['metadata'], list) \
+                and len(odoo_last_update_result['data']['metadata']) > 0 \
+                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']['metadata'][0]:  # noqa: E501
+            discrepancy = (
+                odoo_last_update_result['data']['metadata'][0]['pnt_amount_total_erp_difference'])
             if discrepancy:
-                return odoo_last_update_result['data']['pnt_amount_total_erp_difference']
+                return discrepancy
         return 0
 
     def get_related_values(self, cr, uid, id, context=None):
@@ -108,7 +114,11 @@ class PaymentOrder(osv.osv):
                 # we get the amount difference from the last synchronization
                 amount_difference = self._get_total_amount_difference(inv_read_sync_record)
                 # we update the amount to sync of specific lines with discrepancy
-                lines[inv_read_sync_record['odoo_id']]['amount'] += amount_difference
+                odoo_inv_id = inv_read_sync_record['odoo_id']
+                for line in lines:
+                    if line['invoice_id'] == odoo_inv_id:
+                        line['amount'] += amount_difference
+                        break
 
         if payment_order.type == 'payable':
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
