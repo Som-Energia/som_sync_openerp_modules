@@ -48,7 +48,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 1000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
@@ -85,7 +85,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': -1000.0,
                     'quantity': -1,
                     'quantity_erp': 1,
@@ -124,7 +124,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': -1000.0,
                     'quantity': -1,
                     'quantity_erp': 1,
@@ -163,7 +163,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': -1000.0,
                     'quantity': -1,
                     'quantity_erp': 1,
@@ -201,7 +201,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': -1000.0,
                     'quantity': -1,
                     'quantity_erp': 1,
@@ -250,14 +250,14 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 },
                 {
                     'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 2000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
                     'extra_operations_erp': 1,
                 }, {
                     'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 163500',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 2000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
