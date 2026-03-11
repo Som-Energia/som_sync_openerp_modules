@@ -164,15 +164,21 @@ class AccountInvoice(osv.osv):
             context = {}
         if not isinstance(ids, list):
             ids = [ids]
+        inv_states = {}
+        if 'state' in vals and vals['state'] == 'open':
+            for _id in ids:
+                inv_states[_id] = self.read(cr, uid, _id, ['state'], context=context)['state']
 
         res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
 
+        sync_obj = self.pool.get('odoo.sync')
         if 'state' in vals and vals['state'] == 'open':
-            with Sudo(uid=1, gid=0):
-                sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, 'create', ids, context=context
-                )
+            for _id in ids:
+                if inv_states[_id] in ['draft']:
+                    with Sudo(uid=1, gid=0):
+                        sync_obj.common_sync_model_create_update(
+                            cr, uid, self._name, 'create', _id, context=context
+                        )
 
         return res
 

@@ -495,17 +495,45 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.common_sync_model_create_update(
             self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
-        # Check 3 calls to syncronize.
-        # Open invoice (write), Pay invoice (write) and sync (common_sync_model_create_update)
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
+        # Check 2 calls to because open invoice syncronize it.
+        # Open invoice (write) and sync (common_sync_model_create_update)
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
         self.sync_obj.syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
                       invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
-            mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
                       invoice_id, context={'update_last_sync': True}),
         ])
+        self.assertEqual(self.ai_obj.browse(self.cursor, self.uid, invoice_id).state, 'paid')
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_paid_invoice_no_sync(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, False, False)
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+        month = 'period_{0}'.format(int(time.strftime('%m')))
+        period_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'account', month
+        )[1]
+        account_id = self.aa_obj.search(self.cursor, self.uid, [('code', '=', '570000')])[0]
+        journal_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_journal_sales_syncronizable'
+        )[1]
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+
+        self.ai_obj.pay_and_reconcile(
+            self.cursor, self.uid, [invoice_id], 1000,
+            account_id, period_id, journal_id, account_id, period_id, journal_id
+        )
+
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 0)
+        self.assertEqual(self.ai_obj.browse(self.cursor, self.uid, invoice_id).state, 'paid')
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
