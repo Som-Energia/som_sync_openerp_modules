@@ -376,11 +376,15 @@ class OdooSync(osv.osv):
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
-                msg_formated = self.format_response(msg)
+                # msg is false when account.invoice already exist in Odoo
+                if msg:
+                    msg_formated = self.format_response(msg)
+                    sync_vals.update({
+                        'odoo_last_update_result': msg_formated,
+                        'sync_state': 'synced' if odoo_id else 'error',
+                        'update_odoo_created_sync': True,
+                    })
                 sync_vals.update({
-                    'sync_state': 'synced' if odoo_id else 'error',
-                    'odoo_last_update_result': msg_formated,
-                    'update_odoo_created_sync': True,
                     'odoo_last_sync_request': self.format_response(erp_data),
                 })
 
@@ -478,14 +482,14 @@ class OdooSync(osv.osv):
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
                     if odoo_id:
-                        return odoo_id, response.text
+                        return odoo_id, False
                     else:
                         return False, response.text
             else:
                 return False, response.text
         else:
             raise CreationNotSupportedException(model)
-        return False, ''
+        return False, False
 
     def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
         if context is None:
@@ -605,21 +609,18 @@ class OdooSync(osv.osv):
         if context.get('update_last_sync'):
             vals.update({
                 'odoo_last_sync_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
         if context.get('update_odoo_created_sync'):
             vals.update({
                 'odoo_created_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
         if context.get('update_odoo_updated_sync'):
             vals.update({
                 'odoo_updated_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
