@@ -79,7 +79,6 @@ class PaymentOrder(osv.osv):
         name = payment_order.name or ''
         journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
-        factor = -1 if payment_order.type == 'receivable' else 1
 
         lines = []
         pl_inv_ids = []
@@ -91,7 +90,7 @@ class PaymentOrder(osv.osv):
         for line in payment_order.line_ids:
             payment_line_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'payment.line', line.id, context=context)
-            payment_line_vals['amount'] = payment_line_vals['amount'] * factor
+            payment_line_vals['amount'] = abs(payment_line_vals['amount'])
             if line.ml_inv_ref:
                 pl_inv_ids.append(line.ml_inv_ref.id)
             lines.append(payment_line_vals)
@@ -106,6 +105,7 @@ class PaymentOrder(osv.osv):
             ('sync_state', '=', 'synced_with_warning'),
             ('odoo_last_update_result', '!=', False),
         ])
+        amount_difference_total = 0
         if inv_sync_with_diff_ids:
             # we read the sync records with specific fields to avoid performance issues
             inv_read_sync_records = sync_obj.read(
@@ -118,6 +118,7 @@ class PaymentOrder(osv.osv):
                 for line in lines:
                     if line['invoice_id'] == odoo_inv_id:
                         line['amount'] += amount_difference
+                        amount_difference_total += amount_difference
                         break
 
         if payment_order.type == 'payable':
@@ -129,7 +130,7 @@ class PaymentOrder(osv.osv):
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
             'journal_destiny': journal_odoo_id,
             'lines': lines,
-            'amount': payment_order.total * factor,
+            'amount': round((abs(payment_order.total) + amount_difference_total), 2),
             'name': name,
             'method_id': metode_pagament_id,
         }
