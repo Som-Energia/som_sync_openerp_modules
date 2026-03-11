@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <record id="view_wizard_open_related_odoo_record" model="ir.ui.view">
+            <field name="name">wizard.open.related.odoo.record.form</field>
+            <field name="model">wizard.open.related.odoo.record</field>
+            <field name="type">form</field>
+            <field name="arch" type="xml">
+                <form string="Open Odoo Record">
+                    <label string="This wizard will open the related Odoo record in your browser" colspan="4"/>
+                    <separator colspan="4"/>
+                    <group colspan="4" col="2">
+                        <button special="cancel" string="Cancel" icon="gtk-cancel"/>
+                        <button name="open_odoo_record" string="Open in Odoo" type="object" icon="gtk-execute"/>
+                    </group>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wizard_open_related_odoo_record" model="ir.actions.act_window">
+            <field name="name">Open Related Odoo Record</field>
+            <field name="res_model">wizard.open.related.odoo.record</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="view_id" ref="view_wizard_open_related_odoo_record"/>
+            <field name="context">{'from_model': 'odoo.sync'}</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="value_wizard_open_related_odoo_record_from_odoo_sync" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Open Related Odoo Record</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">odoo.sync</field>
+            <field name="value" eval="'ir.actions.act_window,'+str(ref('action_wizard_open_related_odoo_record'))" />
+        </record>
+
+    </data>
+</openerp>

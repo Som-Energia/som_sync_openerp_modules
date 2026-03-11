@@ -7,6 +7,7 @@ import requests
 from datetime import datetime
 from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
+import json
 
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 
@@ -14,6 +15,7 @@ FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
     'account.invoice': 'invoice',
+    'payment.order': 'payment_orders',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -33,13 +35,13 @@ STATIC_MODELS = [
 
 # Mapping of models: key -> erp model, value -> odoo endpoint sufix
 MAPPING_MODELS_GET = {
-    'account.account': 'account',
-    'res.country.state': 'state',
-    'res.country': 'country',
-    'res.municipi': 'city',
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
-    'res.partner.bank': 'bank',
+    'account.account': 'accounts',
+    'res.country.state': 'states',
+    'res.country': 'countries',
+    'res.municipi': 'cities',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
+    'res.partner.bank': 'banks',
 }
 
 # Mapping of models to post endpoint sufix: key -> erp model, value -> odoo endpoint sufix
@@ -47,6 +49,7 @@ MAPPING_MODELS_POST = {
     'account.account': 'accounts',
     'account.invoice': 'invoices',
     'account.move': 'entries',
+    'payment.order': 'payment_orders',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
@@ -55,8 +58,8 @@ MAPPING_MODELS_POST = {
 
 # Mapping of modles to patch
 MAPPING_MODELS_PATCH = {
-    'res.partner': 'partner',
-    'res.partner.address': 'partner',
+    'res.partner': 'partners',
+    'res.partner.address': 'partners',
 }
 
 
@@ -128,7 +131,7 @@ class OdooSync(osv.osv):
                         # Sync synchronously
                         return self.syncronize_sync(
                             cursor, uid, model, action, _id, context=context)
-
+            return None, None
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
@@ -168,7 +171,9 @@ class OdooSync(osv.osv):
             if key not in keys_no_direct_read
         ]
         # TODO: check in prod if record id is already created when async
-        data = rp_obj.read(cursor, uid, id, keys_to_read)
+        data = {}
+        if keys_to_read:
+            data = rp_obj.read(cursor, uid, id, keys_to_read)
 
         # Read related fields if any
         has_related_fields = hasattr(rp_obj, 'get_related_values')
@@ -303,18 +308,15 @@ class OdooSync(osv.osv):
             # Verify record existence in the local ERP database
             self.check_erp_record_exist(cursor, uid, model, openerp_id)
 
-            # Data preparation logic based on the action type
-            if action in ['create', 'sync', 'write']:
-                erp_data = self.get_model_vals_to_sync(
-                    cursor, uid, model, openerp_id, context=context)
-            elif action in ['unlink']:
-                # Log placeholder for future implementations (PATCH/DELETE)
-                logger.info("Action {} not implemented yet for model {}".format(action, model))
-                sync_vals.update({
-                    'sync_state': 'error',
-                    'odoo_last_update_result': 'Action not implemented'
-                })
-                # We continue to check existence even if the specific update action isn't ready
+            # If the sync is triggered from a FK sync and the model is not in the patch list,
+            # we can directly get the odoo_id by erp_id without checking endpoint suffix.
+            # If exists it means that the record in Odoo already exists and is linked with erp_id.
+            # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
+            if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+                erp_id = openerp_id
+                odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+                if odoo_id:
+                    return odoo_id, erp_id
 
             has_get = hasattr(rp_obj, 'get_endpoint_suffix')
             if not has_get:
@@ -326,6 +328,10 @@ class OdooSync(osv.osv):
                     cursor, uid, openerp_id, context=context)
                 odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
                     cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+
+            # ERP data preparation for sync
+            erp_data = self.get_model_vals_to_sync(
+                cursor, uid, model, openerp_id, context=context)
 
             if odoo_id:
                 if not erp_id:
@@ -358,36 +364,38 @@ class OdooSync(osv.osv):
                     if dict_to_patch:
                         success, msg = self.update_odoo_record(
                             cursor, uid, model, odoo_id, erp_id, dict_to_patch, context)
-                        if not success:
-                            sync_vals.update({
-                                'sync_state': 'error',
-                                'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
-                                'update_last_sync': True,
-                            })
+                        sync_vals.update({
+                            'sync_state': 'synced' if success else 'error',
+                            'odoo_last_update_result': self.format_response(msg),
+                            'update_last_sync': True,
+                            'odoo_last_sync_request': self.format_response(dict_to_patch),
+                        })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
                 odoo_id, msg = self.create_odoo_record(
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
-                    sync_vals.update({
-                        'sync_state': 'synced',
-                        'update_odoo_created_sync': True,
-                    })
-                else:
-                    sync_vals.update({
-                        'sync_state': 'error',
-                        'odoo_last_update_result': msg + "\n\nenviat:\n" + str(erp_data),
-                        'update_last_sync': True,
-                    })
+                msg_formated = self.format_response(msg)
+                sync_vals.update({
+                    'sync_state': 'synced' if odoo_id else 'error',
+                    'odoo_last_update_result': msg_formated,
+                    'update_odoo_created_sync': True,
+                    'odoo_last_sync_request': self.format_response(erp_data),
+                })
+
+                has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
+                if has_hook_after_odoo_creation:
+                    rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
             CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
+                'odoo_last_update_result': self.format_response(e),
                 'update_last_sync': True,
+                'odoo_last_sync_request': self.format_response(erp_data),
             })
         except Exception as e:
             # Catch unexpected errors (Connection, Timeouts, etc.)
@@ -395,8 +403,9 @@ class OdooSync(osv.osv):
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': str(e) + "\n\nenviat:\n" + str(erp_data),
+                'odoo_last_update_result': self.format_response(e),
                 'update_last_sync': True,
+                'odoo_last_sync_request': self.format_response(erp_data),
             })
         finally:
             # Single point of persistence for the sync log
@@ -455,12 +464,24 @@ class OdooSync(osv.osv):
             }
             response = requests.post(url_base, json=data, headers=headers)
             if response.status_code == 201:
-                data = response.json()
-                if data and 'success' in data and data.get('success', False):
-                    odoo_id = data['data']['odoo_id']
-                    return odoo_id, ''
+                data_response = response.json()
+                if data_response and 'success' in data_response and \
+                        data_response.get('success', False):
+                    odoo_id = data_response['data']['odoo_id']
+                    return odoo_id, response.text
+            elif response.status_code == 409 and model == 'account.invoice':
+                # 409 Conflicto - ERP ID o número de factura duplicado: Actualitzem odoo_id.
+                data_response = response.json()
+                if data_response and 'success' in data_response and \
+                        not data_response.get('success', False) and \
+                        data_response.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
+                    odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
+                        cursor, uid, model, data.get('pnt_erp_id', False))
+                    if odoo_id:
+                        return odoo_id, response.text
+                    else:
+                        return False, response.text
             else:
-                print("ERROR CREATING IN ODOO:", response.status_code, response.text)
                 return False, response.text
         else:
             raise CreationNotSupportedException(model)
@@ -482,16 +503,16 @@ class OdooSync(osv.osv):
         if response.status_code == 200:
             data = response.json()
             if data and 'success' in data and data.get('success', False):
-                return True, ''
+                return True, response.text
         return False, response.text
 
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
             context = {}
-        if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
-            odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
-            if odoo_id:
-                return odoo_id, erp_id, {}
+        # if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+        #     odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+        #     if odoo_id:
+        #         return odoo_id, erp_id, {}
 
         data = self.get_odoo_data(cursor, uid, model, url_sufix, context)
         if not data:
@@ -557,7 +578,7 @@ class OdooSync(osv.osv):
             'res_id': openerp_id,
             'odoo_id': odoo_id,
             'odoo_last_sync_at': str_now,
-            'sync_state': 'synced',
+            'sync_state': context.get('sync_state', 'pending'),
         }
 
         if context.get('update_odoo_created_sync'):
@@ -565,10 +586,14 @@ class OdooSync(osv.osv):
                 'odoo_created_at': str_now,
             })
 
+        if context.get('odoo_last_sync_request'):
+            vals.update({
+                'odoo_last_sync_request': context['odoo_last_sync_request'],
+            })
+
         if context.get('odoo_last_update_result'):
             vals.update({
                 'odoo_last_update_result': context['odoo_last_update_result'],
-                'sync_state': 'error',
             })
 
         return self.create(cursor, uid, vals)
@@ -606,20 +631,17 @@ class OdooSync(osv.osv):
             vals['sync_state'] = context['sync_state']
             update = True
 
-        # Special case: error → synced
-        sync_record = self.browse(cursor, uid, id)
-        if sync_record.sync_state == 'error' and vals.get('sync_state') == 'synced':
+        if context.get('odoo_last_sync_request'):
             vals.update({
-                'odoo_last_sync_at': str_now,
-                'odoo_last_update_result': '',
+                'odoo_last_sync_request': context['odoo_last_sync_request'],
             })
             update = True
 
-        # Case Odoo_id change
+        # Case odoo_id change
+        sync_record = self.browse(cursor, uid, id)
         if sync_record.odoo_id != odoo_id:
             vals.update({
                 'odoo_last_sync_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
@@ -629,7 +651,7 @@ class OdooSync(osv.osv):
         if context is None:
             context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
-        url_base = "{}entity/{}/{}/{}".format(
+        url_base = "{}entities/{}/{}/{}".format(
             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), odoo_id, erp_id
         )
         headers = {
@@ -681,16 +703,19 @@ class OdooSync(osv.osv):
         result = {}
         for sync in self.browse(cursor, uid, ids, context=context):
             erp_name = False
+            field_name = 'name'
 
             if sync.model and sync.res_id:
                 try:
                     model_name = sync.model.model
+                    if model_name == 'account.invoice':
+                        field_name = 'number'
                     rp_obj = self.pool.get(model_name)
                     if rp_obj:
                         rec = rp_obj.read(
-                            cursor, uid, sync.res_id, ['name'], context=context
+                            cursor, uid, sync.res_id, [field_name], context=context
                         )
-                        erp_name = rec and rec.get('name') or False
+                        erp_name = rec and rec.get(field_name) or False
                 except Exception:
                     # Registro borrado, modelo no cargado, etc.
                     erp_name = False
@@ -698,6 +723,64 @@ class OdooSync(osv.osv):
             result[sync.id] = erp_name
 
         return result
+
+    def _compute_url_odoo_record(self, cursor, uid, ids, name, args, context=None):
+        """
+        Computes the URL to the Odoo record for each sync record.
+        - If the model has the method get_endpoint_odoo_record_suffix,
+        it will be used to get the suffix of the URL and then concatenated with the base URL.
+        - If not, it will return False and the URL cannot be computed.
+
+        url_api: http://odoo_url/api/v1
+        given model: account.invoice
+        url_result: http://odoo_url/odoo/customer-invoices/160440 for customer invoices
+
+        """
+        if context is None:
+            context = {}
+
+        result = {}
+        odoo_url_api, _ = self._get_conn_params(cursor, uid)
+        # get url base
+        odoo_url_base = odoo_url_api.split('/api')[0] if '/api' in odoo_url_api else odoo_url_api
+        odoo_url_base = '{}/odoo'.format(odoo_url_base)
+        for sync in self.browse(cursor, uid, ids, context=context):
+            odoo_url_record_suffix = False
+            odoo_url_record = False
+            if sync.model and sync.res_id and sync.odoo_id:
+                try:
+                    model_name = sync.model.model
+                    model_obj = self.pool.get(model_name)
+
+                    if model_obj and hasattr(model_obj, 'get_endpoint_odoo_record_suffix') \
+                            and callable(getattr(model_obj, 'get_endpoint_odoo_record_suffix')):
+                        odoo_url_record_suffix = model_obj.get_endpoint_odoo_record_suffix(
+                            cursor, uid, sync.res_id, sync.odoo_id)
+                    odoo_url_record = '{}{}'.format(odoo_url_base, odoo_url_record_suffix) \
+                        if odoo_url_record_suffix else False
+                except Exception:
+                    odoo_url_record = False
+            result[sync.id] = odoo_url_record
+
+        return result
+
+    def get_odoo_id_by_erp_id_from_odoo(self, cursor, uid, model, erp_id):
+        # This method is used when we want to get the odoo_id from Odoo using the ERP id,
+        # in cases where we don't have the sync record created yet in OpenERP
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        url_base = '{}entities/{}/{}'.format(
+            odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), erp_id)
+        headers = {
+            "X-API-Key": odoo_api_key,
+            "Accept": "application/json",
+        }
+        response = requests.get(url_base, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'success' in data and data.get('success', False):
+                odoo_id = data.get('data', {}).get('odoo_id', False)
+                return odoo_id
+        return False
 
     def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
         sync_ids = self.search(cursor, uid, [
@@ -722,6 +805,15 @@ class OdooSync(osv.osv):
         else:
             return False
 
+    def format_response(self, data, context=None):
+        if isinstance(data, dict):
+            return json.dumps(data, ensure_ascii=False, indent=2)
+        try:
+            data = json.dumps(json.loads(data), ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return data
+
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),
         'res_id': fields.integer('ERP id'),
@@ -732,18 +824,28 @@ class OdooSync(osv.osv):
         'odoo_created_at': fields.datetime('Odoo created at'),
         'odoo_updated_at': fields.datetime('Odoo updated at'),
         # Resultat de l'error de la última actualització
-        'odoo_last_update_result': fields.text('Odoo last update error'),
+        'odoo_last_update_result': fields.text('Odoo last update result'),
+        'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
-            ('synced', 'Synced'),
-            ('pending', 'Pending'),
             ('error', 'Error'),
+            ('pending', 'Pending'),
             ('static', 'Static'),
+            ('synced', 'Synced'),
+            ('synced_with_warning', 'Synced with warning'),
         ], 'Syncronization state', required=True),
         'erp_name': fields.function(
             _get_erp_name,
             type='char',
             size=256,
             string='ERP Name',
+            method=True,
+            store=False,
+        ),
+        'odoo_url_record': fields.function(
+            _compute_url_odoo_record,
+            type='char',
+            size=512,
+            string='Odoo URL record',
             method=True,
             store=False,
         ),

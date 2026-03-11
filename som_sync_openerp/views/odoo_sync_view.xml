@@ -11,9 +11,11 @@
                     <field name="res_id"/>
                     <field name="odoo_id"/>
                     <field name="erp_name"/>
+                    <field name="odoo_url_record" widget="url"/>
                     <field name="odoo_last_sync_at"/>
                     <field name="odoo_created_at" />
                     <field name="odoo_updated_at" />
+                    <field name="odoo_last_sync_request" />
                     <field name="odoo_last_update_result" />
                     <field name="sync_state" />
                 </form>
@@ -34,6 +36,7 @@
                     <field name="odoo_updated_at" select="2"/>
                     <field name="sync_state" select="1"/>
                     <field name="odoo_last_update_result" select="2"/>
+                    <field name="odoo_url_record" />
                 </tree>
             </field>
         </record>
@@ -143,6 +146,14 @@
             name="Get synced records with Odoo"
             res_model="odoo.sync"
             src_model="account.invoice"/>
+
+        <!-- Action to get synced records with Odoo for payment.order -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'payment.order')]"
+            id="get_synced_records_odoo_action_payment_order"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="payment.order"/>
 
     </data>
 </openerp>

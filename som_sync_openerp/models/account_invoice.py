@@ -1,5 +1,7 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
+import json
 
 
 class AccountInvoice(osv.osv):
@@ -12,8 +14,6 @@ class AccountInvoice(osv.osv):
         "partner_id": "partner_id",
         "journal_id": "journal_id",
         "date_invoice": "invoice_date",
-        "amount_total": "amount_total",
-        "type": "move_type",
         "payment_term": "invoice_payment_term_id",
         "payment_type": "preferred_payment_method_line_id",
         "fiscal_position": "fiscal_position_id",
@@ -29,12 +29,38 @@ class AccountInvoice(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - for customer invoices: : /odoo/customer-invoices/160440
+        - for customer invoices with type 'out_refund': /odoo/credit-notes/160440
+        - for provider invoices: /odoo/vendor-bills/160440
+        - for provider invoices with type 'in_refund': no way /odoo/action-247/160440
+        """
+        type_endpoint_mapping = {
+            'out_invoice': 'customer-invoices',
+            'out_refund': 'credit-notes',
+            'in_invoice': 'vendor-bills',
+        }
+        if context is None:
+            context = {}
+        account_invoice = self.browse(cr, uid, id, context=context)
+        if account_invoice.type in type_endpoint_mapping:
+            return '/{}/{}'.format(type_endpoint_mapping[account_invoice.type], odoo_id)
+        else:
+            return False
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
         account_invoice = self.browse(cr, uid, id, context=context)
         original_res = {}
         res = []
+        energy_tax_id = False
+        invoice_type = account_invoice.type
+        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
+
+        amount_total = factor_reverse * account_invoice.amount_total
 
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
@@ -45,6 +71,14 @@ class AccountInvoice(osv.osv):
             account_id = ail_vals['account_id']
             erp_account_id = sync_obj.get_erp_id_by_odoo_id(cr, uid, 'account.account', account_id)
             account_code = account_obj.read(cr, uid, erp_account_id, ['code'])['code']
+
+            # Check if it's an energy line to get the tax
+            if not energy_tax_id and line.product_id and line.product_id.categ_id and \
+                    line.product_id.categ_id.name.lower() == 'energia':
+                for tax_line in line.invoice_line_tax_id:
+                    if 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
+                        energy_tax_id = tax_line.id
+                        break
 
             # Remove IESE taxes
             new_tax_ids = []
@@ -64,7 +98,7 @@ class AccountInvoice(osv.osv):
             else:
                 original_res[dict_key] = {
                     'account_id': account_id,
-                    'quantity': 1,
+                    'quantity': 1 * factor_reverse,
                     'name': "Agrupació {}".format(account_code),
                     'price_unit': ail_vals['price_subtotal'],
                     'extra_operations_erp': 1,
@@ -73,12 +107,16 @@ class AccountInvoice(osv.osv):
                 }
 
         # Add tax lines needed for the sync with Odoo
-        res.extend(self.add_taxes_lines_needed_for_sync(cr, uid, id, context=context))
+        res.extend(
+            self.add_taxes_lines_needed_for_sync(
+                cr, uid, id, energy_tax_id, factor_reverse=factor_reverse, context=context)
+        )
 
-        # Get corrected base untaxed and tax amount, only with IVA and IGIC amounts
+        # Get corrected base untaxed and tax amount, only with IVA, IGIC and Retenciones amounts
         amount_tax = 0.0
         for tax_line in account_invoice.tax_line:
-            if 'IVA' in tax_line.tax_id.name or 'IGIC' in tax_line.name:
+            if 'IVA' in tax_line.tax_id.name or 'IGIC' in tax_line.name \
+                    or 'Retenciones' in tax_line.name:
                 amount_tax = amount_tax + tax_line.amount
 
         # Save agrupated lines
@@ -88,18 +126,31 @@ class AccountInvoice(osv.osv):
                 v.pop('tax_ids')
             res.append(v)
 
+        # type invoice treatment whem total amount_total < 0
+        if factor_reverse < 0:
+            if invoice_type == 'out_invoice':
+                invoice_type = 'out_refund'
+            elif invoice_type == 'in_invoice':
+                invoice_type = 'in_refund'
+            elif invoice_type == 'out_refund':
+                invoice_type = 'out_invoice'
+            elif invoice_type == 'in_refund':
+                invoice_type = 'in_invoice'
+
         return {
             'date': account_invoice.date_invoice,
+            'move_type': invoice_type,
             'invoice_line_ids': res,
-            'amount_untaxed': account_invoice.amount_total - amount_tax,
-            'amount_tax': amount_tax,
+            'amount_untaxed': factor_reverse * (account_invoice.amount_total - amount_tax),
+            'amount_tax': factor_reverse * amount_tax,
+            'amount_total': amount_total,
         }
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
             context = {}
         return self._journal_is_syncrozable(cr, uid, id, context=context) and \
-            self._is_invoice_syncrozable(cr, uid, id, context)
+            self._is_invoice_syncrozable(cr, uid, id, context=context)
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         invoice = self.browse(cr, uid, _id, context=context)
@@ -117,14 +168,16 @@ class AccountInvoice(osv.osv):
         res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
 
         if 'state' in vals and vals['state'] == 'open':
-            sync_obj = self.pool.get('odoo.sync')
-            sync_obj.common_sync_model_create_update(
-                cr, uid, self._name, 'create', ids, context=context
-            )
+            with Sudo(uid=1, gid=0):
+                sync_obj = self.pool.get('odoo.sync')
+                sync_obj.common_sync_model_create_update(
+                    cr, uid, self._name, 'create', ids, context=context
+                )
 
         return res
 
-    def add_taxes_lines_needed_for_sync(self, cr, uid, invoice_id, context=None):
+    def add_taxes_lines_needed_for_sync(
+            self, cr, uid, invoice_id, energy_tax_id, factor_reverse=1, context=None):
         """
         This method is called from account.invoice to add the tax lines
         needed for the sync with Odoo.
@@ -144,13 +197,11 @@ class AccountInvoice(osv.osv):
             cr, uid, [('invoice_id', '=', invoice_id)], context=context)
         res = []
         iese_amount = 0
-        iva_tax_id = 0
+        iva_tax_id = energy_tax_id or 0
         for tax_line in tax_line_obj.browse(cr, uid, tax_line_ids, context=context):
             if 'Impuesto especial' in tax_line.name:
                 iese_amount = tax_line.amount
-            elif 'IVA' in tax_line.name or 'IGIC' in tax_line.name:
-                # TODO: Get IVA or IGIC from energy lines, not from "lloguer comptador" FE2501053181
-                iva_tax_id = tax_line.tax_id.id
+                break
 
         odoo_iva_tax_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.tax', iva_tax_id)
         iva_account_id = account_obj.search(cr, uid, [('code', 'like', '47560%0')])[0]
@@ -160,7 +211,7 @@ class AccountInvoice(osv.osv):
             res = [
                 {
                     'name': u'Import IESE',
-                    'quantity': 1,
+                    'quantity': factor_reverse * 1,
                     'price_unit': iese_amount,
                     'tax_ids': [odoo_iva_tax_id],
                     'extra_operations_erp': 1,
@@ -190,6 +241,29 @@ class AccountInvoice(osv.osv):
         if data['ref'] is False:
             data['ref'] = ''
         return data
+
+    def hook_after_odoo_creation(self, cr, uid, response, sync_vals):
+        """
+        After create Invoice in Odoo, we check if we have amounts discrepancies
+        checking metadata in data response:
+        response['data']['metadata'][0]:
+        - "pnt_amount_untaxed_erp_difference" = float
+        - "pnt_amount_tax_erp_difference" = float
+        - "pnt_amount_total_erp_difference" = float
+        - "pnt_amount_untaxed_erp_discrepancy" = True/False
+        - "pnt_amount_tax_erp_discrepancy" = True/False
+        - "pnt_amount_total_erp_discrepancy" = True/False
+        """
+        if not response:
+            return
+        # response to dict if it's not already a dict
+        if not isinstance(response, dict):
+            response = json.loads(response)
+        if response and 'data' in response and 'metadata' in response['data']:
+            metadata = response['data']['metadata'][0]
+            discrepancy_fields = [f for f in metadata if 'discrepancy' in f and metadata[f] is True]
+            if discrepancy_fields:
+                sync_vals['sync_state'] = 'synced_with_warning'
 
 
 AccountInvoice()

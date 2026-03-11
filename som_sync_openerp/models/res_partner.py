@@ -1,5 +1,6 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
 
 
 class ResPartner(osv.osv):
@@ -35,6 +36,17 @@ class ResPartner(osv.osv):
         'is_company': True,
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - /odoo/contacts/160440
+        """
+        if context is None:
+            context = {}
+        if not odoo_id:
+            return False
+        return '/contacts/{}'.format(odoo_id)
+
     def get_endpoint_suffix(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -49,11 +61,11 @@ class ResPartner(osv.osv):
         if context is None:
             context = {}
         ids = super(ResPartner, self).create(cr, uid, vals, context=context)
-
-        sync_obj = self.pool.get('odoo.sync')
-        sync_obj.common_sync_model_create_update(
-            cr, uid, self._name, 'create', ids, context=context
-        )
+        with Sudo(uid=1, gid=0):
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, 'create', ids, context=context
+            )
 
         return ids
 
@@ -71,6 +83,8 @@ class ResPartner(osv.osv):
             context = {}
         if data['vat']:
             data['vat'] = data['vat'].upper()
+        if data.get('lang', False) and data['lang'] == 'en_US':
+            data['lang'] = 'en_GB'
         return data
 
 

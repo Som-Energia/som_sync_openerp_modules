@@ -1,8 +1,10 @@
 
 # -*- coding: utf-8 -*-
-from destral import testing
+import json
 import mock
 import netsvc
+
+from destral import testing
 from ..models import odoo_sync
 
 
@@ -39,17 +41,172 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         expected_values = {
             'amount_tax': 0.0,
             'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
             'date': '2026-01-16',
+            'move_type': 'out_invoice',
             'invoice_line_ids': [
                 {
                     'account_id': odoo_account_id,
                     'extra_operations_erp': 1,
-                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 1000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
                 }
-            ]
+            ],
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_negative_out_invoice(self, mock_syncronize_sync, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'amount_tax': -0.0,
+            'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
+            'date': '2026-01-16',
+            'move_type': 'out_refund',
+            'invoice_line_ids': [
+                {
+                    'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
+                    'name': 'Agrupaci\xc3\xb3 1635',
+                    'price_unit': -1000.0,
+                    'quantity': -1,
+                    'quantity_erp': 1,
+                }
+            ],
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_negative_out_refund_invoice(
+            self, mock_syncronize_sync, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'type': 'out_refund'})
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'amount_tax': -0.0,
+            'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
+            'date': '2026-01-16',
+            'move_type': 'out_invoice',
+            'invoice_line_ids': [
+                {
+                    'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
+                    'name': 'Agrupaci\xc3\xb3 1635',
+                    'price_unit': -1000.0,
+                    'quantity': -1,
+                    'quantity_erp': 1,
+                }
+            ],
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_negative_in_refund_invoice(
+            self, mock_syncronize_sync, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'type': 'in_refund'})
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'amount_tax': -0.0,
+            'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
+            'date': '2026-01-16',
+            'move_type': 'in_invoice',
+            'invoice_line_ids': [
+                {
+                    'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
+                    'name': 'Agrupaci\xc3\xb3 1635',
+                    'price_unit': -1000.0,
+                    'quantity': -1,
+                    'quantity_erp': 1,
+                }
+            ],
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_negative_in_invoice(self, mock_syncronize_sync, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        iva_tax_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_tax_iva"
+        )[1]
+        odoo_account_id = 99
+        erp_account_id = 1
+        mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_erp_id.return_value = iva_tax_id
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'type': 'in_invoice'})
+
+        related_values = self.ai_obj.get_related_values(
+            self.cursor, self.uid, invoice_id
+        )
+
+        expected_values = {
+            'amount_tax': 0.0,
+            'amount_untaxed': 1000.0,
+            'amount_total': 1000.0,
+            'date': '2026-01-16',
+            'move_type': 'in_refund',
+            'invoice_line_ids': [
+                {
+                    'account_id': odoo_account_id,
+                    'extra_operations_erp': 1,
+                    'name': 'Agrupaci\xc3\xb3 1635',
+                    'price_unit': -1000.0,
+                    'quantity': -1,
+                    'quantity_erp': 1,
+                }
+            ],
         }
         self.assertEqual(related_values, expected_values)
 
@@ -79,6 +236,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             'date': '2026-01-16',
             'amount_tax': 420.0,
             'amount_untaxed': 4102.2,
+            'amount_total': 4522.2,
+            'move_type': 'out_invoice',
             'invoice_line_ids': [
                 {
                     'account_id': 99,
@@ -91,21 +250,21 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 },
                 {
                     'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 2000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
                     'extra_operations_erp': 1,
                 }, {
                     'account_id': 99,
-                    'name': 'Agrupaci\xc3\xb3 x 570000',
+                    'name': 'Agrupaci\xc3\xb3 1635',
                     'price_unit': 2000.0,
                     'quantity': 1,
                     'quantity_erp': 1,
                     'extra_operations_erp': 1,
                     'tax_ids': [99],
                 },
-            ]
+            ],
         }
         self.assertEqual(related_values, expected_values)
         self.sync_obj.common_sync_model_create_update.assert_has_calls([
@@ -216,3 +375,150 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         self.assertEqual(hook_data, result_data)
+
+    def test__hook_after_odoo_creation_with_discrepancies(self):
+        """
+        Test hook_after_odoo_creation with amount discrepancies
+        Should set sync_state to 'synced_with_warning'
+        """
+        response = {
+            'data': {
+                'metadata': [{
+                    'pnt_amount_untaxed_erp_difference': 10.50,
+                    'pnt_amount_tax_erp_difference': 2.21,
+                    'pnt_amount_total_erp_difference': 12.71,
+                    'pnt_amount_untaxed_erp_discrepancy': True,
+                    'pnt_amount_tax_erp_discrepancy': False,
+                    'pnt_amount_total_erp_discrepancy': True,
+                }]
+            }
+        }
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
+
+    def test__hook_after_odoo_creation_with_discrepancies_as_string(self):
+        """
+        Test hook_after_odoo_creation with response as JSON string
+        Should set sync_state to 'synced_with_warning'
+        """
+
+        response = json.dumps({
+            'data': {
+                'metadata': [{
+                    'pnt_amount_untaxed_erp_difference': 5.0,
+                    'pnt_amount_tax_erp_difference': 1.05,
+                    'pnt_amount_total_erp_difference': 6.05,
+                    'pnt_amount_untaxed_erp_discrepancy': False,
+                    'pnt_amount_tax_erp_discrepancy': True,
+                    'pnt_amount_total_erp_discrepancy': False,
+                }]
+            }
+        })
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
+
+    def test__hook_after_odoo_creation_without_discrepancies(self):
+        """
+        Test hook_after_odoo_creation without any discrepancies
+        Should NOT modify sync_state
+        """
+        response = {
+            'data': {
+                'metadata': [{
+                    'pnt_amount_untaxed_erp_difference': 0.0,
+                    'pnt_amount_tax_erp_difference': 0.0,
+                    'pnt_amount_total_erp_difference': 0.0,
+                    'pnt_amount_untaxed_erp_discrepancy': False,
+                    'pnt_amount_tax_erp_discrepancy': False,
+                    'pnt_amount_total_erp_discrepancy': False,
+                }]
+            }
+        }
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced')
+
+    def test__hook_after_odoo_creation_without_metadata(self):
+        """
+        Test hook_after_odoo_creation without metadata in response
+        Should NOT modify sync_state
+        """
+        response = {
+            'data': {
+                'id': 12345
+            }
+        }
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced')
+
+    def test__hook_after_odoo_creation_with_empty_response(self):
+        """
+        Test hook_after_odoo_creation with empty response
+        Should NOT modify sync_state
+        """
+        response = {}
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced')
+
+    def test__hook_after_odoo_creation_with_none_response(self):
+        """
+        Test hook_after_odoo_creation with None response
+        Should NOT modify sync_state
+        """
+        response = None
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced')
+
+    def test__hook_after_odoo_creation_with_all_discrepancies(self):
+        """
+        Test hook_after_odoo_creation with all amount discrepancies
+        Should set sync_state to 'synced_with_warning'
+        """
+        response = {
+            'data': {
+                'metadata': [{
+                    'pnt_amount_untaxed_erp_difference': 100.0,
+                    'pnt_amount_tax_erp_difference': 21.0,
+                    'pnt_amount_total_erp_difference': 121.0,
+                    'pnt_amount_untaxed_erp_discrepancy': True,
+                    'pnt_amount_tax_erp_discrepancy': True,
+                    'pnt_amount_total_erp_discrepancy': True,
+                }]
+            }
+        }
+        sync_vals = {'sync_state': 'synced'}
+
+        self.ai_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, sync_vals
+        )
+
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from osv import osv, fields
+from service.security import Sudo
 from som_sync_openerp.models.odoo_sync import STATIC_MODELS
 
 
@@ -33,33 +34,34 @@ class WizardSyncObjectOdoo(osv.osv_memory):
                 )
             context['odoo_id'] = wiz.odoo_id
 
-        if from_model == 'odoo.sync':
-            # Support execution from model odoo.sync
-            for _id in active_ids:
-                # Get the real model and res_id from odoo.sync record
-                sync_data = sync_obj.browse(cursor, uid, _id)
-                from_res_model = sync_data.model.model
-                erp_id = sync_data.res_id
+        with Sudo(uid=1, gid=0):
+            if from_model == 'odoo.sync':
+                # Support execution from model odoo.sync
+                for _id in active_ids:
+                    # Get the real model and res_id from odoo.sync record
+                    sync_data = sync_obj.browse(cursor, uid, _id)
+                    from_res_model = sync_data.model.model
+                    erp_id = sync_data.res_id
+                    if wiz.is_static:
+                        sync_obj.syncronize_sync(
+                            cursor, uid, from_res_model, 'sync', erp_id, context=context
+                        )
+                    else:
+                        sync_obj.common_sync_model_create_update(
+                            cursor, uid, from_res_model, 'sync', erp_id, context=context
+                        )
+                return {'type': 'ir.actions.act_window_close'}
+
+            # Normal execution from any model that can be synced
+            for record_id in active_ids:
                 if wiz.is_static:
                     sync_obj.syncronize_sync(
-                        cursor, uid, from_res_model, 'sync', erp_id, context=context
+                        cursor, uid, from_model, 'sync', record_id, context=context
                     )
                 else:
                     sync_obj.common_sync_model_create_update(
-                        cursor, uid, from_res_model, 'sync', erp_id, context=context
+                        cursor, uid, from_model, 'sync', record_id, context=context
                     )
-            return {'type': 'ir.actions.act_window_close'}
-
-        # Normal execution from any model that can be synced
-        for record_id in active_ids:
-            if wiz.is_static:
-                sync_obj.syncronize_sync(
-                    cursor, uid, from_model, 'sync', record_id, context=context
-                )
-            else:
-                sync_obj.common_sync_model_create_update(
-                    cursor, uid, from_model, 'sync', record_id, context=context
-                )
 
         return {'type': 'ir.actions.act_window_close'}
 
