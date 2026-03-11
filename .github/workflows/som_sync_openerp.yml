@@ -20,7 +20,7 @@ jobs:
 
   sonarcloud:
     name: SonarCloud Analysis
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: erp-tests-module       # <-- Depèn del job que crida el reusable workflow
     steps:
       - name: Checkout repository
