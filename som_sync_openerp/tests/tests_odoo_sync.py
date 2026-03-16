@@ -405,7 +405,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'partner_id': 2,
             'pnt_erp_id': invoice_id,
             'preferred_payment_method_line_id': None,
-            'ref': '',
         }
         self.assertEqual(vals, expected_vals)
 

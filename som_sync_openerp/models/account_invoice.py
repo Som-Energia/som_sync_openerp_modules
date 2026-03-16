@@ -17,7 +17,6 @@ class AccountInvoice(osv.osv):
         "payment_term": "invoice_payment_term_id",
         "payment_type": "preferred_payment_method_line_id",
         "fiscal_position": "fiscal_position_id",
-        "reference": "ref",
     }
     MAPPING_FK = {
         "partner_id": "res.partner",
@@ -50,18 +49,16 @@ class AccountInvoice(osv.osv):
         else:
             return False
 
-    def get_related_values(self, cr, uid, id, context=None):
-        if context is None:
-            context = {}
-        account_invoice = self.browse(cr, uid, id, context=context)
-        original_res = {}
-        res = []
-        energy_tax_id = False
-        invoice_type = account_invoice.type
-        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
-
-        amount_total = factor_reverse * account_invoice.amount_total
-
+    def _process_invoice_lines(self, cr, uid,
+                               account_invoice,
+                               original_res,
+                               energy_tax_id=False,
+                               factor_reverse=1,
+                               context=None):
+        """
+        This method is used to process the invoice lines to get the values to sync with Odoo,
+        and agrupate them by account and taxes.
+        """
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
             tax_obj = self.pool.get('account.tax')
@@ -106,6 +103,23 @@ class AccountInvoice(osv.osv):
                     'tax_ids': ail_vals['tax_ids'],
                 }
 
+    def get_related_values(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        account_invoice = self.browse(cr, uid, id, context=context)
+        original_res = {}
+        res = []
+        energy_tax_id = False
+        invoice_type = account_invoice.type
+        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
+
+        amount_total = factor_reverse * account_invoice.amount_total
+
+        # Process invoice lines to get the values to sync with Odoo
+        self._process_invoice_lines(
+            cr, uid, account_invoice, original_res, energy_tax_id,
+            factor_reverse=factor_reverse, context=context)
+
         # Add tax lines needed for the sync with Odoo
         res.extend(
             self.add_taxes_lines_needed_for_sync(
@@ -137,7 +151,7 @@ class AccountInvoice(osv.osv):
             elif invoice_type == 'in_refund':
                 invoice_type = 'in_invoice'
 
-        return {
+        dict_res = {
             'date': account_invoice.date_invoice,
             'move_type': invoice_type,
             'invoice_line_ids': res,
@@ -145,6 +159,13 @@ class AccountInvoice(osv.osv):
             'amount_tax': factor_reverse * amount_tax,
             'amount_total': amount_total,
         }
+
+        # 'ref' field for refund invoices
+        if account_invoice.rectifying_id and account_invoice.rectifying_id.number:
+            ref = account_invoice.rectifying_id.number
+            dict_res['ref'] = ref
+
+        return dict_res
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
@@ -244,8 +265,6 @@ class AccountInvoice(osv.osv):
             context = {}
         if data['move_type'] in ['in_refund', 'in_invoice']:
             data['preferred_payment_method_line_id'] = odoo_payment_method_id
-        if data['ref'] is False:
-            data['ref'] = ''
         return data
 
     def hook_after_odoo_creation(self, cr, uid, response, sync_vals):
