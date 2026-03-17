@@ -327,7 +327,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'property_account_position_id': None,
             'property_account_receivable_id': 2,
             'property_inbound_payment_method_line_id': None,
-            'property_outbound_payment_method_line_id': None,
             'property_payment_term_id': None,
             'type': 'contact',
             'vat': u'S2903826B'
