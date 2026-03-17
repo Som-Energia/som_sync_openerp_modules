@@ -31,16 +31,8 @@ jobs:
         with:
           name: coverage-xml
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install SonarCloud Scanner
-        run: python -m pip install --upgrade pip && pip install sonar-scanner
-
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e
+        uses: SonarSource/sonarqube-scan-action@9598b8a83feef37de07f549027fab50ecffe6a6e
         with:
           organization: som-energia
           projectKey: Som-Energia_som_sync_openerp_modules
