@@ -21,9 +21,9 @@ class TestResPartner(testing.OOTestCaseWithCursor):
         self.assertEqual(suffix, 'company/ES72789709E')
 
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_related_values(self, mock_syncronize_sync):
+    def test__get_related_values__notSet(self, mock_syncronize_sync):
         partner_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "base", "res_partner_agrolait"
+            self.cursor, self.uid, "base", "main_partner"
         )[1]
         mock_syncronize_sync.return_value = (99, 1)
 
@@ -31,7 +31,24 @@ class TestResPartner(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, partner_id
         )
 
+        expected_values = {}
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values__setted(self, mock_syncronize_sync):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "base", "res_partner_agrolait"
+        )[1]
+        mock_syncronize_sync.return_value = (99, 1)
+        payment_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "odoo_payment_type_provider"
+        )[1]
+
+        related_values = self.rp_obj.get_related_values(
+            self.cursor, self.uid, partner_id
+        )
+
         expected_values = {
-            'property_outbound_payment_method_line_id': 375  # Transferencias APi
+            'property_outbound_payment_method_line_id': payment_type_id  # Transferencias APi
         }
         self.assertEqual(related_values, expected_values)

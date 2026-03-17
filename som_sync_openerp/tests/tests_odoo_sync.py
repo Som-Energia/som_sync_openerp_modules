@@ -466,11 +466,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
                       invoice_id, context={'update_last_sync': True}),
         ])
 
-    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
-    def test__common_sync_model_create_update_paid_invoice(
-            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
-        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+    def helper_open_and_pay_invoice(self):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
@@ -485,6 +481,14 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.wf_service.trg_validate(
             self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
         )
+        return invoice_id, period_id, account_id, journal_id
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_paid_invoice(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+        invoice_id, period_id, account_id, journal_id = self.helper_open_and_pay_invoice()
         self.ai_obj.pay_and_reconcile(
             self.cursor, self.uid, [invoice_id], 1000,
             account_id, period_id, journal_id, account_id, period_id, journal_id
@@ -509,20 +513,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def test__common_sync_model_create_update_paid_invoice_no_sync(
             self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
         mock_sync_model_enabled_amplified.return_value = (True, False, False)
-        invoice_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
-        )[1]
-        month = 'period_{0}'.format(int(time.strftime('%m')))
-        period_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'account', month
-        )[1]
-        account_id = self.aa_obj.search(self.cursor, self.uid, [('code', '=', '570000')])[0]
-        journal_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'account_journal_sales_syncronizable'
-        )[1]
-        self.wf_service.trg_validate(
-            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
-        )
+        invoice_id, period_id, account_id, journal_id = self.helper_open_and_pay_invoice()
         mock_sync_model_enabled_amplified.return_value = (True, True, True)
 
         self.ai_obj.pay_and_reconcile(
