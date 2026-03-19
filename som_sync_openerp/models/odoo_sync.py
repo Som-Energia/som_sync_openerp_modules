@@ -381,11 +381,11 @@ class OdooSync(osv.osv):
                     msg_formated = self.format_response(msg)
                     sync_vals.update({
                         'odoo_last_update_result': msg_formated,
-                        'sync_state': 'synced' if odoo_id else 'error',
                         'update_odoo_created_sync': True,
                     })
                 sync_vals.update({
                     'odoo_last_sync_request': self.format_response(erp_data),
+                    'sync_state': 'synced' if odoo_id else 'error',
                 })
 
                 has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
