@@ -39,14 +39,16 @@ class ResPartner(osv.osv):
             context = {}
         partner = self.browse(cr, uid, id, context=context)
         sync_obj = self.pool.get('odoo.sync')
-        # Transferencias APi
-        payment_mode_id = sync_obj.search(cr, uid, [
-            ('model', '=', 'payment.type'), ('res_id', '=', 0)], context=context)[0]
         res = {}
         if partner.payment_type_supplier:
-            res = {
-                'property_outbound_payment_method_line_id': payment_mode_id
-            }
+            # Transferencias APi
+            payment_mode_id = sync_obj.search(cr, uid, [
+                ('model', '=', 'payment.type'), ('res_id', '=', 0)], context=context)
+            if payment_mode_id:
+                payment_mode_id = payment_mode_id[0]
+                res = {
+                    'property_outbound_payment_method_line_id': payment_mode_id
+                }
         return res
 
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
