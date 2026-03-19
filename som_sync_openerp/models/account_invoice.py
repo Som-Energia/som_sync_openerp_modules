@@ -49,16 +49,13 @@ class AccountInvoice(osv.osv):
         else:
             return False
 
-    def _process_invoice_lines(self, cr, uid,
-                               account_invoice,
-                               original_res,
-                               energy_tax_id=False,
-                               factor_reverse=1,
-                               context=None):
+    def _process_invoice_lines(self, cr, uid, account_invoice, factor_reverse=1, context=None):
         """
         This method is used to process the invoice lines to get the values to sync with Odoo,
         and agrupate them by account and taxes.
         """
+        original_res = {}
+        energy_tax_id = False
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
             tax_obj = self.pool.get('account.tax')
@@ -102,6 +99,7 @@ class AccountInvoice(osv.osv):
                     'quantity_erp': 1,
                     'tax_ids': ail_vals['tax_ids'],
                 }
+        return original_res, energy_tax_id
 
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
@@ -114,11 +112,9 @@ class AccountInvoice(osv.osv):
         factor_reverse = -1 if account_invoice.amount_total < 0 else 1
 
         amount_total = factor_reverse * account_invoice.amount_total
-
         # Process invoice lines to get the values to sync with Odoo
-        self._process_invoice_lines(
-            cr, uid, account_invoice, original_res, energy_tax_id,
-            factor_reverse=factor_reverse, context=context)
+        original_res, energy_tax_id = self._process_invoice_lines(
+            cr, uid, account_invoice, factor_reverse=factor_reverse, context=context)
 
         # Add tax lines needed for the sync with Odoo
         res.extend(
