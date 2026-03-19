@@ -69,6 +69,64 @@ class PaymentOrder(osv.osv):
                 return discrepancy
         return 0
 
+    def _is_order_refund(self, cr, uid, payment_order, context=None):
+        # TODO: cover case when grouped invoices with mixed types (refund and non refund)??
+        if context is None:
+            context = {}
+
+        for line in payment_order.line_ids:
+            if line.ml_inv_ref \
+                    and line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
+                return True
+        return False
+
+    def _get_order_lines_from_invoices(self, cr, uid, payment_line, context=None):
+        """
+         This method is used to get the values of the payment line to sync with Odoo
+         we expect to have the following format in Odoo:
+         {
+            'invoice_id': 125753,
+            'amount': 182.12
+         }
+        """
+        sync_obj = self.pool.get('odoo.sync')
+        if context is None:
+            context = {}
+
+        payment_line_vals = sync_obj.get_model_vals_to_sync(
+            cr, uid, 'payment.line', payment_line.id, context=context)
+        payment_line_vals['amount'] = abs(payment_line_vals['amount'])
+        return payment_line_vals, [payment_line.ml_inv_ref.id] if payment_line.ml_inv_ref else None
+
+    def _get_order_line_from_grouped_invoices(self, cr, uid, payment_line, context=None):
+        """
+         This method is used to get the values of the payment line to sync with Odoo
+         we expect to have the following format in Odoo:
+        {
+            'invoice_ids': [125753, 125754],
+            'amount': 182.12
+        }
+        """
+        sync_obj = self.pool.get('odoo.sync')
+        if context is None:
+            context = {}
+        payment_line_vals = {'amount': abs(payment_line.amount)}
+        odoo_invoice_ids = []
+        erp_invoice_ids = []
+        for am in payment_line.move_line_id.move_id.line_id:
+            if not am.invoice:
+                continue
+            erp_invoice_id = am.invoice.id
+            # we get the odoo id of the invoice in order to link it to the payment line
+            context_copy = context.copy()
+            context_copy['from_fk_sync'] = True
+            odoo_id, _ = sync_obj.common_sync_model_create_update(
+                cr, uid, 'account.invoice', 'sync', erp_invoice_id, context_copy)
+            odoo_invoice_ids.append(odoo_id)
+            erp_invoice_ids.append(erp_invoice_id)
+        payment_line_vals['invoice_ids'] = odoo_invoice_ids
+        return payment_line_vals, erp_invoice_ids
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -82,18 +140,25 @@ class PaymentOrder(osv.osv):
 
         lines = []
         pl_inv_ids = []
-        if payment_order.line_ids:
-            line = payment_order.line_ids[0]
-            if line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
-                # Factures FE negatives, les tractem diferent a Odoo
-                name = 'RECT_{}'.format(payment_order.name)
+
+        if self._is_order_refund(cr, uid, payment_order, context=context):
+            # Factures FE negatives, les tractem diferent a Odoo
+            name = 'RECT_{}'.format(payment_order.name)
+
         for line in payment_order.line_ids:
-            payment_line_vals = sync_obj.get_model_vals_to_sync(
-                cr, uid, 'payment.line', line.id, context=context)
-            payment_line_vals['amount'] = abs(payment_line_vals['amount'])
-            if line.ml_inv_ref:
-                pl_inv_ids.append(line.ml_inv_ref.id)
-            lines.append(payment_line_vals)
+            if not line.ml_inv_ref:
+                # grouped invoices
+                payment_line_vals, erp_invoice_ids = self._get_order_line_from_grouped_invoices(
+                    cr, uid, line, context=context)
+                lines.append(payment_line_vals)
+                if erp_invoice_ids:
+                    pl_inv_ids.extend(erp_invoice_ids)
+            else:
+                payment_line_vals, erp_invoice_ids = self._get_order_lines_from_invoices(
+                    cr, uid, line, context=context)
+                lines.append(payment_line_vals)
+                if erp_invoice_ids:
+                    pl_inv_ids.extend(erp_invoice_ids)
 
         # at this point we're sure that invoices are synced
         # we read sync records for invoices linked to payment lines with warning
