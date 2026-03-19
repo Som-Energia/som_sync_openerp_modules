@@ -19,6 +19,20 @@ class PaymentOrder(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_mapping_model_post(self, cr, uid, id, context=None):
+        payment_order = self.browse(cr, uid, id, context=context)
+        is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
+        is_refund = self._is_order_refund(cr, uid, payment_order)
+
+        mapping = {
+            # (is_grouped, is_refund): 'model_name'
+            (True, True): 'payment_order_batches_refunds',
+            (True, False): 'payment_order_batches',
+            (False, True): 'payment_order_refunds',
+            (False, False): 'payment_orders',
+        }
+        return mapping.get((is_grouped, is_refund))
+
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """
         This method is used to get the suffix to identify the record in Odoo
@@ -69,11 +83,14 @@ class PaymentOrder(osv.osv):
                 return discrepancy
         return 0
 
-    def _is_order_refund(self, cr, uid, payment_order, context=None):
-        # TODO: cover case when grouped invoices with mixed types (refund and non refund)??
-        if context is None:
-            context = {}
+    def _is_order_grouped_invoices(self, cr, uid, payment_order):
+        for line in payment_order.line_ids:
+            if not line.ml_inv_ref:
+                return True
+        return False
 
+    def _is_order_refund(self, cr, uid, payment_order):
+        # TODO: cover case when grouped invoices with mixed types (refund and non refund)??
         for line in payment_order.line_ids:
             if line.ml_inv_ref \
                     and line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
@@ -141,24 +158,21 @@ class PaymentOrder(osv.osv):
         lines = []
         pl_inv_ids = []
 
-        if self._is_order_refund(cr, uid, payment_order, context=context):
+        if self._is_order_refund(cr, uid, payment_order):
             # Factures FE negatives, les tractem diferent a Odoo
             name = 'RECT_{}'.format(payment_order.name)
 
+        if self._is_order_grouped_invoices(cr, uid, payment_order):
+            function_to_get_lines = self._get_order_line_from_grouped_invoices
+        else:
+            function_to_get_lines = self._get_order_lines_from_invoices
+
         for line in payment_order.line_ids:
-            if not line.ml_inv_ref:
-                # grouped invoices
-                payment_line_vals, erp_invoice_ids = self._get_order_line_from_grouped_invoices(
-                    cr, uid, line, context=context)
-                lines.append(payment_line_vals)
-                if erp_invoice_ids:
-                    pl_inv_ids.extend(erp_invoice_ids)
-            else:
-                payment_line_vals, erp_invoice_ids = self._get_order_lines_from_invoices(
-                    cr, uid, line, context=context)
-                lines.append(payment_line_vals)
-                if erp_invoice_ids:
-                    pl_inv_ids.extend(erp_invoice_ids)
+            payment_line_vals, erp_invoice_ids = function_to_get_lines(
+                cr, uid, line, context=context)
+            lines.append(payment_line_vals)
+            if erp_invoice_ids:
+                pl_inv_ids.extend(erp_invoice_ids)
 
         # at this point we're sure that invoices are synced
         # we read sync records for invoices linked to payment lines with warning

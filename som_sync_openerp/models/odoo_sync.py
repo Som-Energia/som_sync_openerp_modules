@@ -459,8 +459,12 @@ class OdooSync(osv.osv):
             context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         post_sufix = MAPPING_MODELS_POST.get(model, False)
+        if hasattr(self.pool.get(model), 'get_mapping_model_post'):
+            pnt_erp_id = data.get('pnt_erp_id', False)
+            post_sufix = self.pool.get(model).get_mapping_model_post(
+                cursor, uid, pnt_erp_id, context=context)
         if post_sufix:
-            url_base = '{}{}'.format(odoo_url_api, MAPPING_MODELS_POST.get(model))
+            url_base = '{}{}'.format(odoo_url_api, post_sufix)
             headers = {
                 "X-API-Key": odoo_api_key,
                 "Content-Type": "application/json",
