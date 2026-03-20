@@ -24,18 +24,14 @@ jobs:
     needs: erp-tests-module       # <-- Depèn del job que crida el reusable workflow
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Download coverage.xml from tests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.1
         with:
           name: coverage-xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@9598b8a83feef37de07f549027fab50ecffe6a6e
-        with:
-          organization: som-energia
-          projectKey: Som-Energia_som_sync_openerp_modules
-          projectName: som_sync_openerp_modules
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

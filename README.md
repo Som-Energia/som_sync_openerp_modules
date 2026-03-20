@@ -2,7 +2,7 @@
 
 An OpenERP module to syncronize OpenERP with Odoo
 
-[![SOM_MODULES](https://github.com/Som-Energia/som_sync_openerp_modules/actions/workflows/som_sync_openerp.yml/badge.svg)](https://github.com/Som-Energia/openerp_som_addons/actions/workflows/som_sync_openerp.yml) [![codecov](https://codecov.io/github/Som-Energia/som_sync_openerp_modules/graph/badge.svg?token=VO8F4EIY8K)](https://codecov.io/github/Som-Energia/som_sync_openerp_modules)
+[![SOM_MODULES](https://github.com/Som-Energia/som_sync_openerp_modules/actions/workflows/som_sync_openerp.yml/badge.svg)](https://github.com/Som-Energia/openerp_som_addons/actions/workflows/som_sync_openerp.yml) [![codecov](https://codecov.io/github/Som-Energia/som_sync_openerp_modules/graph/badge.svg?token=VO8F4EIY8K)](https://codecov.io/github/Som-Energia/som_sync_openerp_modules) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Som-Energia_som_sync_openerp_modules&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Som-Energia_som_sync_openerp_modules)
 
 ## How to use
 

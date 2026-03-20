@@ -263,7 +263,9 @@ class OdooSync(osv.osv):
 
     @job(queue='sync_odoo', timeout=3600)
     def syncronize(self, cursor, uid,
-                   model, action, openerp_id, context={}):
+                   model, action, openerp_id, context=None):
+        if context is None:
+            context = {}
         context['update_last_sync'] = True
         self.syncronize_sync(cursor, uid, model, action, openerp_id, context=context)
 
@@ -289,7 +291,7 @@ class OdooSync(osv.osv):
         # Early return if synchronization is disabled for this specific model
         # in this case auto_sync and async_enabled are not relevant.
         # We need this check for on-demand syncs.
-        sync_enabled, auto_sync, async_enabled = (
+        sync_enabled, _, _ = (
             self.sync_model_enabled_amplified(cursor, uid, model))
         if not sync_enabled:
             return False, False
@@ -445,7 +447,7 @@ class OdooSync(osv.osv):
             return False
 
         # we create the static sync record
-        sync_id = self.create(cursor, uid, {
+        self.create(cursor, uid, {
             'model': self.pool.get('ir.model').search(
                 cursor, uid, [('model', '=', model)], limit=1)[0],
             'res_id': openerp_id,
