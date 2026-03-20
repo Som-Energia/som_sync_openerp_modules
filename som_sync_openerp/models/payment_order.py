@@ -52,6 +52,16 @@ class PaymentOrder(osv.osv):
         else:
             return False
 
+    def _get_journal_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
+        mapping = {
+            # (is_grouped, is_refund): 'model_name'
+            (True, True): 'journal_id',  # payment_order_batches_refunds
+            (True, False): 'destination_journal_id',  # payment_order_batches
+            (False, True): 'journal_id',  # payment_order_refunds
+            (False, False): 'journal_destiny',  # payment_orders
+        }
+        return mapping.get((is_grouped, is_refund))
+
     def _get_total_amount_difference(self, inv_read_sync_record):
         """
         This method is used to get the total amount difference between Odoo and ERP
@@ -229,9 +239,11 @@ class PaymentOrder(osv.osv):
         else:
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_customer_payment_method', 0))
 
+        journal_odoo_field_name = self._get_journal_odoo_field_name(
+            cr, uid, is_grouped, is_refund, context=context)
         res = {
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
-            'journal_destiny': journal_odoo_id,
+            journal_odoo_field_name: journal_odoo_id,
             'lines': lines,
             'amount': round((abs(payment_order.total) + amount_difference_total), 2),
             'name': name,
