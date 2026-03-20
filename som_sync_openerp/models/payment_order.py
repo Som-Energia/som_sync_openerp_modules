@@ -52,6 +52,8 @@ class PaymentOrder(osv.osv):
         else:
             return False
 
+    # TODO: ask Punt to unify field names in API
+    # ----------------------------------
     def _get_journal_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
         mapping = {
             # (is_grouped, is_refund): 'model_name'
@@ -61,6 +63,17 @@ class PaymentOrder(osv.osv):
             (False, False): 'journal_destiny',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
+
+    def _get_payment_method_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
+        mapping = {
+            # (is_grouped, is_refund): 'model_name'
+            (True, True): 'payment_method_id',  # payment_order_batches_refunds
+            (True, False): 'payment_method_id',  # payment_order_batches
+            (False, True): 'method_id',  # payment_order_refunds
+            (False, False): 'method_id',  # payment_orders
+        }
+        return mapping.get((is_grouped, is_refund))
+    # ----------------------------------
 
     def _get_total_amount_difference(self, inv_read_sync_record):
         """
@@ -241,14 +254,18 @@ class PaymentOrder(osv.osv):
 
         journal_odoo_field_name = self._get_journal_odoo_field_name(
             cr, uid, is_grouped, is_refund, context=context)
+
+        payment_method_odoo_field_name = self._get_payment_method_odoo_field_name(
+            cr, uid, is_grouped, is_refund, context=context)
         res = {
-            'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
             journal_odoo_field_name: journal_odoo_id,
+            payment_method_odoo_field_name: metode_pagament_id,
             'lines': lines,
             'amount': round((abs(payment_order.total) + amount_difference_total), 2),
             'name': name,
-            'method_id': metode_pagament_id,
         }
+        if not is_grouped and not is_refund:  # normal payment_orders
+            res['batch_type'] = 'outbound' if payment_order.type == 'payable' else 'inbound'
         return res
 
     def check_special_restrictions(self, cr, uid, id, context=None):
