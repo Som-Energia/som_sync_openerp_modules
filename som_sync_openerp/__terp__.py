@@ -22,6 +22,7 @@
         "data/som_sync_openerp_data.xml",
         "views/account_journal_view.xml",
         "views/odoo_sync_view.xml",
+        "views/odoo_sync_model_config_view.xml",
         "views/payment_mode_view.xml",
         "wizard/wizard_sync_object_odoo_view.xml",
         "wizard/wizard_open_related_model_record_view.xml",

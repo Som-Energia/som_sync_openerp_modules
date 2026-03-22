@@ -224,16 +224,27 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(odoo_id, param_odoo_id)
 
     def test__sync_model_enabled_amplified__setting_ok(self):
-        config_obj = self.openerp.pool.get('res.config')
-        dict_models_to_sync = eval(
-            config_obj.get(self.cursor, self.uid, 'odoo_erp_models_to_sync', '[]'))
-        for _dict in dict_models_to_sync:
-            self.assertIn('model', _dict)
-            self.assertIn('auto_sync', _dict)
-            self.assertIn('async_enabled', _dict)
-        self.assertIsInstance(dict_models_to_sync, list)
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+
+        self.assertTrue(config_ids)
+
+        for cfg in sync_model_config_obj.browse(self.cursor, self.uid, config_ids):
+            self.assertTrue(cfg.model_id)
+            self.assertIsInstance(cfg.auto_sync, bool)
+            self.assertIsInstance(cfg.async_enabled, bool)
 
     def test__sync_model_enabled_amplified__enabled_async_disabled_auto(self):
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+        sync_model_config_obj.write(
+            self.cursor, self.uid, config_ids,
+            {
+                'auto_sync': False,
+                'async_enabled': True,
+            }
+        )
+
         for model in [
             'account.account',
             'res.country.state',
@@ -246,23 +257,19 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             res = self.sync_obj.sync_model_enabled_amplified(
                 self.cursor, self.uid, model
             )
-
             self.assertEqual(res, (True, False, True))
 
     def test__sync_model_enabled_amplified__all_enabled(self):
-        config_obj = self.openerp.pool.get('res.config')
-        config_obj.set(
-            self.cursor, self.uid, 'odoo_erp_models_to_sync',
-            """[
-                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.country.state', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.country', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.municipi', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner.address', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner.bank', 'auto_sync': True, 'async_enabled': True}
-            ]"""
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+        sync_model_config_obj.write(
+            self.cursor, self.uid, config_ids,
+            {
+                'auto_sync': True,
+                'async_enabled': True,
+            }
         )
+
         for model in [
             'account.account',
             'res.country.state',

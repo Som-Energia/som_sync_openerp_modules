@@ -81,18 +81,21 @@ class OdooSync(osv.osv):
 
     def sync_model_enabled_amplified(self, cursor, uid, model):
         """
-            odoo_erp_models_to_sync = [
-                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner', 'auto_sync': False, 'async_enabled': True}]
-            auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
-                otherwise sync only on-demand.
-            async_enabled: if True, sync is done asynchronously
+            odoo.sync.model.config records:
+                model_id: ir.model
+                auto_sync: sync triggered automatically when create, write or unlink occurs
+                    in ERP, otherwise sync only on-demand.
+                async_enabled: if True, sync is done asynchronously.
         """
-        config_obj = self.pool.get('res.config')
-        dict_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
-        for dict_model in dict_models_to_sync:
-            if dict_model['model'] == model:
-                return True, dict_model['auto_sync'], dict_model['async_enabled']
+        sync_model_config_obj = self.pool.get('odoo.sync.model.config')
+        sync_model_config_ids = sync_model_config_obj.search(cursor, uid, [
+            ('model_id.model', '=', model),
+        ], limit=1)
+
+        if sync_model_config_ids:
+            cfg = sync_model_config_obj.browse(cursor, uid, sync_model_config_ids[0])
+            return True, cfg.auto_sync, cfg.async_enabled
+
         return False, False, False
 
     def common_sync_model_create_update(self, cursor, uid, model, action, ids, context=None):

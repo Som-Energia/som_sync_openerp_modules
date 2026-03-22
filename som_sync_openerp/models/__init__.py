@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from . import odoo_sync
+from . import odoo_sync_model_config
 from . import account_account
 from . import account_invoice
 from . import account_invoice_line
