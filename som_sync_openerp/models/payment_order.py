@@ -185,7 +185,7 @@ class PaymentOrder(osv.osv):
         ])
         amount_difference_total = 0
         if not inv_sync_with_diff_ids:
-            return lines
+            return amount_difference_total
         # we read the sync records with specific fields to avoid performance issues
         inv_read_sync_records = sync_obj.read(
             cr, uid, inv_sync_with_diff_ids, ['res_id', 'odoo_id', 'odoo_last_update_result'])
