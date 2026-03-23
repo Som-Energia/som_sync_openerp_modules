@@ -71,6 +71,21 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
+        <record id="odoo_sync_model_config_account_journal" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.journal')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_fiscal_position" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.fiscal.position')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_payment_type" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'payment.type')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
         <record id="odoo_provider_payment_method" model="res.config">
             <field name="name">odoo_provider_payment_method</field>
             <field name="value">375</field>
