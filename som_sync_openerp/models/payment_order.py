@@ -60,7 +60,7 @@ class PaymentOrder(osv.osv):
             (True, True): 'journal_id',  # payment_order_batches_refunds
             (True, False): 'destination_journal_id',  # payment_order_batches
             (False, True): 'journal_id',  # payment_order_refunds
-            (False, False): 'journal_destiny',  # payment_orders
+            (False, False): 'destination_journal_id',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
 
@@ -70,7 +70,7 @@ class PaymentOrder(osv.osv):
             (True, True): 'payment_method_id',  # payment_order_batches_refunds
             (True, False): 'payment_method_id',  # payment_order_batches
             (False, True): 'method_id',  # payment_order_refunds
-            (False, False): 'method_id',  # payment_orders
+            (False, False): 'payment_method_id',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
     # ----------------------------------
