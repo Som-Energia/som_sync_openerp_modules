@@ -263,9 +263,8 @@ class PaymentOrder(osv.osv):
             'lines': lines,
             'amount': round((abs(payment_order.total) + amount_difference_total), 2),
             'name': name,
+            'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
         }
-        if not is_grouped and not is_refund:  # normal payment_orders
-            res['batch_type'] = 'outbound' if payment_order.type == 'payable' else 'inbound'
         return res
 
     def check_special_restrictions(self, cr, uid, id, context=None):
