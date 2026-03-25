@@ -192,6 +192,8 @@ class PaymentOrder(osv.osv):
         for inv_read_sync_record in inv_read_sync_records:
             # we get the amount difference from the last synchronization
             amount_difference = self._get_total_amount_difference(inv_read_sync_record)
+            if amount_difference == 0:
+                continue
             # we update the amount to sync of specific lines with discrepancy
             odoo_inv_id = inv_read_sync_record['odoo_id']
             found = False
@@ -247,8 +249,15 @@ class PaymentOrder(osv.osv):
                 cr, uid, pl_inv_ids, lines, is_grouped, context=context)
         )
 
+        po_total_amount = round((abs(payment_order.total) + amount_difference_total), 2)
+
         if payment_order.type == 'payable':
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
+            # all amounts to negative when payment_oder_batch
+            if is_grouped:
+                po_total_amount = -abs(po_total_amount)
+                for line in lines:
+                    line['amount'] = -abs(line['amount'])
         else:
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_customer_payment_method', 0))
 
@@ -257,11 +266,12 @@ class PaymentOrder(osv.osv):
 
         payment_method_odoo_field_name = self._get_payment_method_odoo_field_name(
             cr, uid, is_grouped, is_refund, context=context)
+
         res = {
             journal_odoo_field_name: journal_odoo_id,
             payment_method_odoo_field_name: metode_pagament_id,
             'lines': lines,
-            'amount': round((abs(payment_order.total) + amount_difference_total), 2),
+            'amount': po_total_amount,
             'name': name,
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
         }
