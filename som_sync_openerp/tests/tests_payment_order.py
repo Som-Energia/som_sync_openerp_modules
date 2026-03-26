@@ -75,14 +75,14 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         expected_values = {
             'amount': 1000.0,
             'batch_type': 'inbound',
-            'journal_destiny': odoo_journal_id,
+            'destination_journal_id': odoo_journal_id,
             'lines': [
                 {
                     'amount': 1000.0,
                     'invoice_id': 99,
                 }
             ],
-            'method_id': 373,
+            'payment_method_id': 373,
             'name': u'Remesa 0001',
         }
         self.assertEqual(related_values, expected_values)
@@ -116,14 +116,14 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         expected_values = {
             'amount': 1000.0,
             'batch_type': 'outbound',
-            'journal_destiny': odoo_journal_id,
+            'destination_journal_id': odoo_journal_id,
             'lines': [
                 {
                     'amount': 1000.0,
                     'invoice_id': 99,
                 }
             ],
-            'method_id': 375,
+            'payment_method_id': 375,
             'name': u'Remesa 0002',
         }
         self.assertEqual(related_values, expected_values)
