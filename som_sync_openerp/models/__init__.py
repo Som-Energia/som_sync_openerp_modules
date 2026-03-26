@@ -17,3 +17,4 @@ from . import res_municipi
 from . import res_partner_bank
 from . import res_partner
 from . import res_partner_address
+from . import giscedata_facturacio_devolucio

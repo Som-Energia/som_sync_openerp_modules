@@ -54,6 +54,7 @@ MAPPING_MODELS_POST = {
     'res.partner': 'partners',
     'res.partner.address': 'partners',
     'res.partner.bank': 'banks',
+    'giscedata.facturacio.devolucio': 'payment_order_refunds',
 }
 
 # Mapping of modles to patch

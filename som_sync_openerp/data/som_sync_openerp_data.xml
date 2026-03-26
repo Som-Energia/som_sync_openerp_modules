@@ -86,6 +86,11 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
+        <record id="odoo_sync_model_config_giscedata_facturacio_devolucio" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'giscedata.facturacio.devolucio')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
         <record id="odoo_provider_payment_method" model="res.config">
             <field name="name">odoo_provider_payment_method</field>
             <field name="value">375</field>
