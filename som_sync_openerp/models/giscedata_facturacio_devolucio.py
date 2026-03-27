@@ -24,23 +24,27 @@ class GiscedataFacturacioDevolucio(osv.osv):
         if context is None:
             context = {}
         sync_obj = self.pool.get('odoo.sync')
-        fact_obj = self.pool.get('giscedata.facturacio.factura')
+        inv_obj = self.pool.get('account.invoice')
+        dev_lin_obj = self.pool.get('giscedata.facturacio.devolucio.linia')
 
         lines = []
 
-        # we get the lines
-        fact_ids = fact_obj.search(cr, uid, [('devolucio_id', '=', id)])
         context_copy = context.copy()
         context_copy['from_fk_sync'] = True
-        for fact in fact_obj.browse(cr, uid, fact_ids, context=context):
-            erp_invoice_id = fact.invoice_id.id
-            odoo_id, _ = sync_obj.common_sync_model_create_update(
-                cr, uid, 'account.invoice', 'sync', erp_invoice_id, context_copy)
-            line = {
-                'invoice_id': odoo_id,
-                'amount': abs(fact.amount_total),
-            }
-            lines.append(line)
+        # we get the lines from 'numfactura' from devolucio lines
+        dev_lin_ids = dev_lin_obj.search(cr, uid, [('devolucio_id', '=', id)])
+        numfacts = dev_lin_obj.read(cr, uid, dev_lin_ids, ['numfactura'])
+        for numfact in numfacts:
+            invoice_ids = inv_obj.search(cr, uid, [('number', '=', numfact['numfactura'])])
+            if invoice_ids:
+                invoice_id = invoice_ids[0]
+                odoo_id, _ = sync_obj.common_sync_model_create_update(
+                    cr, uid, 'account.invoice', 'sync', invoice_id, context_copy)
+                line = {
+                    'invoice_id': odoo_id,
+                    'amount': 0,  # TODO: get the amount from the line
+                }
+                lines.append(line)
 
         res = {
             'lines': lines,
