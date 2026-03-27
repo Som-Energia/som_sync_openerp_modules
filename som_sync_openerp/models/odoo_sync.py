@@ -153,6 +153,9 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
+    def get_total_amount_difference(self, cursor, uid, inv_read_sync_record):
+        return self._get_total_amount_difference(inv_read_sync_record)
+
     def _get_total_amount_difference(self, inv_read_sync_record):
         """
         Get total amount discrepancy (Odoo - ERP) from a sync record payload.
