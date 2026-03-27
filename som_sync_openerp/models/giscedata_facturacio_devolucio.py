@@ -9,9 +9,10 @@ class GiscedataFacturacioDevolucio(osv.osv):
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'number',
-        'total_devolution': 'amount',
+        'total_devolution': 'amount',  # TODO: control invoices with discrepancies
         'date': 'date',
-
+        'pay_journal_id': 'journal_id',
+        'pay_account_id': 'account_id',
     }
     MAPPING_FK = {
         'pay_account_id': 'account.account',
@@ -42,7 +43,7 @@ class GiscedataFacturacioDevolucio(osv.osv):
                     cr, uid, 'account.invoice', 'sync', invoice_id, context_copy)
                 line = {
                     'invoice_id': odoo_id,
-                    'amount': numfact['import'],
+                    'amount': numfact['import'],  # TODO: control invoices with discrepancies
                 }
                 lines.append(line)
 
