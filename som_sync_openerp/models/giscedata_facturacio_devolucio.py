@@ -33,7 +33,7 @@ class GiscedataFacturacioDevolucio(osv.osv):
         context_copy['from_fk_sync'] = True
         # we get the lines from 'numfactura' from devolucio lines
         dev_lin_ids = dev_lin_obj.search(cr, uid, [('devolucio_id', '=', id)])
-        numfacts = dev_lin_obj.read(cr, uid, dev_lin_ids, ['numfactura'])
+        numfacts = dev_lin_obj.read(cr, uid, dev_lin_ids, ['numfactura', 'import'])
         for numfact in numfacts:
             invoice_ids = inv_obj.search(cr, uid, [('number', '=', numfact['numfactura'])])
             if invoice_ids:
@@ -42,7 +42,7 @@ class GiscedataFacturacioDevolucio(osv.osv):
                     cr, uid, 'account.invoice', 'sync', invoice_id, context_copy)
                 line = {
                     'invoice_id': odoo_id,
-                    'amount': 0,  # TODO: get the amount from the line
+                    'amount': numfact['import'],
                 }
                 lines.append(line)
 

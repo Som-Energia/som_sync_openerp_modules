@@ -60,7 +60,7 @@ class TestDevolucions(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, [('devolucio_id', '=', devolucio_id)]
         )
         numfacts = self.dev_lin_obj.read(
-            self.cursor, self.uid, dev_lin_ids, ['numfactura']
+            self.cursor, self.uid, dev_lin_ids, ['numfactura', 'import']
         )
 
         expected_lines = []
@@ -73,7 +73,7 @@ class TestDevolucions(testing.OOTestCaseWithCursor):
             invoice_id = invoice_ids[0]
             expected_lines.append({
                 'invoice_id': odoo_by_invoice_id[invoice_id],
-                'amount': 0,
+                'amount': numfact['import'],
             })
 
         self.assertEqual(
