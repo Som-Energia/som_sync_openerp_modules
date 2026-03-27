@@ -13,6 +13,7 @@
         'l10n_ES_partner',
         'partner_address_tipovia',
         'remeses_base',
+        'devolucions_base',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",
