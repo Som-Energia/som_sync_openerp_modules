@@ -35,10 +35,11 @@ class GiscedataFacturacioDevolucio(osv.osv):
         # we get the lines from 'numfactura' from devolucio lines
         dev_lin_ids = dev_lin_obj.search(cr, uid, [('devolucio_id', '=', id)])
         numfacts = dev_lin_obj.read(cr, uid, dev_lin_ids, ['numfactura', 'import'])
+        invoice_ids = []
         for numfact in numfacts:
-            invoice_ids = inv_obj.search(cr, uid, [('number', '=', numfact['numfactura'])])
-            if invoice_ids:
-                invoice_id = invoice_ids[0]
+            invoice_id = inv_obj.search(cr, uid, [('number', '=', numfact['numfactura'])])
+            if invoice_id:
+                invoice_id = invoice_id[0]
                 odoo_id, _ = sync_obj.common_sync_model_create_update(
                     cr, uid, 'account.invoice', 'sync', invoice_id, context_copy)
                 line = {
@@ -46,6 +47,7 @@ class GiscedataFacturacioDevolucio(osv.osv):
                     'amount': numfact['import'],  # TODO: control invoices with discrepancies
                 }
                 lines.append(line)
+                invoice_ids.append(invoice_id)
 
         res = {
             'lines': lines,

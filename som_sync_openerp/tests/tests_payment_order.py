@@ -256,7 +256,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         record = {
             'odoo_last_update_result': '{"data": {"metadata": [{"pnt_amount_total_erp_difference": 5.5, "move_type": "out_invoice"}]}}'  # noqa: E501
         }
-        res, move_type = self.po_obj._get_total_amount_difference(record)
+        res, move_type = self.sync_obj._get_total_amount_difference(record)
         self.assertEqual(res, 5.5)
         self.assertEqual(move_type, "out_invoice")
 
@@ -264,7 +264,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         record2 = {
             'odoo_last_update_result': {"data": {"metadata": [{"pnt_amount_total_erp_difference": 3.0, "move_type": "out_refund"}]}}  # noqa: E501
         }
-        res2, move_type2 = self.po_obj._get_total_amount_difference(record2)
+        res2, move_type2 = self.sync_obj._get_total_amount_difference(record2)
         self.assertEqual(res2, 3.0)
         self.assertEqual(move_type2, "out_refund")
 
@@ -272,11 +272,11 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         record3 = {
             'odoo_last_update_result': '{"data": {}}'
         }
-        res3, move_type3 = self.po_obj._get_total_amount_difference(record3)
+        res3, move_type3 = self.sync_obj._get_total_amount_difference(record3)
         self.assertEqual(res3, 0)
         self.assertIsNone(move_type3)
 
         # Empty
-        res4, move_type4 = self.po_obj._get_total_amount_difference({})
+        res4, move_type4 = self.sync_obj._get_total_amount_difference({})
         self.assertEqual(res4, 0)
         self.assertIsNone(move_type4)
