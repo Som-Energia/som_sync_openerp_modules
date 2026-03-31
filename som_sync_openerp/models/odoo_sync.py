@@ -153,41 +153,6 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
-    def get_total_amount_difference(self, cursor, uid, inv_read_sync_record):
-        return self._get_total_amount_difference(inv_read_sync_record)
-
-    def _get_total_amount_difference(self, inv_read_sync_record):
-        """
-        Get total amount discrepancy (Odoo - ERP) from a sync record payload.
-
-        inv_read_sync_record format expected:
-        {
-            'id': 1,
-            'res_id': 20,
-            'odoo_id': 57,
-            'odoo_last_update_result': '{...}'
-        }
-        """
-        if not inv_read_sync_record or 'odoo_last_update_result' not in inv_read_sync_record:
-            return 0, None
-        odoo_last_update_result = inv_read_sync_record['odoo_last_update_result']
-        if not odoo_last_update_result:
-            return 0, None
-        if not isinstance(odoo_last_update_result, dict):
-            try:
-                odoo_last_update_result = json.loads(odoo_last_update_result)
-            except Exception:
-                return 0, None
-        if 'data' in odoo_last_update_result and 'metadata' in odoo_last_update_result['data'] \
-                and isinstance(odoo_last_update_result['data']['metadata'], list) \
-                and len(odoo_last_update_result['data']['metadata']) > 0 \
-                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']['metadata'][0]:  # noqa: E501
-            discrepancy = (
-                odoo_last_update_result['data']['metadata'][0]['pnt_amount_total_erp_difference'])
-            if discrepancy:
-                return discrepancy, odoo_last_update_result['data']['metadata'][0]['move_type']
-        return 0, None
-
     def get_model_vals_to_sync(self, cursor, uid, model, id, context=None):
         if context is None:
             context = {}

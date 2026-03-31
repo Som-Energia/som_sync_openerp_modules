@@ -28,6 +28,85 @@ class AccountInvoice(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def _get_total_amount_difference(self, inv_read_sync_record):
+        """
+        Get the total amount difference between ERP and Odoo for a synced invoice with warning,
+        checking the metadata stored in odoo_last_update_result field in odoo.sync record.
+
+        Return a tuple with the amount difference and the move_type of the invoice
+        to apply the correct factor in case of refunds.
+
+        inv_read_sync_record:
+            record read from odoo.sync with fields ['res_id', 'odoo_id', 'odoo_last_update_result']
+        return:
+            (amount_difference, move_type)
+        """
+        if not inv_read_sync_record or 'odoo_last_update_result' not in inv_read_sync_record:
+            return 0, None
+        odoo_last_update_result = inv_read_sync_record['odoo_last_update_result']
+        if not odoo_last_update_result:
+            return 0, None
+        if not isinstance(odoo_last_update_result, dict):
+            try:
+                odoo_last_update_result = json.loads(odoo_last_update_result)
+            except Exception:
+                return 0, None
+        if 'data' in odoo_last_update_result and 'metadata' in odoo_last_update_result['data'] \
+                and isinstance(odoo_last_update_result['data']['metadata'], list) \
+                and len(odoo_last_update_result['data']['metadata']) > 0 \
+                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']['metadata'][0]:  # noqa: E501
+            discrepancy = (
+                odoo_last_update_result['data']['metadata'][0]['pnt_amount_total_erp_difference'])
+            if discrepancy:
+                return discrepancy, odoo_last_update_result['data']['metadata'][0]['move_type']
+        return 0, None
+
+    def process_lines_with_discrepancies(
+            self, cr, uid, invoice_ids, lines, is_grouped=False, context=None):
+        """
+        Update amounts in lines using discrepancy information stored in odoo.sync
+        for invoice sync records with warning.
+
+        Expected line format:
+        - non-grouped: {'invoice_id': <odoo_invoice_id>, 'amount': <float>}
+        - grouped: {'invoice_ids': [<odoo_invoice_id>, ...], 'amount': <float>}
+        """
+        if context is None:
+            context = {}
+        sync_obj = self.pool.get('odoo.sync')
+
+        inv_sync_with_diff_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', 'account.invoice'),
+            ('res_id', 'in', invoice_ids),
+            ('sync_state', '=', 'synced_with_warning'),
+            ('odoo_last_update_result', '!=', False),
+        ])
+        if not inv_sync_with_diff_ids:
+            return True
+
+        inv_read_sync_records = sync_obj.read(
+            cr, uid, inv_sync_with_diff_ids, ['res_id', 'odoo_id', 'odoo_last_update_result'])
+        for inv_read_sync_record in inv_read_sync_records:
+            amount_difference, move_type = self._get_total_amount_difference(inv_read_sync_record)
+            if amount_difference == 0:
+                continue
+
+            factor = -1 if move_type and 'out_refund' in move_type else 1
+            odoo_inv_id = inv_read_sync_record['odoo_id']
+            for line in lines:
+                if is_grouped:
+                    found = line.get('invoice_ids', False) and odoo_inv_id in line['invoice_ids']
+                    if found:
+                        line['amount'] = round(
+                            line['amount'] * factor + amount_difference, 2) * factor
+                        break
+                else:
+                    found = line.get('invoice_id', False) and line['invoice_id'] == odoo_inv_id
+                    if found:
+                        line['amount'] = round(line['amount'] + amount_difference, 2)
+                        break
+        return True
+
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """
         This method is used to get the suffix to identify the record in Odoo

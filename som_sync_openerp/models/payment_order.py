@@ -137,55 +137,6 @@ class PaymentOrder(osv.osv):
         payment_line_vals['invoice_ids'] = odoo_invoice_ids
         return payment_line_vals, erp_invoice_ids
 
-    def _process_payment_lines_with_discrepancies(
-            self, cr, uid, pl_inv_ids, lines, is_grouped=False, context=None):
-        """
-        This method is used to process the payment lines to get the values to sync with Odoo,
-        and update the amount to sync in order to avoid discrepancies in Odoo
-        """
-        if context is None:
-            context = {}
-        sync_obj = self.pool.get('odoo.sync')
-        # we read sync records for invoices linked to payment lines with warning
-        inv_sync_with_diff_ids = sync_obj.search(cr, uid, [
-            ('model.model', '=', 'account.invoice'),
-            ('res_id', 'in', pl_inv_ids),
-            ('sync_state', '=', 'synced_with_warning'),
-            ('odoo_last_update_result', '!=', False),
-        ])
-        if not inv_sync_with_diff_ids:
-            return True
-        # we read the sync records with specific fields to avoid performance issues
-        inv_read_sync_records = sync_obj.read(
-            cr, uid, inv_sync_with_diff_ids, ['res_id', 'odoo_id', 'odoo_last_update_result'])
-        for inv_read_sync_record in inv_read_sync_records:
-            # we get the amount difference from the last synchronization
-            amount_difference, move_type = sync_obj._get_total_amount_difference(
-                inv_read_sync_record)
-            if amount_difference == 0:
-                continue
-
-            # factor -1 if out_refund and 1 if  out_invoice
-            factor = -1 if 'out_refund' in move_type else 1
-            # we update the amount to sync of specific lines with discrepancy
-            odoo_inv_id = inv_read_sync_record['odoo_id']
-            found = False
-            for line in lines:
-                if is_grouped:
-                    found = line.get('invoice_ids', False) and odoo_inv_id in line['invoice_ids']
-                    if found:
-                        # In grouped payment orders, amounts are negative so we need to take the
-                        # absolute value to add the difference
-                        line['amount'] = round(
-                            line['amount'] * factor + amount_difference, 2) * factor
-                        break
-                else:
-                    found = line.get('invoice_id', False) and line['invoice_id'] == odoo_inv_id
-                    if found:
-                        line['amount'] = round(line['amount'] + amount_difference, 2)
-                        break
-        return True
-
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -221,9 +172,11 @@ class PaymentOrder(osv.osv):
 
         # at this point we're sure that invoices are synced, and we have to treat the discrepancies
         # if there are any, in order to update the amounts to sync with Odoo and avoid sync issues
-        self._process_payment_lines_with_discrepancies(
-            cr, uid, pl_inv_ids, lines, is_grouped, context=context
+        inv_obj = self.pool.get('account.invoice')
+        inv_obj.process_lines_with_discrepancies(
+            cr, uid, pl_inv_ids, lines, is_grouped=is_grouped, context=context
         )
+
         # we calculte the total amount of lines
         po_total_amount = round(sum([line['amount'] for line in lines]), 2)
 
