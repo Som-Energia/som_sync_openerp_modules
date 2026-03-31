@@ -9,7 +9,6 @@ class GiscedataFacturacioDevolucio(osv.osv):
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'name',
-        # 'total_devolution': 'amount',  # TODO: control invoices with discrepancies
         'date': 'date',
         'pay_journal_id': 'journal_id',
         'pay_account_id': 'account_id',
@@ -36,7 +35,6 @@ class GiscedataFacturacioDevolucio(osv.osv):
         dev_lin_ids = dev_lin_obj.search(cr, uid, [('devolucio_id', '=', id)])
         numfacts = dev_lin_obj.read(cr, uid, dev_lin_ids, ['numfactura', 'import'])
         invoice_ids = []
-        total_amount = 0
         for numfact in numfacts:
             invoice_id = inv_obj.search(cr, uid, [('number', '=', numfact['numfactura'])])
             if invoice_id:
@@ -49,11 +47,19 @@ class GiscedataFacturacioDevolucio(osv.osv):
                 }
                 lines.append(line)
                 invoice_ids.append(invoice_id)
-                total_amount += numfact['import']
+
+        inv_obj.process_lines_with_discrepancies(
+            cr, uid, invoice_ids, lines, is_grouped=False, context=context
+        )
+
+        total_amount = 0
+        for line in lines:
+            total_amount += line['amount']
+        total_amount = round(total_amount, 2)
 
         res = {
             'lines': lines,
-            'amount': round(total_amount, 2),
+            'amount': total_amount,
         }
         return res
 
