@@ -20,6 +20,15 @@ class GiscedataFacturacioDevolucio(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
+        """
+        This method is used to get the suffix to identify the record in Odoo
+        - for customer: :/odoo/action-639/1
+        """
+        if context is None:
+            context = {}
+        return '/odoo/action-639/{}'.format(odoo_id)
+
     def get_syncable_devolucio_ids(self, cr, uid, context=None):
         """
         Return devolucio ids that meet these constraints:
