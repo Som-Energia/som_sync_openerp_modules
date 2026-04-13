@@ -37,7 +37,7 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "odoo_partner_already_syncred"
         )[1]
         osdemo_2 = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "som_sync_openerp", "odoo_country_pending"
+            self.cursor, self.uid, "som_sync_openerp", "odoo_country_draft"
         )[1]
         osdemo_3 = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "odoo_country_state_error"
