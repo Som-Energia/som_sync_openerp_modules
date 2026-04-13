@@ -592,7 +592,7 @@ class OdooSync(osv.osv):
             'res_id': openerp_id,
             'odoo_id': odoo_id,
             'odoo_last_sync_at': str_now,
-            'sync_state': context.get('sync_state', 'pending'),
+            'sync_state': context.get('sync_state', 'draft'),
         }
 
         if context.get('update_odoo_created_sync'):
@@ -838,6 +838,7 @@ class OdooSync(osv.osv):
         'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
+            ('draft', 'Draft'),
             ('error', 'Error'),
             ('pending', 'Pending'),
             ('static', 'Static'),
@@ -867,7 +868,7 @@ class OdooSync(osv.osv):
     ]
 
     _defaults = {
-        'sync_state': lambda obj, cr, uid, context: 'pending',
+        'sync_state': lambda obj, cr, uid, context: 'draft',
     }
 
 

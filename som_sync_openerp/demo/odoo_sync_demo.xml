@@ -8,12 +8,12 @@
             <field name="odoo_last_sync_at">2023-01-01 10:00:00</field>
             <field name="sync_state">synced</field>
         </record>
-        <record id="odoo_country_pending" model="odoo.sync">
+        <record id="odoo_country_draft" model="odoo.sync">
             <field name="model" search="[('model','=','res.country')]"/>
             <field name="odoo_id">2002</field>
             <field name="res_id">2</field>
             <field name="odoo_last_sync_at">2023-01-02 11:00:00</field>
-            <field name="sync_state">pending</field>
+            <field name="sync_state">draft</field>
         </record>
         <record id="odoo_country_state_error" model="odoo.sync">
             <field name="model" search="[('model','=','res.country.state')]"/>
