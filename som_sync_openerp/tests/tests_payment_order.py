@@ -251,6 +251,105 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertEqual(lines[0]['amount'], 100.0)
 
+    @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
+    @mock.patch('som_sync_openerp.models.payment_order.requests.get')
+    @mock.patch.object(odoo_sync.OdooSync, "_get_conn_params")
+    def test_update_pending_state_marks_record_as_synced(
+        self, mock_get_conn_params, mock_requests_get, mock_update_odoo_id
+    ):
+        mock_get_conn_params.return_value = (
+            'http://example.com/api/',
+            'test-api-key',
+        )
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'success': True,
+            'message': 'Record found successfully',
+            'data': {
+                'odoo_id': 92,
+                'erp_id': 13228,
+                'status': 'done',
+                'processed': False,
+                'confirmed': False,
+            },
+        }
+        mock_requests_get.return_value = mock_response
+        mock_update_odoo_id.return_value = True
+
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
+
+        result = self.po_obj.update_pending_state_sync(
+            self.cursor, self.uid, payment_order_id, 13228
+        )
+
+        self.assertTrue(result)
+        mock_requests_get.assert_called_once_with(
+            'http://example.com/api/payment_orders/status/13228',
+            headers={
+                'X-API-Key': 'test-api-key',
+                'Accept': 'application/json',
+            },
+        )
+        mock_update_odoo_id.assert_called_once()
+        _, kwargs = mock_update_odoo_id.call_args
+        self.assertEqual(kwargs['context'], {
+            'sync_state': 'synced',
+            'update_last_sync': True,
+        })
+
+    @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
+    @mock.patch('som_sync_openerp.models.payment_order.requests.get')
+    @mock.patch.object(odoo_sync.OdooSync, "_get_conn_params")
+    def test_update_pending_state_marks_record_as_error(
+        self, mock_get_conn_params, mock_requests_get, mock_update_odoo_id
+    ):
+        mock_get_conn_params.return_value = (
+            'http://example.com/api/',
+            'test-api-key',
+        )
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'success': True,
+            'message': 'Record found successfully',
+            'data': {
+                'odoo_id': 92,
+                'erp_id': 13228,
+                'status': 'error',
+                'processed': False,
+                'confirmed': False,
+            },
+        }
+        mock_requests_get.return_value = mock_response
+        mock_update_odoo_id.return_value = True
+
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
+
+        result = self.po_obj.update_pending_state_sync(
+            self.cursor, self.uid, payment_order_id, 13228
+        )
+
+        self.assertTrue(result)
+        mock_requests_get.assert_called_once_with(
+            'http://example.com/api/payment_orders/status/13228',
+            headers={
+                'X-API-Key': 'test-api-key',
+                'Accept': 'application/json',
+            },
+        )
+        mock_update_odoo_id.assert_called_once()
+        _, kwargs = mock_update_odoo_id.call_args
+        self.assertEqual(kwargs['context'], {
+            'sync_state': 'error',
+            'update_last_sync': True,
+            'odoo_last_update_result': mock_response,
+        })
+
     def test_get_total_amount_difference(self):
         # Valid JSON string
         record = {

@@ -686,6 +686,58 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             mock.ANY, self.uid, 'account.account', account_id, 321, context=mock.ANY
         )
 
+    @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.update_pending_state')
+    def test_common_update_pending_state__calls_update_pending_state(
+            self, mock_update_pending_state):
+        # Create a sync record with pending state for payment.order
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending',
+        })
+
+        mock_update_pending_state.return_value = True
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertTrue(result)
+        mock_update_pending_state.assert_called_once_with(
+            self.cursor, self.uid, sync_id, 123, context={}
+        )
+
+    def test_common_update_pending_state__not_pending(self):
+        # Create a sync record with synced state
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'synced',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
+
+    def test_common_update_pending_state__no_update_pending_state_method(self):
+        # Create a sync record for a model without update_pending_state method
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 456,
+            'sync_state': 'pending',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
+
 
 class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
     """Test cases for odoo_url_record computed field"""

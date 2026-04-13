@@ -1,4 +1,7 @@
 #  -*- coding: utf-8 -*-
+import requests
+
+from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
 
@@ -230,6 +233,67 @@ class PaymentOrder(osv.osv):
                 )
 
         return res
+
+    @job(queue='sync_odoo', timeout=3600)
+    def update_pending_state(self, cursor, uid,
+                             model, action, openerp_id, context=None):
+        if context is None:
+            context = {}
+        self.update_pending_state_sync(cursor, uid, model, action, openerp_id, context=context)
+
+    def update_pending_state_sync(self, cr, uid, id, erp_id, context=None):
+        """
+            Request:
+            https://som-energia_odoo_75_puntsistemes.pulls.puntsistemes.cloud/api/v1/payment_orders/status/13228  # noqa:E501
+
+            Response:
+            {
+                "success": true,
+                "message": "Record found successfully",
+                "data": {
+                    "odoo_id": 92,
+                    "erp_id": 13228,
+                    "status": "processing",
+                    "processed": false,
+                    "confirmed": false
+                }
+            }
+        """
+        if context is None:
+            context = {}
+
+        sync_obj = self.pool.get('odoo.sync')
+        odoo_url_api, odoo_api_key = sync_obj._get_conn_params(cr, uid)
+        sync_vals = {}
+
+        url_base = "{}payment_orders/status/{}".format(
+            odoo_url_api, erp_id
+        )
+        headers = {
+            "X-API-Key": odoo_api_key,
+            "Accept": "application/json",
+        }
+        response = requests.get(url_base, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            if data and 'success' in data and data.get('success', False) and \
+                    data.get('data', False) and data['data'].get('status', False):
+                if data['data']['status'] == 'done':
+                    sync_vals.update({'sync_state': 'synced', 'update_last_sync': True})
+                elif data['data']['status'] == 'error':
+                    sync_vals.update({
+                        'sync_state': 'error',
+                        'update_last_sync': True,
+                        'odoo_last_update_result': response
+                    })
+
+            if sync_vals:
+                odoo_id = data['data']['odoo_id'] if data['data'].get('odoo_id', False) else False
+                final_context = context.copy()
+                final_context.update(sync_vals)
+                sync_obj.update_odoo_id(cr, uid, self._name, erp_id, odoo_id, context=final_context)
+                return True
+        return False
 
 
 PaymentOrder()

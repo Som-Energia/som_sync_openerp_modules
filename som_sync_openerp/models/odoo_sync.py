@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from time import sleep
+
 from osv import osv, fields
 from oorq.decorators import job
 import requests
@@ -824,6 +825,34 @@ class OdooSync(osv.osv):
         except Exception:
             pass
         return data
+
+    def common_update_pending_state(self, cursor, uid, id, context=None):
+        if not context:
+            context = {}
+        if isinstance(id, list):
+            id = id[0]
+        sync_record = self.browse(cursor, uid, id)
+        model_obj = self.pool.get(sync_record.model.model)
+        if sync_record.sync_state != 'pending':
+            return False
+
+        has_update_pending_state = hasattr(
+            model_obj, 'update_pending_state') and \
+            callable(getattr(model_obj, 'update_pending_state'))
+        if has_update_pending_state:
+            return model_obj.update_pending_state(
+                cursor, uid, id, sync_record.res_id, context=context)
+
+        return False
+
+    def _cron_update_pending_state(self, cursor, uid, context=None):
+        if context is None:
+            context = {}
+        pending_sync_ids = self.search(cursor, uid, [
+            ('sync_state', '=', 'pending'),
+        ])
+        for sync_id in pending_sync_ids:
+            self.common_update_pending_state(cursor, uid, sync_id, context=context)
 
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),
