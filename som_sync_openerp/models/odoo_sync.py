@@ -301,8 +301,19 @@ class OdooSync(osv.osv):
         if not sync_enabled:
             return False, False
 
+        # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
-        logger.info("Odoo syncronize {} with id {}".format(model, openerp_id))
+        sync_obj = self.pool.get('odoo.sync')
+        sync_id = sync_obj.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', openerp_id),
+        ], limit=1)
+        if sync_id:
+            state = sync_obj.read(cursor, uid, sync_id[0], ['state'])['state']
+            if state == 'pending':
+                logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
+                context['update_pending_state_sync'] = True
+                return self.common_update_pending_state(cursor, uid, openerp_id, context=context)
 
         erp_data = {}
         rp_obj = self.pool.get(model)
@@ -310,6 +321,7 @@ class OdooSync(osv.osv):
 
         # Initialize sync status tracking
         sync_vals = {}
+        logger.info("Odoo syncronize {} with id {}".format(model, openerp_id))
 
         try:
             # Verify record existence in the local ERP database
@@ -840,6 +852,10 @@ class OdooSync(osv.osv):
             model_obj, 'update_pending_state') and \
             callable(getattr(model_obj, 'update_pending_state'))
         if has_update_pending_state:
+            if context.get('update_pending_state_sync', False) and \
+                    context['update_pending_state_sync']:
+                return model_obj.update_pending_state_sync(
+                    cursor, uid, id, sync_record.res_id, context=context)
             return model_obj.update_pending_state(
                 cursor, uid, id, sync_record.res_id, context=context)
 

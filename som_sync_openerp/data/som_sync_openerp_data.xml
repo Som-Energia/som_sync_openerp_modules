@@ -107,5 +107,16 @@
                 We create a general payment.method for customers in Odoo and this is the odoo_id of it.
             </field>
         </record>
+        <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">
+            <field name="name">Actualitzar sincronitzacions pendents d'Odoo</field>
+            <field name="active" eval="0"/>
+            <field name="user_id" ref="base.user_admin"/>
+            <field eval="False" name="doall"/>
+            <field name="model" eval="'odoo.sync'"/>
+            <field name="function" eval="'_cron_update_pending_state'"/>
+            <field eval="'([],)'" name="args"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+        </record>
     </data>
 </openerp>
