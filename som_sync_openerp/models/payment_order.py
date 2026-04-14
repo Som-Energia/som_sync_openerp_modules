@@ -236,12 +236,12 @@ class PaymentOrder(osv.osv):
 
     @job(queue='sync_odoo', timeout=3600)
     def update_pending_state(self, cursor, uid,
-                             model, action, openerp_id, context=None):
+                             openerp_id, context=None):
         if context is None:
             context = {}
-        self.update_pending_state_sync(cursor, uid, model, action, openerp_id, context=context)
+        self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
 
-    def update_pending_state_sync(self, cr, uid, id, erp_id, context=None):
+    def update_pending_state_sync(self, cr, uid, erp_id, context=None):
         """
             Request:
             https://som-energia_odoo_75_puntsistemes.pulls.puntsistemes.cloud/api/v1/payment_orders/status/13228  # noqa:E501
