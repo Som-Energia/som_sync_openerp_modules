@@ -855,9 +855,9 @@ class OdooSync(osv.osv):
             if context.get('update_pending_state_sync', False) and \
                     context['update_pending_state_sync']:
                 return model_obj.update_pending_state_sync(
-                    cursor, uid, id, sync_record.res_id, context=context)
+                    cursor, uid, sync_record.res_id, context=context)
             return model_obj.update_pending_state(
-                cursor, uid, id, sync_record.res_id, context=context)
+                cursor, uid, sync_record.res_id, context=context)
 
         return False
 

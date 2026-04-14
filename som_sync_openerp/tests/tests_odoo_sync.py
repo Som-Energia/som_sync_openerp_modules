@@ -705,7 +705,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertTrue(result)
         mock_update_pending_state.assert_called_once_with(
-            self.cursor, self.uid, sync_id, 123, context={}
+            self.cursor, self.uid, 123, context={}
         )
 
     def test_common_update_pending_state__not_pending(self):

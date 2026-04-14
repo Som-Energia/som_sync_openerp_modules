@@ -263,12 +263,15 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
         mock_response = mock.Mock()
         mock_response.status_code = 200
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
         mock_response.json.return_value = {
             'success': True,
             'message': 'Record found successfully',
             'data': {
                 'odoo_id': 92,
-                'erp_id': 13228,
+                'erp_id': payment_order_id,
                 'status': 'done',
                 'processed': False,
                 'confirmed': False,
@@ -277,17 +280,13 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_requests_get.return_value = mock_response
         mock_update_odoo_id.return_value = True
 
-        payment_order_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
-        )[1]
-
         result = self.po_obj.update_pending_state_sync(
-            self.cursor, self.uid, payment_order_id, 13228
+            self.cursor, self.uid, payment_order_id, {}
         )
 
         self.assertTrue(result)
         mock_requests_get.assert_called_once_with(
-            'http://example.com/api/payment_orders/status/13228',
+            'http://example.com/api/payment_orders/status/{}'.format(payment_order_id),
             headers={
                 'X-API-Key': 'test-api-key',
                 'Accept': 'application/json',
@@ -312,12 +311,15 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
         mock_response = mock.Mock()
         mock_response.status_code = 200
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
         mock_response.json.return_value = {
             'success': True,
             'message': 'Record found successfully',
             'data': {
                 'odoo_id': 92,
-                'erp_id': 13228,
+                'erp_id': payment_order_id,
                 'status': 'error',
                 'processed': False,
                 'confirmed': False,
@@ -326,17 +328,13 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_requests_get.return_value = mock_response
         mock_update_odoo_id.return_value = True
 
-        payment_order_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
-        )[1]
-
         result = self.po_obj.update_pending_state_sync(
-            self.cursor, self.uid, payment_order_id, 13228
+            self.cursor, self.uid, payment_order_id, {}
         )
 
         self.assertTrue(result)
         mock_requests_get.assert_called_once_with(
-            'http://example.com/api/payment_orders/status/13228',
+            'http://example.com/api/payment_orders/status/{}'.format(payment_order_id),
             headers={
                 'X-API-Key': 'test-api-key',
                 'Accept': 'application/json',

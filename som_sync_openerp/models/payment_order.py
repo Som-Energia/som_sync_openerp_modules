@@ -244,7 +244,7 @@ class PaymentOrder(osv.osv):
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
         """
             Request:
-            https://som-energia_odoo_75_puntsistemes.pulls.puntsistemes.cloud/api/v1/payment_orders/status/13228  # noqa:E501
+            https://*****/api/v1/payment_orders/status/13228  # noqa:E501
 
             Response:
             {
