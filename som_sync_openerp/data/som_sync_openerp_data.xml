@@ -11,15 +11,85 @@
             <field name="value">###</field>
             <field name="description">API key d'Odoo</field>
         </record>
-        <record id="odoo_erp_models_to_sync" model="res.config">
-            <field name="name">odoo_erp_models_to_sync</field>
-            <field name="value">[{'model': 'account.account', 'auto_sync': False, 'async_enabled': True},{'model': 'account.invoice', 'auto_sync': False, 'async_enabled': True},{'model': 'account.move', 'auto_sync': False, 'async_enabled': True}, {'model': 'account.payment.term', 'auto_sync': False, 'async_enabled': True},{'model': 'account.tax', 'auto_sync': False, 'async_enabled': True},{'model': 'payment.order', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country', 'auto_sync': False, 'async_enabled': True},{'model': 'res.country.state', 'auto_sync': False, 'async_enabled': True},{'model': 'res.municipi', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.address', 'auto_sync': False, 'async_enabled': True},{'model': 'res.partner.bank', 'auto_sync': False, 'async_enabled': True}]</field>
-            <field name="description">
-                OpenERP models to sync with Odoo.
-                auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
-                    otherwise sync only on-demand.
-                async_enabled: if True, sync is done asynchronously
-            </field>
+        <record id="odoo_sync_model_config_account_account" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.account')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_invoice" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.invoice')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_move" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.move')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_payment_term" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.payment.term')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_tax" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.tax')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_payment_order" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'payment.order')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_country" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.country')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_country_state" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.country.state')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_municipi" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.municipi')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_partner" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.partner')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_partner_address" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.partner.address')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_res_partner_bank" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'res.partner.bank')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_journal" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.journal')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_account_fiscal_position" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.fiscal.position')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_payment_type" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'payment.type')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_model_config_giscedata_facturacio_devolucio" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'giscedata.facturacio.devolucio')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
         </record>
         <record id="odoo_provider_payment_method" model="res.config">
             <field name="name">odoo_provider_payment_method</field>
@@ -36,6 +106,17 @@
                 Odoo has different payment.method for customers and providers but OpenERP only has one.
                 We create a general payment.method for customers in Odoo and this is the odoo_id of it.
             </field>
+        </record>
+        <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">
+            <field name="name">Actualitzar sincronitzacions pendents d'Odoo</field>
+            <field name="active" eval="0"/>
+            <field name="user_id" ref="base.user_admin"/>
+            <field eval="False" name="doall"/>
+            <field name="model" eval="'odoo.sync'"/>
+            <field name="function" eval="'_cron_update_pending_state'"/>
+            <field eval="'([],)'" name="args"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
         </record>
     </data>
 </openerp>

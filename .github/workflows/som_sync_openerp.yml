@@ -24,26 +24,15 @@ jobs:
     needs: erp-tests-module       # <-- Depèn del job que crida el reusable workflow
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.2
 
       - name: Download coverage.xml from tests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7.0.0
         with:
-          name: coverage-xml
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install SonarCloud Scanner
-        run: python -m pip install --upgrade pip && pip install sonar-scanner
+          name: coverage.xml
+          path: coverage.xml
 
       - name: SonarCloud Scan
-        uses: sonarsource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e
-        with:
-          organization: som-energia
-          projectKey: Som-Energia_som_sync_openerp_modules
-          projectName: som_sync_openerp_modules
+        uses: SonarSource/sonarqube-scan-action@9598b8a83feef37de07f549027fab50ecffe6a6e
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

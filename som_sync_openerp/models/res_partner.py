@@ -19,7 +19,6 @@ class ResPartner(osv.osv):
         'property_account_position': 'property_account_position_id',  # 'account.fiscal.position'
         'property_payment_term': 'property_payment_term_id',  # 'account.payment.term'
         'payment_type_customer': 'property_inbound_payment_method_line_id',  # 'payment.type'
-        'payment_type_supplier': 'property_outbound_payment_method_line_id',  # 'payment.type'
     }
 
     MAPPING_FK = {
@@ -28,13 +27,29 @@ class ResPartner(osv.osv):
         'property_account_position': 'account.fiscal.position',  # 'account.fiscal.position'
         'property_payment_term': 'account.payment.term',  # 'account.payment.term'
         'payment_type_customer': 'payment.type',  # 'payment.type'
-        'payment_type_supplier': 'payment.type',  # 'payment.type'
     }
 
     MAPPING_CONSTANTS = {
         'type': 'contact',
         'is_company': True,
     }
+
+    def get_related_values(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        partner = self.browse(cr, uid, id, context=context)
+        sync_obj = self.pool.get('odoo.sync')
+        res = {}
+        if partner.payment_type_supplier:
+            # Transferencias APi
+            payment_mode_id = sync_obj.search(cr, uid, [
+                ('model', '=', 'payment.type'), ('res_id', '=', 0)], context=context)
+            if payment_mode_id:
+                payment_mode_id = payment_mode_id[0]
+                res = {
+                    'property_outbound_payment_method_line_id': payment_mode_id
+                }
+        return res
 
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """

@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from . import odoo_sync
+from . import odoo_sync_model_config
 from . import account_account
 from . import account_invoice
 from . import account_invoice_line
@@ -16,3 +17,4 @@ from . import res_municipi
 from . import res_partner_bank
 from . import res_partner
 from . import res_partner_address
+from . import giscedata_facturacio_devolucio

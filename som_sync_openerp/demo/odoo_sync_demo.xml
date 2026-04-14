@@ -8,12 +8,12 @@
             <field name="odoo_last_sync_at">2023-01-01 10:00:00</field>
             <field name="sync_state">synced</field>
         </record>
-        <record id="odoo_country_pending" model="odoo.sync">
+        <record id="odoo_country_draft" model="odoo.sync">
             <field name="model" search="[('model','=','res.country')]"/>
             <field name="odoo_id">2002</field>
             <field name="res_id">2</field>
             <field name="odoo_last_sync_at">2023-01-02 11:00:00</field>
-            <field name="sync_state">pending</field>
+            <field name="sync_state">draft</field>
         </record>
         <record id="odoo_country_state_error" model="odoo.sync">
             <field name="model" search="[('model','=','res.country.state')]"/>
@@ -23,8 +23,23 @@
             <field name="sync_state">error</field>
             <field name="odoo_last_update_result">Connection refused</field>
         </record>
+        <record id="payment_type_demo" model="payment.type">
+            <field name="code">DEMO_PAYMENT_TYPE</field>
+            <field name="name">Demo payment type</field>
+            <field eval="[(6,0,[ref('base.bank_normal')])]"
+                   name="suitable_bank_types"/>
+            <field name="note">Demo payment type</field>
+            <field eval="1" name="active"/>
+        </record>
+        <record id="odoo_payment_type_provider" model="odoo.sync">
+            <field name="model" search="[('model','=','payment.type')]"/>
+            <field name="odoo_id">375</field>
+            <field name="res_id">0</field>
+            <field name="sync_state">static</field>
+        </record>
         <record id="base.res_partner_agrolait" model="res.partner">
             <field name="vat">ES72789709E</field>
+            <field name="payment_type_supplier" ref="payment_type_demo"/>
         </record>
         <record id="fiscalyear_2026" model="account.fiscalyear">
             <field name="name">Fiscal Year 2026</field>

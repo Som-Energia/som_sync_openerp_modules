@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from __future__ import absolute_import
 from time import sleep
+
 from osv import osv, fields
 from oorq.decorators import job
 import requests
@@ -54,6 +55,7 @@ MAPPING_MODELS_POST = {
     'res.partner': 'partners',
     'res.partner.address': 'partners',
     'res.partner.bank': 'banks',
+    'giscedata.facturacio.devolucio': 'payment_order_refunds',
 }
 
 # Mapping of modles to patch
@@ -81,18 +83,21 @@ class OdooSync(osv.osv):
 
     def sync_model_enabled_amplified(self, cursor, uid, model):
         """
-            odoo_erp_models_to_sync = [
-                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner', 'auto_sync': False, 'async_enabled': True}]
-            auto_sync: sync triggered automatically when create, write or unlink occurs in ERP,
-                otherwise sync only on-demand.
-            async_enabled: if True, sync is done asynchronously
+            odoo.sync.model.config records:
+                model_id: ir.model
+                auto_sync: sync triggered automatically when create, write or unlink occurs
+                    in ERP, otherwise sync only on-demand.
+                async_enabled: if True, sync is done asynchronously.
         """
-        config_obj = self.pool.get('res.config')
-        dict_models_to_sync = eval(config_obj.get(cursor, uid, 'odoo_erp_models_to_sync', '[]'))
-        for dict_model in dict_models_to_sync:
-            if dict_model['model'] == model:
-                return True, dict_model['auto_sync'], dict_model['async_enabled']
+        sync_model_config_obj = self.pool.get('odoo.sync.model.config')
+        sync_model_config_ids = sync_model_config_obj.search(cursor, uid, [
+            ('model_id.model', '=', model),
+        ], limit=1)
+
+        if sync_model_config_ids:
+            cfg = sync_model_config_obj.browse(cursor, uid, sync_model_config_ids[0])
+            return True, cfg.auto_sync, cfg.async_enabled
+
         return False, False, False
 
     def common_sync_model_create_update(self, cursor, uid, model, action, ids, context=None):
@@ -263,7 +268,9 @@ class OdooSync(osv.osv):
 
     @job(queue='sync_odoo', timeout=3600)
     def syncronize(self, cursor, uid,
-                   model, action, openerp_id, context={}):
+                   model, action, openerp_id, context=None):
+        if context is None:
+            context = {}
         context['update_last_sync'] = True
         self.syncronize_sync(cursor, uid, model, action, openerp_id, context=context)
 
@@ -289,13 +296,24 @@ class OdooSync(osv.osv):
         # Early return if synchronization is disabled for this specific model
         # in this case auto_sync and async_enabled are not relevant.
         # We need this check for on-demand syncs.
-        sync_enabled, auto_sync, async_enabled = (
+        sync_enabled, _, _ = (
             self.sync_model_enabled_amplified(cursor, uid, model))
         if not sync_enabled:
             return False, False
 
+        # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
-        logger.info("Odoo syncronize {} with id {}".format(model, openerp_id))
+        sync_obj = self.pool.get('odoo.sync')
+        sync_id = sync_obj.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', openerp_id),
+        ], limit=1)
+        if sync_id:
+            state = sync_obj.read(cursor, uid, sync_id[0], ['state'])['state']
+            if state == 'pending':
+                logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
+                context['update_pending_state_sync'] = True
+                return self.common_update_pending_state(cursor, uid, openerp_id, context=context)
 
         erp_data = {}
         rp_obj = self.pool.get(model)
@@ -303,6 +321,7 @@ class OdooSync(osv.osv):
 
         # Initialize sync status tracking
         sync_vals = {}
+        logger.info("Odoo syncronize {} with id {}".format(model, openerp_id))
 
         try:
             # Verify record existence in the local ERP database
@@ -376,12 +395,16 @@ class OdooSync(osv.osv):
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
-                msg_formated = self.format_response(msg)
+                # msg is false when account.invoice already exist in Odoo
+                if msg:
+                    msg_formated = self.format_response(msg)
+                    sync_vals.update({
+                        'odoo_last_update_result': msg_formated,
+                        'update_odoo_created_sync': True,
+                    })
                 sync_vals.update({
-                    'sync_state': 'synced' if odoo_id else 'error',
-                    'odoo_last_update_result': msg_formated,
-                    'update_odoo_created_sync': True,
                     'odoo_last_sync_request': self.format_response(erp_data),
+                    'sync_state': 'synced' if odoo_id else 'error',
                 })
 
                 has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
@@ -441,7 +464,7 @@ class OdooSync(osv.osv):
             return False
 
         # we create the static sync record
-        sync_id = self.create(cursor, uid, {
+        self.create(cursor, uid, {
             'model': self.pool.get('ir.model').search(
                 cursor, uid, [('model', '=', model)], limit=1)[0],
             'res_id': openerp_id,
@@ -455,8 +478,12 @@ class OdooSync(osv.osv):
             context = {}
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         post_sufix = MAPPING_MODELS_POST.get(model, False)
+        if hasattr(self.pool.get(model), 'get_mapping_model_post'):
+            pnt_erp_id = data.get('pnt_erp_id', False)
+            post_sufix = self.pool.get(model).get_mapping_model_post(
+                cursor, uid, pnt_erp_id, context=context)
         if post_sufix:
-            url_base = '{}{}'.format(odoo_url_api, MAPPING_MODELS_POST.get(model))
+            url_base = '{}{}'.format(odoo_url_api, post_sufix)
             headers = {
                 "X-API-Key": odoo_api_key,
                 "Content-Type": "application/json",
@@ -478,14 +505,14 @@ class OdooSync(osv.osv):
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
                     if odoo_id:
-                        return odoo_id, response.text
+                        return odoo_id, False
                     else:
                         return False, response.text
             else:
                 return False, response.text
         else:
             raise CreationNotSupportedException(model)
-        return False, ''
+        return False, False
 
     def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
         if context is None:
@@ -578,7 +605,7 @@ class OdooSync(osv.osv):
             'res_id': openerp_id,
             'odoo_id': odoo_id,
             'odoo_last_sync_at': str_now,
-            'sync_state': context.get('sync_state', 'pending'),
+            'sync_state': context.get('sync_state', 'draft'),
         }
 
         if context.get('update_odoo_created_sync'):
@@ -605,21 +632,18 @@ class OdooSync(osv.osv):
         if context.get('update_last_sync'):
             vals.update({
                 'odoo_last_sync_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
         if context.get('update_odoo_created_sync'):
             vals.update({
                 'odoo_created_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
         if context.get('update_odoo_updated_sync'):
             vals.update({
                 'odoo_updated_at': str_now,
-                'sync_state': 'synced',
             })
             update = True
 
@@ -814,6 +838,38 @@ class OdooSync(osv.osv):
             pass
         return data
 
+    def common_update_pending_state(self, cursor, uid, id, context=None):
+        if not context:
+            context = {}
+        if isinstance(id, list):
+            id = id[0]
+        sync_record = self.browse(cursor, uid, id)
+        model_obj = self.pool.get(sync_record.model.model)
+        if sync_record.sync_state != 'pending':
+            return False
+
+        has_update_pending_state = hasattr(
+            model_obj, 'update_pending_state') and \
+            callable(getattr(model_obj, 'update_pending_state'))
+        if has_update_pending_state:
+            if context.get('update_pending_state_sync', False) and \
+                    context['update_pending_state_sync']:
+                return model_obj.update_pending_state_sync(
+                    cursor, uid, sync_record.res_id, context=context)
+            return model_obj.update_pending_state(
+                cursor, uid, sync_record.res_id, context=context)
+
+        return False
+
+    def _cron_update_pending_state(self, cursor, uid, context=None):
+        if context is None:
+            context = {}
+        pending_sync_ids = self.search(cursor, uid, [
+            ('sync_state', '=', 'pending'),
+        ])
+        for sync_id in pending_sync_ids:
+            self.common_update_pending_state(cursor, uid, sync_id, context=context)
+
     _columns = {
         'model': fields.many2one('ir.model', 'Model'),
         'res_id': fields.integer('ERP id'),
@@ -827,6 +883,7 @@ class OdooSync(osv.osv):
         'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'sync_state': fields.selection([
+            ('draft', 'Draft'),
             ('error', 'Error'),
             ('pending', 'Pending'),
             ('static', 'Static'),
@@ -856,7 +913,7 @@ class OdooSync(osv.osv):
     ]
 
     _defaults = {
-        'sync_state': lambda obj, cr, uid, context: 'pending',
+        'sync_state': lambda obj, cr, uid, context: 'draft',
     }
 
 

@@ -1,0 +1,6 @@
+{
+    "sonarlint.connectedMode.project": {
+        "connectionId": "som-energia",
+        "projectKey": "Som-Energia_som_sync_openerp_modules"
+    }
+}

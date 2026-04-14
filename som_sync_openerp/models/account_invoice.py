@@ -17,7 +17,6 @@ class AccountInvoice(osv.osv):
         "payment_term": "invoice_payment_term_id",
         "payment_type": "preferred_payment_method_line_id",
         "fiscal_position": "fiscal_position_id",
-        "reference": "ref",
     }
     MAPPING_FK = {
         "partner_id": "res.partner",
@@ -28,6 +27,85 @@ class AccountInvoice(osv.osv):
     }
     MAPPING_CONSTANTS = {
     }
+
+    def _get_total_amount_difference(self, inv_read_sync_record):
+        """
+        Get the total amount difference between ERP and Odoo for a synced invoice with warning,
+        checking the metadata stored in odoo_last_update_result field in odoo.sync record.
+
+        Return a tuple with the amount difference and the move_type of the invoice
+        to apply the correct factor in case of refunds.
+
+        inv_read_sync_record:
+            record read from odoo.sync with fields ['res_id', 'odoo_id', 'odoo_last_update_result']
+        return:
+            (amount_difference, move_type)
+        """
+        if not inv_read_sync_record or 'odoo_last_update_result' not in inv_read_sync_record:
+            return 0, None
+        odoo_last_update_result = inv_read_sync_record['odoo_last_update_result']
+        if not odoo_last_update_result:
+            return 0, None
+        if not isinstance(odoo_last_update_result, dict):
+            try:
+                odoo_last_update_result = json.loads(odoo_last_update_result)
+            except Exception:
+                return 0, None
+        if 'data' in odoo_last_update_result and 'metadata' in odoo_last_update_result['data'] \
+                and isinstance(odoo_last_update_result['data']['metadata'], list) \
+                and len(odoo_last_update_result['data']['metadata']) > 0 \
+                and 'pnt_amount_total_erp_difference' in odoo_last_update_result['data']['metadata'][0]:  # noqa: E501
+            discrepancy = (
+                odoo_last_update_result['data']['metadata'][0]['pnt_amount_total_erp_difference'])
+            if discrepancy:
+                return discrepancy, odoo_last_update_result['data']['metadata'][0]['move_type']
+        return 0, None
+
+    def process_lines_with_discrepancies(
+            self, cr, uid, invoice_ids, lines, is_grouped=False, context=None):
+        """
+        Update amounts in lines using discrepancy information stored in odoo.sync
+        for invoice sync records with warning.
+
+        Expected line format:
+        - non-grouped: {'invoice_id': <odoo_invoice_id>, 'amount': <float>}
+        - grouped: {'invoice_ids': [<odoo_invoice_id>, ...], 'amount': <float>}
+        """
+        if context is None:
+            context = {}
+        sync_obj = self.pool.get('odoo.sync')
+
+        inv_sync_with_diff_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', 'account.invoice'),
+            ('res_id', 'in', invoice_ids),
+            ('sync_state', '=', 'synced_with_warning'),
+            ('odoo_last_update_result', '!=', False),
+        ])
+        if not inv_sync_with_diff_ids:
+            return True
+
+        inv_read_sync_records = sync_obj.read(
+            cr, uid, inv_sync_with_diff_ids, ['res_id', 'odoo_id', 'odoo_last_update_result'])
+        for inv_read_sync_record in inv_read_sync_records:
+            amount_difference, move_type = self._get_total_amount_difference(inv_read_sync_record)
+            if amount_difference == 0:
+                continue
+
+            factor = -1 if move_type and 'out_refund' in move_type else 1
+            odoo_inv_id = inv_read_sync_record['odoo_id']
+            for line in lines:
+                if is_grouped:
+                    found = line.get('invoice_ids', False) and odoo_inv_id in line['invoice_ids']
+                    if found:
+                        line['amount'] = round(
+                            line['amount'] * factor + amount_difference, 2) * factor
+                        break
+                else:
+                    found = line.get('invoice_id', False) and line['invoice_id'] == odoo_inv_id
+                    if found:
+                        line['amount'] = round(line['amount'] + amount_difference, 2)
+                        break
+        return True
 
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """
@@ -50,18 +128,13 @@ class AccountInvoice(osv.osv):
         else:
             return False
 
-    def get_related_values(self, cr, uid, id, context=None):
-        if context is None:
-            context = {}
-        account_invoice = self.browse(cr, uid, id, context=context)
+    def _process_invoice_lines(self, cr, uid, account_invoice, factor_reverse=1, context=None):
+        """
+        This method is used to process the invoice lines to get the values to sync with Odoo,
+        and agrupate them by account and taxes.
+        """
         original_res = {}
-        res = []
         energy_tax_id = False
-        invoice_type = account_invoice.type
-        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
-
-        amount_total = factor_reverse * account_invoice.amount_total
-
         for line in account_invoice.invoice_line:
             sync_obj = self.pool.get('odoo.sync')
             tax_obj = self.pool.get('account.tax')
@@ -105,6 +178,22 @@ class AccountInvoice(osv.osv):
                     'quantity_erp': 1,
                     'tax_ids': ail_vals['tax_ids'],
                 }
+        return original_res, energy_tax_id
+
+    def get_related_values(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+        account_invoice = self.browse(cr, uid, id, context=context)
+        original_res = {}
+        res = []
+        energy_tax_id = False
+        invoice_type = account_invoice.type
+        factor_reverse = -1 if account_invoice.amount_total < 0 else 1
+
+        amount_total = factor_reverse * account_invoice.amount_total
+        # Process invoice lines to get the values to sync with Odoo
+        original_res, energy_tax_id = self._process_invoice_lines(
+            cr, uid, account_invoice, factor_reverse=factor_reverse, context=context)
 
         # Add tax lines needed for the sync with Odoo
         res.extend(
@@ -137,7 +226,7 @@ class AccountInvoice(osv.osv):
             elif invoice_type == 'in_refund':
                 invoice_type = 'in_invoice'
 
-        return {
+        dict_res = {
             'date': account_invoice.date_invoice,
             'move_type': invoice_type,
             'invoice_line_ids': res,
@@ -145,6 +234,13 @@ class AccountInvoice(osv.osv):
             'amount_tax': factor_reverse * amount_tax,
             'amount_total': amount_total,
         }
+
+        # 'ref' field for refund invoices
+        if account_invoice.rectifying_id and account_invoice.rectifying_id.number:
+            ref = account_invoice.rectifying_id.number
+            dict_res['ref'] = ref
+
+        return dict_res
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
@@ -164,15 +260,21 @@ class AccountInvoice(osv.osv):
             context = {}
         if not isinstance(ids, list):
             ids = [ids]
+        inv_states = {}
+        if 'state' in vals and vals['state'] == 'open':
+            for _id in ids:
+                inv_states[_id] = self.read(cr, uid, _id, ['state'], context=context)['state']
 
         res = super(AccountInvoice, self).write(cr, uid, ids, vals, context=context)
 
+        sync_obj = self.pool.get('odoo.sync')
         if 'state' in vals and vals['state'] == 'open':
-            with Sudo(uid=1, gid=0):
-                sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, 'create', ids, context=context
-                )
+            for _id in ids:
+                if inv_states[_id] in ['draft']:
+                    with Sudo(uid=1, gid=0):
+                        sync_obj.common_sync_model_create_update(
+                            cr, uid, self._name, 'create', _id, context=context
+                        )
 
         return res
 
@@ -238,8 +340,6 @@ class AccountInvoice(osv.osv):
             context = {}
         if data['move_type'] in ['in_refund', 'in_invoice']:
             data['preferred_payment_method_line_id'] = odoo_payment_method_id
-        if data['ref'] is False:
-            data['ref'] = ''
         return data
 
     def hook_after_odoo_creation(self, cr, uid, response, sync_vals):

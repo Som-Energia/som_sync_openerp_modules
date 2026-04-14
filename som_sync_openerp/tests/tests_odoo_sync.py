@@ -224,16 +224,27 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(odoo_id, param_odoo_id)
 
     def test__sync_model_enabled_amplified__setting_ok(self):
-        config_obj = self.openerp.pool.get('res.config')
-        dict_models_to_sync = eval(
-            config_obj.get(self.cursor, self.uid, 'odoo_erp_models_to_sync', '[]'))
-        for _dict in dict_models_to_sync:
-            self.assertIn('model', _dict)
-            self.assertIn('auto_sync', _dict)
-            self.assertIn('async_enabled', _dict)
-        self.assertIsInstance(dict_models_to_sync, list)
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+
+        self.assertTrue(config_ids)
+
+        for cfg in sync_model_config_obj.browse(self.cursor, self.uid, config_ids):
+            self.assertTrue(cfg.model_id)
+            self.assertIsInstance(cfg.auto_sync, bool)
+            self.assertIsInstance(cfg.async_enabled, bool)
 
     def test__sync_model_enabled_amplified__enabled_async_disabled_auto(self):
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+        sync_model_config_obj.write(
+            self.cursor, self.uid, config_ids,
+            {
+                'auto_sync': False,
+                'async_enabled': True,
+            }
+        )
+
         for model in [
             'account.account',
             'res.country.state',
@@ -246,23 +257,19 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             res = self.sync_obj.sync_model_enabled_amplified(
                 self.cursor, self.uid, model
             )
-
             self.assertEqual(res, (True, False, True))
 
     def test__sync_model_enabled_amplified__all_enabled(self):
-        config_obj = self.openerp.pool.get('res.config')
-        config_obj.set(
-            self.cursor, self.uid, 'odoo_erp_models_to_sync',
-            """[
-                {'model': 'account.account', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.country.state', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.country', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.municipi', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner.address', 'auto_sync': True, 'async_enabled': True},
-                {'model': 'res.partner.bank', 'auto_sync': True, 'async_enabled': True}
-            ]"""
+        sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_model_config_obj.search(self.cursor, self.uid, [])
+        sync_model_config_obj.write(
+            self.cursor, self.uid, config_ids,
+            {
+                'auto_sync': True,
+                'async_enabled': True,
+            }
         )
+
         for model in [
             'account.account',
             'res.country.state',
@@ -327,7 +334,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'property_account_position_id': None,
             'property_account_receivable_id': 2,
             'property_inbound_payment_method_line_id': None,
-            'property_outbound_payment_method_line_id': None,
             'property_payment_term_id': None,
             'type': 'contact',
             'vat': u'S2903826B'
@@ -405,7 +411,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'partner_id': 2,
             'pnt_erp_id': invoice_id,
             'preferred_payment_method_line_id': None,
-            'ref': '',
         }
         self.assertEqual(vals, expected_vals)
 
@@ -468,11 +473,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
                       invoice_id, context={'update_last_sync': True}),
         ])
 
-    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
-    def test__common_sync_model_create_update_paid_invoice(
-            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
-        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+    def helper_open_and_pay_invoice(self):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
@@ -487,6 +488,14 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.wf_service.trg_validate(
             self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
         )
+        return invoice_id, period_id, account_id, journal_id
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_paid_invoice(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+        invoice_id, period_id, account_id, journal_id = self.helper_open_and_pay_invoice()
         self.ai_obj.pay_and_reconcile(
             self.cursor, self.uid, [invoice_id], 1000,
             account_id, period_id, journal_id, account_id, period_id, journal_id
@@ -495,17 +504,32 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.common_sync_model_create_update(
             self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
-        # Check 3 calls to syncronize.
-        # Open invoice (write), Pay invoice (write) and sync (common_sync_model_create_update)
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
+        # Check 2 calls to because open invoice syncronize it.
+        # Open invoice (write) and sync (common_sync_model_create_update)
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
         self.sync_obj.syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
                       invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
-            mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
                       invoice_id, context={'update_last_sync': True}),
         ])
+        self.assertEqual(self.ai_obj.browse(self.cursor, self.uid, invoice_id).state, 'paid')
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_paid_invoice_no_sync(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, False, False)
+        invoice_id, period_id, account_id, journal_id = self.helper_open_and_pay_invoice()
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+
+        self.ai_obj.pay_and_reconcile(
+            self.cursor, self.uid, [invoice_id], 1000,
+            account_id, period_id, journal_id, account_id, period_id, journal_id
+        )
+
+        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 0)
+        self.assertEqual(self.ai_obj.browse(self.cursor, self.uid, invoice_id).state, 'paid')
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
@@ -661,6 +685,58 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_update_odoo_id.assert_called_once_with(
             mock.ANY, self.uid, 'account.account', account_id, 321, context=mock.ANY
         )
+
+    @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.update_pending_state')
+    def test_common_update_pending_state__calls_update_pending_state(
+            self, mock_update_pending_state):
+        # Create a sync record with pending state for payment.order
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending',
+        })
+
+        mock_update_pending_state.return_value = True
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertTrue(result)
+        mock_update_pending_state.assert_called_once_with(
+            self.cursor, self.uid, 123, context={}
+        )
+
+    def test_common_update_pending_state__not_pending(self):
+        # Create a sync record with synced state
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'synced',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
+
+    def test_common_update_pending_state__no_update_pending_state_method(self):
+        # Create a sync record for a model without update_pending_state method
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'res.partner')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 456,
+            'sync_state': 'pending',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
 
 
 class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
