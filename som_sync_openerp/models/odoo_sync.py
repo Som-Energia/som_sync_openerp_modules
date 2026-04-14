@@ -309,7 +309,7 @@ class OdooSync(osv.osv):
             ('res_id', '=', openerp_id),
         ], limit=1)
         if sync_id:
-            state = sync_obj.read(cursor, uid, sync_id[0], ['state'])['state']
+            state = sync_obj.read(cursor, uid, sync_id[0], ['sync_state'])['sync_state']
             if state == 'pending':
                 logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
                 context['update_pending_state_sync'] = True
