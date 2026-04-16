@@ -6,6 +6,7 @@ from osv import osv, fields
 from oorq.decorators import job
 import requests
 from datetime import datetime
+from service.security import Sudo
 from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
 import json
@@ -591,7 +592,8 @@ class OdooSync(osv.osv):
                 cursor, uid, ids[0], odoo_id, str_now, context
             )
             if update:
-                self.write(cursor, uid, ids, vals, context=context)
+                with Sudo(uid=1, gid=0):
+                    self.write(cursor, uid, ids, vals, context=context)
 
         return True
 
@@ -623,7 +625,8 @@ class OdooSync(osv.osv):
                 'odoo_last_update_result': context['odoo_last_update_result'],
             })
 
-        return self.create(cursor, uid, vals)
+        with Sudo(uid=1, gid=0):
+            return self.create(cursor, uid, vals)
 
     def _build_update_vals(self, cursor, uid, id, odoo_id, str_now, context):
         vals = {'odoo_id': odoo_id}
