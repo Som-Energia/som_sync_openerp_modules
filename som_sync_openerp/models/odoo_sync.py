@@ -314,7 +314,7 @@ class OdooSync(osv.osv):
             if state == 'pending':
                 logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
                 context['update_pending_state_sync'] = True
-                return self.common_update_pending_state(cursor, uid, openerp_id, context=context)
+                return self.common_update_pending_state(cursor, uid, sync_id[0], context=context)
 
         erp_data = {}
         rp_obj = self.pool.get(model)
@@ -403,9 +403,13 @@ class OdooSync(osv.osv):
                         'odoo_last_update_result': msg_formated,
                         'update_odoo_created_sync': True,
                     })
+                sync_state = 'synced' if odoo_id else 'error'
+                if model == 'payment.order' and odoo_id and not sync_id:
+                    sync_state = 'pending'
+
                 sync_vals.update({
                     'odoo_last_sync_request': self.format_response(erp_data),
-                    'sync_state': 'synced' if odoo_id else 'error',
+                    'sync_state': sync_state,
                 })
 
                 has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
