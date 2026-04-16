@@ -1,4 +1,5 @@
 "odoo_id","erp_id","Nombre del diario","Tipo"
+"13",21,"Banc","Banco"
 "796",44,"Factures Prov. Conceptes (Complementaries)","Compra"
 "797",45,"Factures Prov. Conceptes (Regularitzadores)","Compra"
 "798",2,"Diario de compras","Compra"
