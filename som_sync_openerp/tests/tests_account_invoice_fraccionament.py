@@ -71,14 +71,17 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
         )[1]
         odoo_invoice_id = 9001
-        odoo_payment_method_id = 555
+        odoo_payment_method_id = 411
 
         mock_common_sync.return_value = (odoo_invoice_id, invoice_id)
         mock_get_odoo_id.return_value = odoo_payment_method_id
 
         frac_id = self._create_fraccionament(invoice_id)
-        frac = self.frac_obj.browse(self.cursor, self.uid, frac_id)
-        frac_lines = list(frac.fraccionament_ids)
+        frac_line_obj = self.openerp.pool.get('account.invoice.fraccionament.fraccionaments')
+        frac_line_ids = frac_line_obj.search(
+            self.cursor, self.uid, [('invoice_fraccionament_id', '=', frac_id)])
+        frac_lines = frac_line_obj.read(
+            self.cursor, self.uid, frac_line_ids, ['import', 'data_venciment'])
 
         related_values = self.frac_obj.get_related_values(
             self.cursor, self.uid, frac_id, context={}
@@ -91,14 +94,14 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
 
         expected_lines = [
             {
-                'pnt_erp_id': frac_lines[0].id,
-                'amount': frac_lines[0].import,  # noqa: E999
-                'payment_date': str(frac_lines[0].data_venciment),
+                'pnt_erp_id': frac_lines[0]['id'],
+                'amount': frac_lines[0]['import'],
+                'payment_date': str(frac_lines[0]['data_venciment']),
             },
             {
-                'pnt_erp_id': frac_lines[1].id,
-                'amount': frac_lines[1].import,  # noqa: E999
-                'payment_date': str(frac_lines[1].data_venciment),
+                'pnt_erp_id': frac_lines[1]['id'],
+                'amount': frac_lines[1]['import'],
+                'payment_date': str(frac_lines[1]['data_venciment']),
             },
         ]
         self.assertEqual(

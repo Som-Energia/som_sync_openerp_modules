@@ -60,12 +60,18 @@ class AccountInvoiceFraccionament(osv.osv):
         payment_method_odoo_id = 411
 
         # Build the lines from fraccionament_ids (account.invoice.fraccionament.fraccionaments)
+        frac_line_obj = self.pool.get('account.invoice.fraccionament.fraccionaments')
+        frac_line_ids = frac_line_obj.search(
+            cr, uid, [('invoice_fraccionament_id', '=', id)], context=context)
+        frac_lines_data = frac_line_obj.read(
+            cr, uid, frac_line_ids, ['import', 'data_venciment'], context=context)
+
         lines = []
-        for frac_line in fraccionament.fraccionament_ids:
+        for frac_line in frac_lines_data:
             lines.append({
-                'pnt_erp_id': frac_line.id,
-                'amount': frac_line.import,  # noqa: E999
-                'payment_date': str(frac_line.data_venciment),
+                'pnt_erp_id': frac_line['id'],
+                'amount': frac_line['import'],
+                'payment_date': str(frac_line['data_venciment']),
             })
 
         res = {
