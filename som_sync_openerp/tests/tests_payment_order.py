@@ -60,7 +60,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         odoo_account_id = 99
-        odoo_journal_id = 66
+        odoo_journal_id = 13
         erp_account_id = 1
 
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
@@ -101,7 +101,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "remesa_0002"
         )[1]
         odoo_account_id = 99
-        odoo_journal_id = 66
+        odoo_journal_id = 13
         erp_account_id = 1
 
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
