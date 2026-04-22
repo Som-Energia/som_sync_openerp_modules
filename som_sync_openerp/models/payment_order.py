@@ -143,14 +143,17 @@ class PaymentOrder(osv.osv):
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
-        sync_obj = self.pool.get('odoo.sync')
+        # sync_obj = self.pool.get('odoo.sync')
         conf_obj = self.pool.get('res.config')
 
         payment_order = self.browse(cr, uid, id, context=context)
         name = payment_order.name or ''
-        journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
-        journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(cr, uid, 'account.journal', journal_erp_id)
-
+        # TODO: we need to get to bank journal from the payment_mode,
+        # but it is not payment_order.mode.journal, by now harcoded
+        # journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
+        # journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(
+        #   cr, uid, 'account.journal', journal_erp_id)
+        journal_odoo_id = 13
         lines = []
         pl_inv_ids = []
 
