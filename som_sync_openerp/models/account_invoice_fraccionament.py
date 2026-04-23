@@ -9,7 +9,6 @@ class AccountInvoiceFraccionament(osv.osv):
     # Fields mapped directly to Odoo payload fields
     # erp field -> odoo field
     MAPPING_FIELDS_TO_SYNC = {
-        'id': 'erp_id',
     }
     MAPPING_FK = {}
     MAPPING_CONSTANTS = {}
@@ -30,6 +29,7 @@ class AccountInvoiceFraccionament(osv.osv):
         """
         Builds the full payload for the Odoo fraccionament endpoint:
         {
+            'erp_id': <erp id of the fraccionament>,
             'invoice_id': <odoo_id of the invoice>,
             'payment_method_id': <odoo_id of the payment method>,
             'amount_total': <total amount>,
@@ -53,6 +53,7 @@ class AccountInvoiceFraccionament(osv.osv):
         context_copy['from_fk_sync'] = True
 
         # Sync the invoice and get its Odoo ID
+        invoice_erp_id = fraccionament.invoice_id.id
         invoice_odoo_id, _ = sync_obj.common_sync_model_create_update(
             cr, uid, 'account.invoice', 'sync', fraccionament.invoice_id.id, context_copy)
 
@@ -75,6 +76,7 @@ class AccountInvoiceFraccionament(osv.osv):
             })
 
         res = {
+            'erp_id': invoice_erp_id,
             'invoice_id': invoice_odoo_id,
             'payment_method_id': payment_method_odoo_id,
             'amount_total': fraccionament.import_a_fraccionar,

@@ -87,6 +87,7 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, frac_id, context={}
         )
 
+        self.assertEqual(related_values['erp_id'], invoice_id)
         self.assertEqual(related_values['invoice_id'], odoo_invoice_id)
         self.assertEqual(related_values['payment_method_id'], odoo_payment_method_id)
         self.assertEqual(related_values['amount_total'], 200.0)
