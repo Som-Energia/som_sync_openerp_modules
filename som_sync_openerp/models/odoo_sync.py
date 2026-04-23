@@ -732,6 +732,11 @@ class OdooSync(osv.osv):
             context = {}
 
         result = {}
+
+        special_cases = {
+            'account.invoice': 'number',
+            'account.invoice.fraccionament': 'codi',
+        }
         for sync in self.browse(cursor, uid, ids, context=context):
             erp_name = False
             field_name = 'name'
@@ -739,8 +744,8 @@ class OdooSync(osv.osv):
             if sync.model and sync.res_id:
                 try:
                     model_name = sync.model.model
-                    if model_name == 'account.invoice':
-                        field_name = 'number'
+                    if model_name in special_cases:
+                        field_name = special_cases[model_name]
                     rp_obj = self.pool.get(model_name)
                     if rp_obj:
                         rec = rp_obj.read(
@@ -748,7 +753,6 @@ class OdooSync(osv.osv):
                         )
                         erp_name = rec and rec.get(field_name) or False
                 except Exception:
-                    # Registro borrado, modelo no cargado, etc.
                     erp_name = False
 
             result[sync.id] = erp_name
