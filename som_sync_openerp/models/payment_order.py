@@ -79,7 +79,17 @@ class PaymentOrder(osv.osv):
 
     def _is_order_grouped_invoices(self, cr, uid, payment_order):
         for line in payment_order.line_ids:
-            if not line.ml_inv_ref:
+            without_ml_inv_ref = not line.ml_inv_ref
+            has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
+            if without_ml_inv_ref and has_invoices:
+                return True
+        return False
+
+    def _is_order_splitted_invoices(self, cr, uid, payment_order):
+        for line in payment_order.line_ids:
+            without_ml_inv_ref = not line.ml_inv_ref
+            has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
+            if without_ml_inv_ref and not has_invoices:
                 return True
         return False
 
@@ -140,6 +150,12 @@ class PaymentOrder(osv.osv):
         payment_line_vals['invoice_ids'] = odoo_invoice_ids
         return payment_line_vals, erp_invoice_ids
 
+    # def _get_order_line_from_splitted_invoices(self, cr, uid, payment_line, context=None):
+    #     """
+    #     WIP - This method is used to get the values of the payment line to sync with Odoo
+    #     """
+    #     # we get
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
@@ -159,6 +175,7 @@ class PaymentOrder(osv.osv):
 
         is_refund = self._is_order_refund(cr, uid, payment_order)
         is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
+        # is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
 
         if is_refund:
             # Factures FE negatives, les tractem diferent a Odoo
@@ -166,6 +183,8 @@ class PaymentOrder(osv.osv):
 
         if is_grouped:
             function_to_get_lines = self._get_order_line_from_grouped_invoices
+        # elif is_splitted:
+        #     function_to_get_lines = self._get_order_line_from_splitted_invoices
         else:
             function_to_get_lines = self._get_order_lines_from_invoices
 
