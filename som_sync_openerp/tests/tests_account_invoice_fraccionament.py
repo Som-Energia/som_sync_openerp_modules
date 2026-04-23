@@ -125,3 +125,38 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
             ),
             'invoices/payments'
         )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'get_odoo_id_by_erp_id')
+    def test__get_endpoint_odoo_record_suffix(self, mock_get_odoo_id_by_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+        odoo_invoice_id = 9001
+        mock_get_odoo_id_by_erp_id.return_value = odoo_invoice_id
+
+        frac_id = self._create_fraccionament(invoice_id)
+
+        result = self.frac_obj.get_endpoint_odoo_record_suffix(
+            self.cursor, self.uid, frac_id, odoo_id=None, context={}
+        )
+
+        self.assertEqual(result, '/odoo/customer-invoices/{}'.format(odoo_invoice_id))
+        mock_get_odoo_id_by_erp_id.assert_called_once_with(
+            self.cursor, self.uid, 'account.invoice', invoice_id, context={}
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'get_odoo_id_by_erp_id')
+    def test__get_endpoint_odoo_record_suffix_no_odoo_id(self, mock_get_odoo_id_by_erp_id):
+        """Returns False when the invoice has not been synced to Odoo yet."""
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
+        )[1]
+        mock_get_odoo_id_by_erp_id.return_value = False
+
+        frac_id = self._create_fraccionament(invoice_id)
+
+        result = self.frac_obj.get_endpoint_odoo_record_suffix(
+            self.cursor, self.uid, frac_id, odoo_id=None, context={}
+        )
+
+        self.assertFalse(result)
