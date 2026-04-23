@@ -25,7 +25,7 @@ class AccountInvoiceFraccionament(osv.osv):
         Fraccionament lines are synced as payments linked to an invoice in Odoo.
         There is no direct URL for a payment in Odoo, so we return the URL of
         the related invoice instead:
-        /odoo/customer-invoices/<odoo_invoice_id>
+        /customer-invoices/<odoo_invoice_id>
         """
         if context is None:
             context = {}
@@ -33,11 +33,12 @@ class AccountInvoiceFraccionament(osv.osv):
         invoice_erp_id = fraccionament['invoice_id'][0] if fraccionament['invoice_id'] else None
         if not invoice_erp_id:
             return False
-        invoice_odoo_id = self.pool.get('odoo.sync').get_odoo_id_by_erp_id(
-            cr, uid, 'account.invoice', invoice_erp_id, context=context)
+        sync_obj = self.pool.get('odoo.sync')
+        invoice_odoo_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.invoice', invoice_erp_id)
         if not invoice_odoo_id:
             return False
-        return '/odoo/customer-invoices/{}'.format(invoice_odoo_id)
+        return '/customer-invoices/{}'.format(invoice_odoo_id)
 
     def get_related_values(self, cr, uid, id, context=None):
         """

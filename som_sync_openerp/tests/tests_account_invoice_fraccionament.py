@@ -140,9 +140,9 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, frac_id, odoo_id=None, context={}
         )
 
-        self.assertEqual(result, '/odoo/customer-invoices/{}'.format(odoo_invoice_id))
+        self.assertEqual(result, '/customer-invoices/{}'.format(odoo_invoice_id))
         mock_get_odoo_id_by_erp_id.assert_called_once_with(
-            self.cursor, self.uid, 'account.invoice', invoice_id, context={}
+            self.cursor, self.uid, 'account.invoice', invoice_id,
         )
 
     @mock.patch.object(odoo_sync.OdooSync, 'get_odoo_id_by_erp_id')
