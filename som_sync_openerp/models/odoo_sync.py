@@ -65,6 +65,12 @@ MAPPING_MODELS_PATCH = {
     'res.partner.address': 'partners',
 }
 
+# Models that always check local odoo.sync table before any API call,
+# regardless of context (same shortcut as from_fk_sync for non-patchable models).
+MAPPING_MODELS_CHECK_LOCAL = [
+    'account.invoice.fraccionament',
+]
+
 
 class OdooSync(osv.osv):
     "Sync manager"
@@ -332,7 +338,9 @@ class OdooSync(osv.osv):
             # we can directly get the odoo_id by erp_id without checking endpoint suffix.
             # If exists it means that the record in Odoo already exists and is linked with erp_id.
             # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
-            if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
+            # Models in MAPPING_MODELS_CHECK_LOCAL always use this shortcut, regardless of context.
+            if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL) \
+                    and not MAPPING_MODELS_PATCH.get(model, False):
                 erp_id = openerp_id
                 odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
                 if odoo_id:
