@@ -25,6 +25,10 @@ class PaymentOrder(osv.osv):
         payment_order = self.browse(cr, uid, id, context=context)
         is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
         is_refund = self._is_order_refund(cr, uid, payment_order)
+        is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
+
+        if is_splitted:
+            return 'payment_order_payments'
 
         mapping = {
             # (is_grouped, is_refund): 'model_name'
@@ -150,41 +154,77 @@ class PaymentOrder(osv.osv):
         payment_line_vals['invoice_ids'] = odoo_invoice_ids
         return payment_line_vals, erp_invoice_ids
 
-    # def _get_order_line_from_splitted_invoices(self, cr, uid, payment_line, context=None):
-    #     """
-    #     WIP - This method is used to get the values of the payment line to sync with Odoo
-    #     """
-    #     # we get
+    def _get_order_payment_lines_from_splitted_invoices(self, cr, uid, payment_order, context=None):
+        """
+        Gets the payment_ids and total amount for a payment.order with fraccionaments.
+        Syncs each fraccionament (account.invoice.fraccionament.fraccionaments) to Odoo
+        to obtain their odoo_ids (account.payment in Odoo).
 
-    def get_related_values(self, cr, uid, id, context=None):
+        Returns:
+            payment_ids: list of Odoo account.payment ids
+            amount: total amount of all fraccionaments
+        """
         if context is None:
             context = {}
-        # sync_obj = self.pool.get('odoo.sync')
+
+        sync_obj = self.pool.get('odoo.sync')
+        aiff_obj = self.pool.get('account.invoice.fraccionament.fraccionaments')
+
+        fracc_ids = aiff_obj.search(
+            cr, uid, [('remesa_desti_id', '=', payment_order.id)], context=context)
+
+        # We must sync each fraccionament first to ensure their odoo_ids exist,
+        # otherwise the payment_order batch creation in Odoo will fail
+        payment_ids = []
+        amount_total = 0.0
+        for fracc_id in fracc_ids:
+            context_copy = context.copy()
+            context_copy['from_fk_sync'] = True
+            odoo_id, _ = sync_obj.common_sync_model_create_update(
+                cr, uid, 'account.invoice.fraccionament.fraccionaments',
+                'sync', fracc_id, context_copy)
+            payment_ids.append(odoo_id)
+            fracc_data = aiff_obj.read(cr, uid, fracc_id, ['import'], context=context)
+            amount_total += fracc_data['import']
+
+        return payment_ids, round(amount_total, 2)
+
+    def _build_splitted_related_values(self, cr, uid, payment_order, name, context=None):
+        if context is None:
+            context = {}
         conf_obj = self.pool.get('res.config')
 
-        payment_order = self.browse(cr, uid, id, context=context)
-        name = payment_order.name or ''
         # TODO: we need to get to bank journal from the payment_mode,
         # but it is not payment_order.mode.journal, by now harcoded
-        # journal_erp_id = payment_order.mode.journal.id if payment_order.mode.journal else False
-        # journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(
-        #   cr, uid, 'account.journal', journal_erp_id)
+        journal_odoo_id = 13
+        metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_customer_payment_method', 0))
+
+        payment_ids, amount = self._get_order_payment_lines_from_splitted_invoices(
+            cr, uid, payment_order, context=context)
+
+        return {
+            'destination_journal_id': journal_odoo_id,
+            'payment_method_line_id': metode_pagament_id,
+            'payment_ids': payment_ids,
+            'amount': amount,
+            'name': name,
+            'batch_type': 'inbound',
+        }
+
+    def _build_normal_related_values(
+            self, cr, uid, payment_order, name, is_grouped, is_refund, context=None):
+        if context is None:
+            context = {}
+        conf_obj = self.pool.get('res.config')
+
+        # TODO: we need to get to bank journal from the payment_mode,
+        # but it is not payment_order.mode.journal, by now harcoded
         journal_odoo_id = 13
         lines = []
         pl_inv_ids = []
 
-        is_refund = self._is_order_refund(cr, uid, payment_order)
-        is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
-        # is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
-
-        if is_refund:
-            # Factures FE negatives, les tractem diferent a Odoo
-            name = 'RECT_{}'.format(payment_order.name)
-
         if is_grouped:
             function_to_get_lines = self._get_order_line_from_grouped_invoices
-        # elif is_splitted:
-        #     function_to_get_lines = self._get_order_line_from_splitted_invoices
         else:
             function_to_get_lines = self._get_order_lines_from_invoices
 
@@ -199,15 +239,13 @@ class PaymentOrder(osv.osv):
         # if there are any, in order to update the amounts to sync with Odoo and avoid sync issues
         inv_obj = self.pool.get('account.invoice')
         inv_obj.process_lines_with_discrepancies(
-            cr, uid, pl_inv_ids, lines, is_grouped=is_grouped, context=context
-        )
+            cr, uid, pl_inv_ids, lines, is_grouped=is_grouped, context=context)
 
-        # we calculte the total amount of lines
         po_total_amount = round(sum([line['amount'] for line in lines]), 2)
 
         if payment_order.type == 'payable':
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
-            # all amounts to negative when payment_oder_batch payable
+            # all amounts to negative when payment_order_batch payable
             if is_grouped:
                 po_total_amount = -abs(po_total_amount)
                 for line in lines:
@@ -217,11 +255,10 @@ class PaymentOrder(osv.osv):
 
         journal_odoo_field_name = self._get_journal_odoo_field_name(
             cr, uid, is_grouped, is_refund, context=context)
-
         payment_method_odoo_field_name = self._get_payment_method_odoo_field_name(
             cr, uid, is_grouped, is_refund, context=context)
 
-        res = {
+        return {
             journal_odoo_field_name: journal_odoo_id,
             payment_method_odoo_field_name: metode_pagament_id,
             'lines': lines,
@@ -229,7 +266,27 @@ class PaymentOrder(osv.osv):
             'name': name,
             'batch_type': 'outbound' if payment_order.type == 'payable' else 'inbound',
         }
-        return res
+
+    def get_related_values(self, cr, uid, id, context=None):
+        if context is None:
+            context = {}
+
+        payment_order = self.browse(cr, uid, id, context=context)
+        name = payment_order.name or ''
+
+        is_refund = self._is_order_refund(cr, uid, payment_order)
+        is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
+        is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
+
+        if is_refund:
+            name = 'RECT_{}'.format(payment_order.name)
+
+        if is_splitted:
+            return self._build_splitted_related_values(
+                cr, uid, payment_order, name, context=context)
+
+        return self._build_normal_related_values(
+            cr, uid, payment_order, name, is_grouped, is_refund, context=context)
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
