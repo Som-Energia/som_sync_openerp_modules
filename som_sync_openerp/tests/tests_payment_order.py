@@ -772,3 +772,51 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             'sync', fracc_id,
             mock.ANY,
         )
+
+    def test__get_mapping_model_post_returns_payment_order_payments_when_splitted(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
+
+        result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'payment_order_payments')
+
+    def test__get_mapping_model_post_returns_payment_orders_when_normal(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0004"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id, factor=-1)
+
+        result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'payment_orders')
+
+    def test__get_mapping_model_post_returns_payment_order_batches_when_grouped(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        with mock.patch.object(
+            type(self.po_obj), '_is_order_grouped_invoices', return_value=True
+        ):
+            result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'payment_order_batches')
+
+    def test__get_mapping_model_post_returns_payment_order_refunds_when_refund(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'payment_order_refunds')
