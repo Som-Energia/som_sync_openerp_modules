@@ -22,6 +22,56 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestPaymentOrder, self).setUp()
 
+    def utils_add_splitted_line_to_order(self, order_id, amount=500.0):
+        """
+        Crea una payment.line sense ml_inv_ref i amb un move_line_id
+        el moviment del qual no té cap factura associada (cas fraccionament).
+        """
+        am_obj = self.openerp.pool.get("account.move")
+        aml_obj = self.openerp.pool.get("account.move.line")
+
+        journal_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_journal_syncronizable"
+        )[1]
+        period_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "period_012026"
+        )[1]
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "base", "res_partner_agrolait"
+        )[1]
+
+        move_id = am_obj.create(self.cursor, self.uid, {
+            'journal_id': journal_id,
+            'period_id': period_id,
+            'date': '2026-01-15',
+        })
+        receivable_account_id = self.openerp.pool.get("account.account").search(
+            self.cursor, self.uid, [('type', '=', 'receivable')], limit=1
+        )[0]
+        move_line_id = aml_obj.create(self.cursor, self.uid, {
+            'move_id': move_id,
+            'name': 'Fraccionament test',
+            'debit': amount,
+            'credit': 0.0,
+            'account_id': receivable_account_id,
+            'partner_id': partner_id,
+            'journal_id': journal_id,
+            'period_id': period_id,
+        })
+        self.pl_obj.create(self.cursor, self.uid, {
+            'order_id': order_id,
+            'move_line_id': move_line_id,
+            'partner_id': partner_id,
+            'name': 'Fraccionament test',
+            'date': '2026-01-15',
+            'state': 'normal',
+            'communication': 'Fraccionament test',
+            'amount_currency': amount,
+            'currency': self.openerp.pool.get("res.currency").search(
+                self.cursor, self.uid, [('name', '=', 'EUR')], limit=1
+            )[0],
+        })
+
     def utils_open_invoice_add_to_order(self, invoice_id, order_id, factor=1):
         self.wf_service.trg_validate(
             self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
@@ -45,6 +95,68 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             'amount_currency': invoice.amount_total * factor,
             'currency': invoice.currency_id.id,
         })
+
+    def utils_open_invoice_add_to_order_with_ml_inv_ref(self, invoice_id, order_id):
+        self.wf_service.trg_validate(
+            self.uid, 'account.invoice', invoice_id, 'invoice_open', self.cursor
+        )
+        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
+        move_line_id = None
+        for line in invoice.move_id.line_id:
+            if line.account_id.type == 'receivable':
+                move_line_id = line.id
+                break
+        self.pl_obj.create(self.cursor, self.uid, {
+            'order_id': order_id,
+            'move_line_id': move_line_id,
+            'ml_inv_ref': invoice_id,
+            'partner_id': invoice.partner_id.id,
+            'name': invoice.name or '/',
+            'date': invoice.date_invoice,
+            'state': 'normal',
+            'communication': invoice.name or '/',
+            'amount_currency': invoice.amount_total,
+            'currency': invoice.currency_id.id,
+        })
+
+    def utils_create_invoice_without_payment_order(self):
+        """
+        Crea una factura sense payment_order_id per poder afegir-la a una
+        payment.order sense que s'informe ml_inv_ref automàticament.
+        """
+        journal_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_journal_sales_syncronizable"
+        )[1]
+        period_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "period_012026"
+        )[1]
+        invoice_id = self.ai_obj.create(self.cursor, self.uid, {
+            'name': 'Grouped invoice test',
+            'type': 'out_invoice',
+            'state': 'draft',
+            'date_invoice': '2026-01-16',
+            'partner_id': self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "base", "res_partner_9"
+            )[1],
+            'address_invoice_id': self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "base", "res_partner_address_1"
+            )[1],
+            'period_id': period_id,
+            'account_id': self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "account", "a_recv"
+            )[1],
+            'journal_id': journal_id,
+        })
+        self.ail_obj.create(self.cursor, self.uid, {
+            'invoice_id': invoice_id,
+            'name': 'Product grouped',
+            'price_unit': 1000.0,
+            'quantity': 1,
+            'account_id': self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "account", "a_sale"
+            )[1],
+        })
+        return invoice_id
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
@@ -377,3 +489,116 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         res4, move_type4 = self.ai_obj._get_total_amount_difference({})
         self.assertEqual(res4, 0)
         self.assertIsNone(move_type4)
+
+    def test__is_order_splitted_invoices_returns_true_when_has_splitted_lines(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_add_splitted_line_to_order(remesa_id)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_splitted_invoices(self.cursor, self.uid, payment_order)
+
+        self.assertTrue(result)
+
+    def test__is_order_splitted_invoices_returns_false_when_has_normal_invoice_lines(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0004"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_splitted_invoices(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
+
+    def test__is_order_splitted_invoices_returns_false_when_order_has_no_lines(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_splitted_invoices(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
+
+    # _is_order_grouped_invoices
+    def test__is_order_grouped_invoices_returns_true_when_line_has_no_ml_inv_ref_and_move_has_invoices(self):  # noqa: E501
+        mock_invoice = mock.Mock()
+        mock_aml = mock.Mock()
+        mock_aml.invoice = mock_invoice
+        mock_move = mock.Mock()
+        mock_move.line_id = [mock_aml]
+        mock_move_line = mock.Mock()
+        mock_move_line.move_id = mock_move
+        mock_line = mock.Mock()
+        mock_line.ml_inv_ref = False
+        mock_line.move_line_id = mock_move_line
+        mock_payment_order = mock.Mock()
+        mock_payment_order.line_ids = [mock_line]
+
+        result = self.po_obj._is_order_grouped_invoices(
+            self.cursor, self.uid, mock_payment_order
+        )
+
+        self.assertTrue(result)
+
+    def test__is_order_grouped_invoices_returns_false_when_order_has_no_lines(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_grouped_invoices(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
+
+    def test__is_order_grouped_invoices_returns_false_when_move_has_no_invoices(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_add_splitted_line_to_order(remesa_id)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_grouped_invoices(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
+
+    # _is_order_refund
+    def test__is_order_refund_returns_true_when_line_has_negative_out_invoice(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_refund(self.cursor, self.uid, payment_order)
+
+        self.assertTrue(result)
+
+    def test__is_order_refund_returns_false_when_line_has_positive_invoice(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0004"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_refund(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
+
+    def test__is_order_refund_returns_false_when_order_has_no_lines(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        result = self.po_obj._is_order_refund(self.cursor, self.uid, payment_order)
+
+        self.assertFalse(result)
