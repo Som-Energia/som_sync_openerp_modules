@@ -28,7 +28,7 @@ class PaymentOrder(osv.osv):
         is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
 
         if is_splitted:
-            return 'payment_order_payments'
+            return 'payment_orders/payments'
 
         mapping = {
             # (is_grouped, is_refund): 'model_name'
@@ -157,9 +157,6 @@ class PaymentOrder(osv.osv):
     def _get_order_payment_lines_from_splitted_invoices(self, cr, uid, payment_order, context=None):
         """
         Gets the payment_ids and total amount for a payment.order with fraccionaments.
-        Syncs each fraccionament (account.invoice.fraccionament.fraccionaments) to Odoo
-        to obtain their odoo_ids (account.payment in Odoo).
-
         Returns:
             payment_ids: list of Odoo account.payment ids
             amount: total amount of all fraccionaments
@@ -170,22 +167,36 @@ class PaymentOrder(osv.osv):
         sync_obj = self.pool.get('odoo.sync')
         aiff_obj = self.pool.get('account.invoice.fraccionament.fraccionaments')
 
-        fracc_ids = aiff_obj.search(
-            cr, uid, [('remesa_desti_id', '=', payment_order.id)], context=context)
-
-        # We must sync each fraccionament first to ensure their odoo_ids exist,
-        # otherwise the payment_order batch creation in Odoo will fail
         payment_ids = []
         amount_total = 0.0
+
+        # we get fraccionament lines linked to the payment order through remesa_desti_id
+        fraccl_ids = aiff_obj.search(
+            cr, uid, [('remesa_desti_id', '=', payment_order.id)], context=context)
+
+        # now we get all different fraccionaments linked to those lines
+        fracc_read_ids = aiff_obj.read(
+            cr, uid, fraccl_ids, ['invoice_fraccionament_id'], context=context)
+        fracc_ids = list(set([
+            f['invoice_fraccionament_id'][0]for f in fracc_read_ids if f['invoice_fraccionament_id']
+        ]))
+
+        # ensure all fraccionaments are synced so all fraccionaments lines exist in Odoo
         for fracc_id in fracc_ids:
             context_copy = context.copy()
             context_copy['from_fk_sync'] = True
             odoo_id, _ = sync_obj.common_sync_model_create_update(
-                cr, uid, 'account.invoice.fraccionament.fraccionaments',
+                cr, uid, 'account.invoice.fraccionament',
                 'sync', fracc_id, context_copy)
-            payment_ids.append(odoo_id)
-            fracc_data = aiff_obj.read(cr, uid, fracc_id, ['import'], context=context)
-            amount_total += fracc_data['import']
+
+        # now we can get the odoo_ids of the fraccionaments lines
+        for fraccl_id in fraccl_ids:
+            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
+                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id)
+            if payment_odoo_id:
+                payment_ids.append(payment_odoo_id)
+                fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
+                amount_total += fraccl_data['import']
 
         return payment_ids, round(amount_total, 2)
 
@@ -208,7 +219,6 @@ class PaymentOrder(osv.osv):
             'payment_ids': payment_ids,
             'amount': amount,
             'name': name,
-            'batch_type': 'inbound',
         }
 
     def _build_normal_related_values(

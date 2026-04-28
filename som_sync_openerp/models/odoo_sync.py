@@ -24,6 +24,7 @@ MAPPING_MODELS_ENTITIES = {
     'res.partner': 'partner',
     'res.partner.address': 'partner',
     'res.partner.bank': 'bank',
+    'account.invoice.fraccionament.fraccionaments': 'payment',
 }
 
 STATIC_MODELS = [
