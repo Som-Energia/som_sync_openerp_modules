@@ -306,18 +306,17 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(related_values, expected_values)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_splitted_returns_payment_ids_and_amount(
-            self, mock_sync_create_update):
+            self, mock_sync_create_update, mock_get_odoo_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         odoo_payment_id_1 = 101
         odoo_payment_id_2 = 102
-        mock_sync_create_update.side_effect = [
-            (odoo_payment_id_1, 1),
-            (odoo_payment_id_2, 2),
-        ]
+        mock_sync_create_update.return_value = (999, 1)
+        mock_get_odoo_id.side_effect = [odoo_payment_id_1, odoo_payment_id_2]
 
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=200.0)
@@ -332,17 +331,18 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             'payment_ids': [odoo_payment_id_1, odoo_payment_id_2],
             'amount': 500.0,
             'name': u'Remesa 0001',
-            'batch_type': 'inbound',
         }
         self.assertEqual(related_values, expected_values)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_splitted_amount_is_rounded(
-            self, mock_sync_create_update):
+            self, mock_sync_create_update, mock_get_odoo_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         mock_sync_create_update.return_value = (999, 1)
+        mock_get_odoo_id.return_value = 999
 
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.005)
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.005)
@@ -711,18 +711,17 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertFalse(result)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_order_payment_lines_from_splitted_invoices_returns_payment_ids_and_amount(
-            self, mock_sync_create_update):
+            self, mock_sync_create_update, mock_get_odoo_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         odoo_payment_id_1 = 201
         odoo_payment_id_2 = 202
-        mock_sync_create_update.side_effect = [
-            (odoo_payment_id_1, 1),
-            (odoo_payment_id_2, 2),
-        ]
+        mock_sync_create_update.return_value = (999, 1)
+        mock_get_odoo_id.side_effect = [odoo_payment_id_1, odoo_payment_id_2]
 
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=400.0)
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.0)
@@ -751,27 +750,32 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.assertEqual(amount, 0.0)
         mock_sync_create_update.assert_not_called()
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_order_payment_lines_from_splitted_invoices_syncs_each_fraccionament(
-            self, mock_sync_create_update):
+    def test__get_order_payment_lines_from_splitted_invoices_syncs_fraccionament_parent(
+            self, mock_sync_create_update, mock_get_odoo_id):
+        """
+        Verifica que es syncronitza el fraccionament pare (account.invoice.fraccionament)
+        i no la línia individual. El pare s'obté via invoice_fraccionament_id.
+        Si la línia no té pare assignat, no es fa cap sync.
+        """
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         mock_sync_create_update.return_value = (999, 1)
+        mock_get_odoo_id.return_value = None
 
-        fracc_id = self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
+        # línia sense invoice_fraccionament_id: no ha de syncronitzar cap pare
+        self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
 
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
-        self.po_obj._get_order_payment_lines_from_splitted_invoices(
+        payment_ids, amount = self.po_obj._get_order_payment_lines_from_splitted_invoices(
             self.cursor, self.uid, payment_order
         )
 
-        mock_sync_create_update.assert_called_once_with(
-            self.cursor, self.uid,
-            'account.invoice.fraccionament.fraccionaments',
-            'sync', fracc_id,
-            mock.ANY,
-        )
+        mock_sync_create_update.assert_not_called()
+        self.assertEqual(payment_ids, [])
+        self.assertEqual(amount, 0.0)
 
     def test__get_mapping_model_post_returns_payment_order_payments_when_splitted(self):
         remesa_id = self.imd_obj.get_object_reference(
@@ -781,7 +785,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
 
-        self.assertEqual(result, 'payment_order_payments')
+        self.assertEqual(result, 'payment_orders/payments')
 
     def test__get_mapping_model_post_returns_payment_orders_when_normal(self):
         invoice_id = self.imd_obj.get_object_reference(
