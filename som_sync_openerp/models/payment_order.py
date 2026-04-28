@@ -208,7 +208,8 @@ class PaymentOrder(osv.osv):
         # TODO: we need to get to bank journal from the payment_mode,
         # but it is not payment_order.mode.journal, by now harcoded
         journal_odoo_id = 13
-        metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_customer_payment_method', 0))
+        metode_pagament_id = eval(
+            conf_obj.get(cr, uid, 'odoo_customer_fraccionaments_payment_method', 0))
 
         payment_ids, amount = self._get_order_payment_lines_from_splitted_invoices(
             cr, uid, payment_order, context=context)

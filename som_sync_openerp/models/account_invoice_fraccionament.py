@@ -62,6 +62,8 @@ class AccountInvoiceFraccionament(osv.osv):
             context = {}
 
         sync_obj = self.pool.get('odoo.sync')
+        conf_obj = self.pool.get('res.config')
+
         fraccionament = self.browse(cr, uid, id, context=context)
 
         context_copy = context.copy()
@@ -72,8 +74,8 @@ class AccountInvoiceFraccionament(osv.osv):
         invoice_odoo_id, _ = sync_obj.common_sync_model_create_update(
             cr, uid, 'account.invoice', 'sync', fraccionament.invoice_id.id, context_copy)
 
-        # TODO: from where can we get the payment method in ERP? For now, hardcoded
-        payment_method_odoo_id = 411
+        payment_method_odoo_id = eval(
+            conf_obj.get(cr, uid, 'odoo_customer_fraccionaments_payment_method', 0))
 
         # Build the lines from fraccionament_ids (account.invoice.fraccionament.fraccionaments)
         frac_line_obj = self.pool.get('account.invoice.fraccionament.fraccionaments')

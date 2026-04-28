@@ -19,6 +19,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.wf_service = netsvc.LocalService('workflow')
         self.po_obj = self.openerp.pool.get("payment.order")
         self.pl_obj = self.openerp.pool.get("payment.line")
+        self.conf_obj = self.openerp.pool.get("res.config")
         self.maxDiff = None
         super(TestPaymentOrder, self).setUp()
 
@@ -315,6 +316,11 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )[1]
         odoo_payment_id_1 = 101
         odoo_payment_id_2 = 102
+        payment_method_line_id = eval(
+            self.conf_obj.get(
+                self.cursor, self.uid, 'odoo_customer_fraccionaments_payment_method', 0
+            ))
+
         mock_sync_create_update.return_value = (999, 1)
         mock_get_odoo_id.side_effect = [odoo_payment_id_1, odoo_payment_id_2]
 
@@ -327,7 +333,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         expected_values = {
             'destination_journal_id': 13,
-            'payment_method_line_id': 373,
+            'payment_method_line_id': payment_method_line_id,
             'payment_ids': [odoo_payment_id_1, odoo_payment_id_2],
             'amount': 500.0,
             'name': u'Remesa 0001',

@@ -112,6 +112,13 @@
                 We create a general payment.method for customers in Odoo and this is the odoo_id of it.
             </field>
         </record>
+        <record id="odoo_customer_fraccionaments_payment_method" model="res.config">
+            <field name="name">odoo_customer_fraccionaments_payment_method</field>
+            <field name="value">411</field>
+            <field name="description">
+                Odoo payment.method for fraccionaments.
+            </field>
+        </record>
         <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">
             <field name="name">Actualitzar sincronitzacions pendents d'Odoo</field>
             <field name="active" eval="0"/>
