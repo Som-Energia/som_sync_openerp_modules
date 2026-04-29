@@ -830,3 +830,50 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
 
         self.assertEqual(result, 'payment_order_refunds')
+
+    def test__get_sync_state_on_creation_returns_pending_when_normal(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0004"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order(invoice_id, remesa_id, factor=-1)
+
+        result = self.po_obj.get_sync_state_on_creation(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'pending')
+
+    def test__get_sync_state_on_creation_returns_synced_when_splitted(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
+
+        result = self.po_obj.get_sync_state_on_creation(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'synced')
+
+    def test__get_sync_state_on_creation_returns_synced_when_grouped(self):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        with mock.patch.object(
+            type(self.po_obj), '_is_order_grouped_invoices', return_value=True
+        ):
+            result = self.po_obj.get_sync_state_on_creation(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'synced')
+
+    def test__get_sync_state_on_creation_returns_synced_when_refund(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        result = self.po_obj.get_sync_state_on_creation(self.cursor, self.uid, remesa_id)
+
+        self.assertEqual(result, 'synced')
