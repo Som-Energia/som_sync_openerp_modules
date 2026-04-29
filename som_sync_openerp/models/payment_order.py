@@ -197,6 +197,11 @@ class PaymentOrder(osv.osv):
                 payment_ids.append(payment_odoo_id)
                 fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
                 amount_total += fraccl_data['import']
+            else:
+                # if we don't find the odoo_id for a fraccionament line it means that the sync of
+                # the parent fraccionament has failed. This way we force error in the payment order
+                # sync and avoid having unsynced fraccionament lines linked to synced payment orders
+                payment_ids.append(False)
 
         return payment_ids, round(amount_total, 2)
 

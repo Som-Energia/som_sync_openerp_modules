@@ -780,7 +780,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
 
         mock_sync_create_update.assert_not_called()
-        self.assertEqual(payment_ids, [])
+        self.assertEqual(payment_ids, [False])
         self.assertEqual(amount, 0.0)
 
     def test__get_mapping_model_post_returns_payment_order_payments_when_splitted(self):
