@@ -39,6 +39,16 @@ class PaymentOrder(osv.osv):
         }
         return mapping.get((is_grouped, is_refund))
 
+    def get_sync_state_on_creation(self, cr, uid, id, context=None):
+        payment_order = self.browse(cr, uid, id, context=context)
+        is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
+        is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
+        is_refund = self._is_order_refund(cr, uid, payment_order)
+        if not is_grouped and not is_refund and not is_splitted:
+            return 'synced'
+        else:
+            return 'pending'
+
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """
         This method is used to get the suffix to identify the record in Odoo

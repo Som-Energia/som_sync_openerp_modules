@@ -413,8 +413,9 @@ class OdooSync(osv.osv):
                         'update_odoo_created_sync': True,
                     })
                 sync_state = 'synced' if odoo_id else 'error'
-                if model == 'payment.order' and odoo_id and not sync_id:
-                    sync_state = 'pending'
+                if odoo_id and not sync_id and hasattr(rp_obj, 'get_sync_state_on_creation'):
+                    sync_state = rp_obj.get_sync_state_on_creation(
+                        cursor, uid, openerp_id, context=context)
 
                 sync_vals.update({
                     'odoo_last_sync_request': self.format_response(erp_data),
