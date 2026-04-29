@@ -836,8 +836,7 @@ class OdooSync(osv.osv):
             sync = self.browse(cursor, uid, sync_ids[0])
             return sync.odoo_id
         else:
-            odoo_id, _ = self.common_sync_model_create_update(cursor, uid, model, 'sync', erp_id)
-            return odoo_id
+            return False
 
     def get_erp_id_by_odoo_id(self, cursor, uid, model, odoo_id):
         sync_ids = self.search(cursor, uid, [

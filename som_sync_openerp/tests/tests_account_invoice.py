@@ -211,8 +211,9 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.assertEqual(related_values, expected_values)
 
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__get_related_values_with_taxes(self, mock_syncronize_sync, mock_erp_id):
+    def test__get_related_values_with_taxes(self, mock_syncronize_sync, mock_odoo_id, mock_erp_id):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0002"
         )[1]
@@ -222,6 +223,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         odoo_account_id = 99
         erp_account_id = 1
         mock_syncronize_sync.return_value = (odoo_account_id, erp_account_id)
+        mock_odoo_id.return_value = odoo_account_id
         mock_erp_id.return_value = iva_tax_id
         self.ai_obj.button_reset_taxes(self.cursor, self.uid, [invoice_id])
         self.wf_service.trg_validate(
