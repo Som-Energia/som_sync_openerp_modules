@@ -96,6 +96,14 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
+        <record id="odoo_sync_invoice_amount_tolerance" model="res.config">
+            <field name="name">odoo_sync_invoice_amount_tolerance</field>
+            <field name="value">0.02</field>
+            <field name="description">
+                Tolerància màxima (en euros) per a discrepàncies d'imports en la sincronització
+                de factures. Si la diferència supera aquest valor, el registre es marca com 'error'.
+            </field>
+        </record>
         <record id="odoo_provider_payment_method" model="res.config">
             <field name="name">odoo_provider_payment_method</field>
             <field name="value">375</field>

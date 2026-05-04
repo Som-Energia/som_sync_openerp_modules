@@ -32,7 +32,7 @@ class PaymentOrder(osv.osv):
 
         mapping = {
             # (is_grouped, is_refund): 'model_name'
-            (True, True): 'payment_order_batches_refunds',
+            (True, True): 'payment_order_batches_refunds',  # TODO: does not exists this endpoint!!
             (True, False): 'payment_order_batches',
             (False, True): 'payment_order_refunds',
             (False, False): 'payment_orders',

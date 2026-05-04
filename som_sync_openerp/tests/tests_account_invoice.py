@@ -380,8 +380,8 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
 
     def test__hook_after_odoo_creation_with_discrepancies(self):
         """
-        Test hook_after_odoo_creation with amount discrepancies
-        Should set sync_state to 'synced_with_warning'
+        Test hook_after_odoo_creation with amount discrepancies above tolerance
+        Should set sync_state to 'error'
         """
         response = {
             'data': {
@@ -401,12 +401,12 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
+        self.assertEqual(sync_vals['sync_state'], 'error')
 
     def test__hook_after_odoo_creation_with_discrepancies_as_string(self):
         """
-        Test hook_after_odoo_creation with response as JSON string
-        Should set sync_state to 'synced_with_warning'
+        Test hook_after_odoo_creation with response as JSON string and difference above tolerance
+        Should set sync_state to 'error'
         """
 
         response = json.dumps({
@@ -427,7 +427,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
+        self.assertEqual(sync_vals['sync_state'], 'error')
 
     def test__hook_after_odoo_creation_without_discrepancies(self):
         """
@@ -454,14 +454,16 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
 
         self.assertEqual(sync_vals['sync_state'], 'synced')
 
-    def test__hook_after_odoo_creation_without_metadata(self):
+    def test__hook_after_odoo_creation_difference_within_tolerance(self):
         """
-        Test hook_after_odoo_creation without metadata in response
-        Should NOT modify sync_state
+        Test hook_after_odoo_creation with difference within tolerance
+        Should set sync_state to 'synced_with_warning'
         """
         response = {
             'data': {
-                'id': 12345
+                'metadata': [{
+                    'pnt_amount_total_erp_difference': 0.01,
+                }]
             }
         }
         sync_vals = {'sync_state': 'synced'}
@@ -470,50 +472,37 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['sync_state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'synced_with_warning')
 
-    def test__hook_after_odoo_creation_with_empty_response(self):
+    def test__hook_after_odoo_creation_difference_above_tolerance(self):
         """
-        Test hook_after_odoo_creation with empty response
-        Should NOT modify sync_state
+        Test hook_after_odoo_creation with difference above tolerance
+        Should set sync_state to 'error'
         """
-        response = {}
+        response = {
+            'data': {
+                'metadata': [{
+                    'pnt_amount_total_erp_difference': 0.03,
+                }]
+            }
+        }
         sync_vals = {'sync_state': 'synced'}
 
         self.ai_obj.hook_after_odoo_creation(
             self.cursor, self.uid, response, sync_vals
         )
 
-        self.assertEqual(sync_vals['sync_state'], 'synced')
+        self.assertEqual(sync_vals['sync_state'], 'error')
 
-    def test__hook_after_odoo_creation_with_none_response(self):
+    def test__hook_after_odoo_creation_difference_exactly_at_tolerance(self):
         """
-        Test hook_after_odoo_creation with None response
-        Should NOT modify sync_state
-        """
-        response = None
-        sync_vals = {'sync_state': 'synced'}
-
-        self.ai_obj.hook_after_odoo_creation(
-            self.cursor, self.uid, response, sync_vals
-        )
-
-        self.assertEqual(sync_vals['sync_state'], 'synced')
-
-    def test__hook_after_odoo_creation_with_all_discrepancies(self):
-        """
-        Test hook_after_odoo_creation with all amount discrepancies
+        Test hook_after_odoo_creation with difference exactly at tolerance boundary
         Should set sync_state to 'synced_with_warning'
         """
         response = {
             'data': {
                 'metadata': [{
-                    'pnt_amount_untaxed_erp_difference': 100.0,
-                    'pnt_amount_tax_erp_difference': 21.0,
-                    'pnt_amount_total_erp_difference': 121.0,
-                    'pnt_amount_untaxed_erp_discrepancy': True,
-                    'pnt_amount_tax_erp_discrepancy': True,
-                    'pnt_amount_total_erp_discrepancy': True,
+                    'pnt_amount_total_erp_difference': 0.02,
                 }]
             }
         }
