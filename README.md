@@ -22,3 +22,4 @@ odoo_api_key
 
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
+
