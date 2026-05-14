@@ -33,7 +33,7 @@ class PaymentOrder(osv.osv):
         mapping = {
             # (is_grouped, is_refund): 'model_name'
             (True, True): 'payment_order_batches_refunds',  # TODO: does not exists this endpoint!!
-            (True, False): 'payment_order_batches',
+            (True, False): 'payment_orders/batches',
             (False, True): 'payment_order_refunds',
             (False, False): 'payment_orders',
         }
@@ -79,10 +79,10 @@ class PaymentOrder(osv.osv):
     def _get_payment_method_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
         mapping = {
             # (is_grouped, is_refund): 'model_name'
-            (True, True): 'payment_method_id',  # payment_order_batches_refunds
-            (True, False): 'payment_method_id',  # payment_order_batches
+            (True, True): 'payment_method_line_id',  # payment_order_batches_refunds
+            (True, False): 'payment_method_line_id',  # payment_orders/batches
             (False, True): 'method_id',  # payment_order_refunds
-            (False, False): 'payment_method_id',  # payment_orders
+            (False, False): 'payment_method_line_id',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
     # ----------------------------------
@@ -345,7 +345,7 @@ class PaymentOrder(osv.osv):
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
         """
             Request:
-            https://*****/api/v1/payment_orders/status/13228  # noqa:E501
+            https://*****/api/v1/payment_orders/13228/status  # noqa:E501
 
             Response:
             {
@@ -367,7 +367,7 @@ class PaymentOrder(osv.osv):
         odoo_url_api, odoo_api_key = sync_obj._get_conn_params(cr, uid)
         sync_vals = {}
 
-        url_base = "{}payment_orders/status/{}".format(
+        url_base = "{}payment_orders/{}/status".format(
             odoo_url_api, erp_id
         )
         headers = {
