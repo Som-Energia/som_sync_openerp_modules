@@ -14,6 +14,7 @@
         'partner_address_tipovia',
         'remeses_base',
         'devolucions_base',
+        'account_invoice_fraccionaments',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",

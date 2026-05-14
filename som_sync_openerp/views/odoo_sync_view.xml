@@ -163,5 +163,13 @@
             res_model="odoo.sync"
             src_model="giscedata.facturacio.devolucio"/>
 
+        <!-- Action to get synced records with Odoo for account.invoice.fraccionament -->
+        <act_window
+            domain="[('res_id', '=', active_id), ('model', '=', 'account.invoice.fraccionament')]"
+            id="get_synced_records_odoo_action_invoice_fraccionament"
+            name="Get synced records with Odoo"
+            res_model="odoo.sync"
+            src_model="account.invoice.fraccionament"/>
+
     </data>
 </openerp>

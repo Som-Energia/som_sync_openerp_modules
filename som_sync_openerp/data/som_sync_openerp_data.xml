@@ -91,6 +91,19 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
+        <record id="odoo_sync_model_config_account_invoice_fraccionament" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'account.invoice.fraccionament')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
+        <record id="odoo_sync_invoice_amount_tolerance" model="res.config">
+            <field name="name">odoo_sync_invoice_amount_tolerance</field>
+            <field name="value">0.02</field>
+            <field name="description">
+                Tolerància màxima (en euros) per a discrepàncies d'imports en la sincronització
+                de factures. Si la diferència supera aquest valor, el registre es marca com 'error'.
+            </field>
+        </record>
         <record id="odoo_provider_payment_method" model="res.config">
             <field name="name">odoo_provider_payment_method</field>
             <field name="value">375</field>
@@ -105,6 +118,13 @@
             <field name="description">
                 Odoo has different payment.method for customers and providers but OpenERP only has one.
                 We create a general payment.method for customers in Odoo and this is the odoo_id of it.
+            </field>
+        </record>
+        <record id="odoo_customer_fraccionaments_payment_method" model="res.config">
+            <field name="name">odoo_customer_fraccionaments_payment_method</field>
+            <field name="value">411</field>
+            <field name="description">
+                Odoo payment.method for fraccionaments.
             </field>
         </record>
         <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">

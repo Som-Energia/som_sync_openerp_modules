@@ -686,6 +686,86 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             mock.ANY, self.uid, 'account.account', account_id, 321, context=mock.ANY
         )
 
+    @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.get_sync_state_on_creation')
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__payment_order_first_create_sets_pending(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_create_odoo_record, mock_update_odoo_id, mock_get_sync_state):
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': payment_order_id,
+        }
+        mock_create_odoo_record.return_value = (4321, '')
+        mock_get_sync_state.return_value = 'pending'
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'payment.order', 'sync', payment_order_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 4321)
+        self.assertEqual(erp_id, payment_order_id)
+        mock_update_odoo_id.assert_called_once()
+        _, kwargs = mock_update_odoo_id.call_args
+        self.assertEqual(kwargs['context']['sync_state'], 'pending')
+
+    @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.get_sync_state_on_creation')
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__payment_order_splitted_first_create_sets_synced(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_create_odoo_record, mock_update_odoo_id, mock_get_sync_state):
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': payment_order_id,
+        }
+        mock_create_odoo_record.return_value = (4321, '')
+        mock_get_sync_state.return_value = 'synced'
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'payment.order', 'sync', payment_order_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 4321)
+        self.assertEqual(erp_id, payment_order_id)
+        mock_update_odoo_id.assert_called_once()
+        _, kwargs = mock_update_odoo_id.call_args
+        self.assertEqual(kwargs['context']['sync_state'], 'synced')
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_update_pending_state")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__pending_uses_sync_id(
+            self, mock_sync_model_enabled_amplified, mock_common_update_pending_state):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987654,
+            'sync_state': 'pending',
+        })
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_common_update_pending_state.return_value = True
+
+        result = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'payment.order', 'sync', 987654, context={}
+        )
+
+        self.assertTrue(result)
+        mock_common_update_pending_state.assert_called_once_with(
+            self.cursor, self.uid, sync_id, context={'update_pending_state_sync': True}
+        )
+
     @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.update_pending_state')
     def test_common_update_pending_state__calls_update_pending_state(
             self, mock_update_pending_state):

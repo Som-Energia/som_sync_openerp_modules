@@ -342,17 +342,26 @@ class AccountInvoice(osv.osv):
             data['preferred_payment_method_line_id'] = odoo_payment_method_id
         return data
 
+    def _get_amount_tolerance(self, cr, uid):
+        """
+        Returns the configured tolerance for invoice amount discrepancies.
+        Reads 'odoo_sync_invoice_amount_tolerance' from res.config.
+        Defaults to 0.02 if not set or if the config model is not available.
+        """
+        DEFAULT_TOLERANCE = 0.02
+        config_obj = self.pool.get('res.config')
+        val = eval(config_obj.get(cr, uid, 'odoo_sync_invoice_amount_tolerance', DEFAULT_TOLERANCE))
+        return float(val)
+
     def hook_after_odoo_creation(self, cr, uid, response, sync_vals):
         """
         After create Invoice in Odoo, we check if we have amounts discrepancies
         checking metadata in data response:
         response['data']['metadata'][0]:
-        - "pnt_amount_untaxed_erp_difference" = float
-        - "pnt_amount_tax_erp_difference" = float
         - "pnt_amount_total_erp_difference" = float
-        - "pnt_amount_untaxed_erp_discrepancy" = True/False
-        - "pnt_amount_tax_erp_discrepancy" = True/False
-        - "pnt_amount_total_erp_discrepancy" = True/False
+        If pnt_amount_total_erp_difference <= tolerance -> synced_with_warning
+        If pnt_amount_total_erp_difference > tolerance  -> error
+        Tolerance is configured via 'odoo_sync_invoice_amount_tolerance' (default 0.02).
         """
         if not response:
             return
@@ -361,9 +370,13 @@ class AccountInvoice(osv.osv):
             response = json.loads(response)
         if response and 'data' in response and 'metadata' in response['data']:
             metadata = response['data']['metadata'][0]
-            discrepancy_fields = [f for f in metadata if 'discrepancy' in f and metadata[f] is True]
-            if discrepancy_fields:
-                sync_vals['sync_state'] = 'synced_with_warning'
+            difference = abs(metadata.get('pnt_amount_total_erp_difference', 0.0))
+            if difference > 0:
+                tolerance = self._get_amount_tolerance(cr, uid)
+                if difference <= tolerance:
+                    sync_vals['sync_state'] = 'synced_with_warning'
+                else:
+                    sync_vals['sync_state'] = 'error'
 
 
 AccountInvoice()
