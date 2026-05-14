@@ -261,7 +261,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
                     'invoice_id': 99,
                 }
             ],
-            'payment_method_id': 373,
+            'payment_method_line_id': 373,
             'name': u'Remesa 0001',
         }
         self.assertEqual(related_values, expected_values)
@@ -302,7 +302,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
                     'invoice_id': 99,
                 }
             ],
-            'payment_method_id': 375,
+            'payment_method_line_id': 375,
             'name': u'Remesa 0002',
         }
         self.assertEqual(related_values, expected_values)
@@ -517,7 +517,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertTrue(result)
         mock_requests_get.assert_called_once_with(
-            'http://example.com/api/payment_orders/status/{}'.format(payment_order_id),
+            'http://example.com/api/payment_orders/{}/status'.format(payment_order_id),
             headers={
                 'X-API-Key': 'test-api-key',
                 'Accept': 'application/json',
@@ -565,7 +565,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertTrue(result)
         mock_requests_get.assert_called_once_with(
-            'http://example.com/api/payment_orders/status/{}'.format(payment_order_id),
+            'http://example.com/api/payment_orders/{}/status'.format(payment_order_id),
             headers={
                 'X-API-Key': 'test-api-key',
                 'Accept': 'application/json',
@@ -816,7 +816,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         ):
             result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
 
-        self.assertEqual(result, 'payment_order_batches')
+        self.assertEqual(result, 'payment_orders/batches')
 
     def test__get_mapping_model_post_returns_payment_order_refunds_when_refund(self):
         invoice_id = self.imd_obj.get_object_reference(
