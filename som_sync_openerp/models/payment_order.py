@@ -91,32 +91,46 @@ class PaymentOrder(osv.osv):
     def _is_order_grouped_invoices(self, cr, uid, payment_order):
         logger = logging.getLogger('openerp.odoo.sync')
         logger.info('Checking if payment order %s has grouped invoices', payment_order.id)
+        # We consider that a payment order has grouped invoices when at least one of its lines
+        # is not directly linked to an invoice but has some invoice in its move lines.
+        # We assume that if there are grouped invoices, they are all grouped and there are no
+        # mixed cases with grouped and non-grouped invoices in the same payment order.
         for line in payment_order.line_ids:
             without_ml_inv_ref = not line.ml_inv_ref
             has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
             if without_ml_inv_ref and has_invoices:
                 return True
-        return False
+            else:
+                return False
 
     def _is_order_splitted_invoices(self, cr, uid, payment_order):
         logger = logging.getLogger('openerp.odoo.sync')
         logger.info('Checking if payment order %s has splitted invoices', payment_order.id)
+        # We consider that a payment order has splitted invoices when at least one of its lines
+        # is not directly linked to an invoice and has no invoices in its move lines.
+        # We assume that if there are splitted invoices, they are all splitted and there are no
+        # mixed cases with splitted and non-splitted invoices in the same payment order.
         for line in payment_order.line_ids:
             without_ml_inv_ref = not line.ml_inv_ref
             has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
             if without_ml_inv_ref and not has_invoices:
                 return True
-        return False
+            else:
+                return False
 
     def _is_order_refund(self, cr, uid, payment_order):
         logger = logging.getLogger('openerp.odoo.sync')
         logger.info('Checking if payment order %s is refund', payment_order.id)
         # TODO: cover case when grouped invoices with mixed types (refund and non refund)??
+        # We consider that if the first line of the payment order is linked to a refund invoice,
+        # then the payment order is a refund.
+        # We assume that there are no mixed payment orders with refund and non-refund invoices.
         for line in payment_order.line_ids:
             if line.ml_inv_ref \
                     and line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
                 return True
-        return False
+            else:
+                return False
 
     def _get_order_lines_from_invoices(self, cr, uid, payment_line, context=None):
         """
