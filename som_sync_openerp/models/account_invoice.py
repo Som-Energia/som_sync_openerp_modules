@@ -239,6 +239,8 @@ class AccountInvoice(osv.osv):
         if account_invoice.rectifying_id and account_invoice.rectifying_id.number:
             ref = account_invoice.rectifying_id.number
             dict_res['ref'] = ref
+        if account_invoice.type == 'in_invoice':
+            dict_res['ref'] = account_invoice.origin or ''
 
         return dict_res
 

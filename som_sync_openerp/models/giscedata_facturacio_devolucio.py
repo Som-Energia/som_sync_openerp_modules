@@ -138,7 +138,7 @@ class GiscedataFacturacioDevolucio(osv.osv):
                 odoo_id, _ = sync_obj.common_sync_model_create_update(
                     cr, uid, 'account.invoice', 'sync', invoice_id, context_copy)
                 line = {
-                    'invoice_id': odoo_id,
+                    'invoice_ids': [odoo_id],
                     'amount': numfact['import'],  # TODO: control invoices with discrepancies
                 }
                 lines.append(line)
