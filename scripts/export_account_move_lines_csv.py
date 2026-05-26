@@ -79,15 +79,19 @@ def export_csv(account_code, date_from, date_to, output_path):
     if not line_ids:
         print("No hi ha moviments per als filtres indicats.")
 
-    fields = ["date", "name", "ref", "debit", "credit"]
+    fields = ["id", "date", "name", "ref", "debit", "credit"]
     rows = client.AccountMoveLine.read(line_ids, fields) if line_ids else []
 
+    # Defensa extra: alguns backends no garanteixen l'ordre del read(line_ids, ...)
+    rows = sorted(rows, key=lambda r: (to_text(r.get("date")), int(r.get("id") or 0)))
+
     with io.open(output_path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(u"data;compte_comptable;descripcio;import\n")
+        fh.write(u"id;data;compte_comptable;descripcio;import\n")
         for row in rows:
             desc = classify_description(row.get("name"), row.get("ref"))
             signed = amount_signed(row.get("debit"), row.get("credit"))
-            line = u"%s;%s;%s;%s\n" % (
+            line = u"%s;%s;%s;%s;%s\n" % (
+                to_text(row.get("id")),
                 to_text(row.get("date")),
                 account_code,
                 desc.replace(u";", u","),
