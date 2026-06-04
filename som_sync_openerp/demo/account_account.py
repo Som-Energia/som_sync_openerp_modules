@@ -40,6 +40,11 @@ class AccountAccount(osv.osv):
                     xml_id='account_account_iva', res_id=xml_account_id,
                     noupdate=False, mode='init', context=context
                 )
+            stale_imd_id = imd_obj._get_id(
+                cr, uid, 'som_sync_openerp', 'account_account_iva'
+            )
+            if stale_imd_id:
+                imd_obj.unlink(cr, uid, [stale_imd_id], context=context)
 
         account_ids = self.search(
             cr, uid, [('code', '=', '475600'), ('company_id', '=', 1)], context=context

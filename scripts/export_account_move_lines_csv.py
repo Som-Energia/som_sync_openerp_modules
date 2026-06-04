@@ -310,12 +310,6 @@ def classify_description(
         if direct:
             return u"[FACTURA] %s" % direct
 
-    # Prioritat 3: pista de factura en altres línies del mateix assentament
-    if move_hint_resolver:
-        move_hint = move_hint_resolver.invoice_hint_for_move(move_id)
-        if move_hint:
-            return u"[FACTURA] %s" % move_hint
-
     remesa_match = re.search(r"\bremesa\s+(.+)$", name, re.IGNORECASE)
     if remesa_match:
         remesa_code = remesa_match.group(1).strip()
@@ -330,6 +324,12 @@ def classify_description(
 
     if u"devoluc" in lower_name:
         return u"[DEVOLUCIONS] Devolucions"
+
+    # Prioritat 4: pista de factura en altres línies del mateix assentament
+    if move_hint_resolver:
+        move_hint = move_hint_resolver.invoice_hint_for_move(move_id)
+        if move_hint:
+            return u"[FACTURA] %s" % move_hint
 
     if ref and re.search(r"\d", ref):
         return u"[FACTURA] %s" % ref
@@ -364,8 +364,10 @@ def export_csv(account_code, date_from, date_to, output_path):
     if not line_ids:
         print("No hi ha moviments per als filtres indicats.")
 
-    fields = ["id", "date", "name", "ref", "move_id", "invoice_id",
-              "factura_id", "invoice", "factura", "debit", "credit"]
+    line_fields = client.execute("account.move.line", "fields_get") or {}
+    wanted_fields = ["id", "date", "name", "ref", "move_id", "invoice_id",
+                     "factura_id", "invoice", "factura", "debit", "credit"]
+    fields = [field for field in wanted_fields if field in line_fields]
     rows = client.AccountMoveLine.read(line_ids, fields) if line_ids else []
 
     # Defensa extra: alguns backends no garanteixen l'ordre del read(line_ids, ...)
