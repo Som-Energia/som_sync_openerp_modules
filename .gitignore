@@ -135,5 +135,6 @@ dmypy.json
 # AI things
 .atl/
 .pi/
+.pi-lens/
 .engram/
 .opencode/
