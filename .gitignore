@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*dbconfig.py
+
+# Agents things
+.atl/
+.pi/
+.pi-lens/
+.engram/
+.opencode/

@@ -1,0 +1,432 @@
+# -*- coding: utf-8 -*-
+"""
+Script per exportar assentaments de bancs a un excel
+
+   python scripts/export_account_move_lines_csv.py \
+     --account 572000000005 \
+     --date-from 2026-01-01 \
+     --date-to 2026-01-31 \
+     --output /tmp/moviments_572_gener_2026.csv
+"""
+from __future__ import print_function, unicode_literals
+
+import io
+import re
+import sys
+
+try:
+    import argparse
+except ImportError:
+    argparse = None
+
+import dbconfig
+from erppeek import Client
+
+
+def to_text(value):
+    if value is None:
+        return u""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", "replace")
+    return u"%s" % value
+
+
+REMESA_FAKE_RE = re.compile(r"^\d{4}-\d{10,}$")
+INVOICE_HINT_RE = re.compile(r"\b(FPE\d+|RE/[^\s;]+|RG/[^\s;]+)\b", re.IGNORECASE)
+
+
+def _extract_m2o_id(value):
+    if isinstance(value, (list, tuple)) and value:
+        try:
+            return int(value[0])
+        except Exception:
+            return None
+    if isinstance(value, (int, float)):
+        try:
+            return int(value)
+        except Exception:
+            return None
+    if isinstance(value, (str, bytes)):
+        txt = to_text(value).strip()
+        if txt.isdigit():
+            return int(txt)
+    return None
+
+
+class MoveInvoiceHintResolver(object):
+    def __init__(self, client):
+        self.client = client
+        self.cache = {}
+
+    def _invoice_number_from_any_model(self, invoice_id):
+        invoice_id = _extract_m2o_id(invoice_id)
+        if not invoice_id:
+            return None
+
+        for model, fields in [
+            ("giscedata.facturacio.factura", ["number", "name", "ref"]),
+            ("account.invoice", ["number", "reference", "internal_number", "move_name"]),
+        ]:
+            try:
+                row = self.client.execute(model, "read", [invoice_id], fields)
+                row = row[0] if isinstance(row, list) and row else row
+                if not row:
+                    continue
+                for f in fields:
+                    val = to_text(row.get(f)).strip()
+                    if val:
+                        m = INVOICE_HINT_RE.search(val)
+                        if m:
+                            return to_text(m.group(1)).upper()
+                        return val
+            except Exception:
+                continue
+        return None
+
+    def invoice_hint_for_line(self, line):
+        if not isinstance(line, dict):
+            return None
+        for field_name in ["invoice_id", "factura_id", "invoice", "factura"]:
+            if field_name in line:
+                number = self._invoice_number_from_any_model(line.get(field_name))
+                if number:
+                    return number
+        return None
+
+    def invoice_hint_for_move(self, move_id):
+        move_id = _extract_m2o_id(move_id)
+        if not move_id:
+            return None
+        if move_id in self.cache:
+            return self.cache[move_id]
+
+        try:
+            ids = self.client.AccountMoveLine.search([("move_id", "=", move_id)])
+            if not ids:
+                self.cache[move_id] = None
+                return None
+            lines = self.client.AccountMoveLine.read(
+                ids, ["name", "ref", "invoice_id", "factura_id", "invoice", "factura"])
+        except Exception:
+            self.cache[move_id] = None
+            return None
+
+        candidates = set()
+        for ln in lines or []:
+            direct = self.invoice_hint_for_line(ln)
+            if direct:
+                candidates.add(direct)
+            for txt in (to_text(ln.get("ref")), to_text(ln.get("name"))):
+                m = INVOICE_HINT_RE.search(txt or "")
+                if m:
+                    candidates.add(to_text(m.group(1)).upper())
+
+        value = list(candidates)[0] if len(candidates) == 1 else None
+        self.cache[move_id] = value
+        return value
+
+
+class RemesaFacturaResolver(object):
+    def __init__(self, client):
+        self.client = client
+        self.cache = {}
+        self.remesa_fields = self._safe_fields_get("giscedata.remesa.f1")
+        self.invoice_fields = self._safe_fields_get("account.invoice")
+
+    def _safe_fields_get(self, model):
+        try:
+            fields = self.client.execute(model, "fields_get")
+            return fields if isinstance(fields, dict) else {}
+        except Exception:
+            return {}
+
+    def _search_one(self, model, domain):
+        try:
+            ids = self.client.execute(model, "search", domain, 0, 1)
+            return ids[0] if ids else None
+        except Exception:
+            return None
+
+    def _search_ids(self, model, domain, limit=20):
+        try:
+            return self.client.execute(model, "search", domain, 0, limit) or []
+        except Exception:
+            return []
+
+    def _read(self, model, rec_id, fields):
+        if not rec_id:
+            return None
+        try:
+            data = self.client.execute(model, "read", [rec_id], fields)
+            if isinstance(data, list):
+                return data[0] if data else None
+            return data
+        except Exception:
+            return None
+
+    def _invoice_number(self, invoice_id):
+        if not invoice_id:
+            return None
+
+        number_candidates = ["number", "reference", "internal_number", "move_name"]
+        usable = [f for f in number_candidates if f in self.invoice_fields] or ["number"]
+        inv = self._read("account.invoice", invoice_id, usable)
+        if not inv:
+            return None
+
+        for field_name in usable:
+            value = to_text(inv.get(field_name)).strip()
+            if value:
+                return value
+        return None
+
+    def _find_remesa_ids(self, code):
+        terms = [code, u"Remesa %s" % code]
+        char_fields = [
+            name for name, meta in self.remesa_fields.items()
+            if to_text(meta.get("type")) in ("char", "text")
+        ]
+        preferred = [f for f in ["name", "codi", "code", "reference", "ref"] if f in char_fields]
+        candidates = preferred + [f for f in char_fields if f not in preferred]
+
+        for field_name in candidates:
+            for term in terms:
+                for op in ("=", "ilike"):
+                    ids = self._search_ids("giscedata.remesa.f1", [
+                                           (field_name, op, term)], limit=20)
+                    if ids:
+                        return ids
+        return []
+
+    def _invoice_from_direct_rel(self, remesa_id):
+        rel_fields = [
+            name for name, meta in self.remesa_fields.items()
+            if to_text(meta.get("type")) == "many2one"
+            and to_text(meta.get("relation")) == "account.invoice"
+        ]
+        if not rel_fields:
+            rel_fields = [f for f in ["invoice_id", "factura_id",
+                                      "invoice", "factura"] if f in self.remesa_fields]
+        if not rel_fields:
+            return None
+
+        remesa = self._read("giscedata.remesa.f1", remesa_id, rel_fields)
+        if not remesa:
+            return None
+
+        for field_name in rel_fields:
+            invoice_id = _extract_m2o_id(remesa.get(field_name))
+            number = self._invoice_number(invoice_id)
+            if number:
+                return number
+        return None
+
+    def _invoice_from_related_lines(self, remesa_id):
+        rel_fields = [
+            name for name, meta in self.remesa_fields.items()
+            if to_text(meta.get("type")) in ("one2many", "many2many")
+        ]
+
+        candidates = set()
+        for field_name in rel_fields:
+            meta = self.remesa_fields.get(field_name, {})
+            relation_model = to_text(meta.get("relation"))
+            if not relation_model:
+                continue
+
+            remesa = self._read("giscedata.remesa.f1", remesa_id, [field_name])
+            rel_ids = (remesa or {}).get(field_name) or []
+            if not isinstance(rel_ids, list) or not rel_ids:
+                continue
+
+            rel_meta = self._safe_fields_get(relation_model)
+            invoice_m2o_fields = [
+                n for n, m in rel_meta.items()
+                if to_text(m.get("type")) == "many2one"
+                and to_text(m.get("relation")) == "account.invoice"
+            ]
+            for rel_id in rel_ids[:200]:
+                if invoice_m2o_fields:
+                    rel_row = self._read(relation_model, rel_id, invoice_m2o_fields)
+                    if rel_row:
+                        for m2o in invoice_m2o_fields:
+                            invoice_id = _extract_m2o_id(rel_row.get(m2o))
+                            number = self._invoice_number(invoice_id)
+                            if number:
+                                candidates.add(number)
+
+                for num_field in ["numfactura", "number", "invoice_number", "name"]:
+                    if num_field in rel_meta:
+                        rel_row = self._read(relation_model, rel_id, [num_field])
+                        value = to_text((rel_row or {}).get(num_field)).strip()
+                        if value and ("/" in value or value.upper().startswith("FPE")):
+                            candidates.add(value)
+
+        if len(candidates) == 1:
+            return list(candidates)[0]
+        return None
+
+    def resolve_invoice_number(self, remesa_code):
+        code = to_text(remesa_code).strip()
+        if code in self.cache:
+            return self.cache[code]
+
+        if not code:
+            self.cache[code] = None
+            return None
+
+        remesa_ids = self._find_remesa_ids(code)
+        for remesa_id in remesa_ids:
+            number = self._invoice_from_direct_rel(remesa_id)
+            if number:
+                self.cache[code] = number
+                return number
+
+            number = self._invoice_from_related_lines(remesa_id)
+            if number:
+                self.cache[code] = number
+                return number
+
+        self.cache[code] = None
+        return None
+
+
+def classify_description(
+        line_name, line_ref, line_data=None, move_id=None,
+        move_hint_resolver=None, remesa_resolver=None):
+    name = to_text(line_name).strip()
+    ref = to_text(line_ref).strip()
+    lower_name = name.lower()
+
+    # Prioritat 1: pista de factura a la pròpia línia
+    for candidate in (ref, name):
+        m = INVOICE_HINT_RE.search(candidate or "")
+        if m:
+            return u"[FACTURA] %s" % to_text(m.group(1)).upper()
+
+    # Prioritat 2: relació directa factura a la línia comptable
+    if move_hint_resolver and isinstance(line_data, dict):
+        direct = move_hint_resolver.invoice_hint_for_line(line_data)
+        if direct:
+            return u"[FACTURA] %s" % direct
+
+    # Prioritat 3: pista de factura en altres línies del mateix assentament
+    if move_hint_resolver:
+        move_hint = move_hint_resolver.invoice_hint_for_move(move_id)
+        if move_hint:
+            return u"[FACTURA] %s" % move_hint
+
+    remesa_match = re.search(r"\bremesa\s+(.+)$", name, re.IGNORECASE)
+    if remesa_match:
+        remesa_code = remesa_match.group(1).strip()
+        if REMESA_FAKE_RE.match(remesa_code) and remesa_resolver:
+            invoice_number = remesa_resolver.resolve_invoice_number(remesa_code)
+            if invoice_number:
+                return u"[FACTURA] %s" % invoice_number
+        return u"[REMESA] %s" % remesa_code
+
+    if u"comissió" in lower_name or u"comissio" in lower_name or u"comisión" in lower_name:
+        return u"[COMISSIÓ] Comissió"
+
+    if u"devoluc" in lower_name:
+        return u"[DEVOLUCIONS] Devolucions"
+
+    if ref and re.search(r"\d", ref):
+        return u"[FACTURA] %s" % ref
+
+    return name or ref
+
+
+def amount_signed(debit, credit):
+    debit = float(debit or 0.0)
+    credit = float(credit or 0.0)
+    return debit - credit
+
+
+def format_amount(value):
+    return (u"%.2f" % value)
+
+
+def export_csv(account_code, date_from, date_to, output_path):
+    client = Client(**dbconfig.erppeek)
+
+    account_ids = client.AccountAccount.search([("code", "=", account_code)])
+    if not account_ids:
+        raise RuntimeError("No s'ha trobat el compte comptable: %s" % account_code)
+
+    domain = [
+        ("account_id", "in", account_ids),
+        ("date", ">=", date_from),
+        ("date", "<=", date_to),
+    ]
+
+    line_ids = client.AccountMoveLine.search(domain, order="date asc, id asc")
+    if not line_ids:
+        print("No hi ha moviments per als filtres indicats.")
+
+    fields = ["id", "date", "name", "ref", "move_id", "invoice_id",
+              "factura_id", "invoice", "factura", "debit", "credit"]
+    rows = client.AccountMoveLine.read(line_ids, fields) if line_ids else []
+
+    # Defensa extra: alguns backends no garanteixen l'ordre del read(line_ids, ...)
+    rows = sorted(rows, key=lambda r: (to_text(r.get("date")), int(r.get("id") or 0)))
+    move_hint_resolver = MoveInvoiceHintResolver(client)
+    remesa_resolver = RemesaFacturaResolver(client)
+
+    unresolved_fake_remeses = set()
+
+    with io.open(output_path, "w", encoding="utf-8", newline="") as fh:
+        fh.write(u"id;data;compte_comptable;descripcio;import\n")
+        for row in rows:
+            raw_name = to_text(row.get("name")).strip()
+            desc = classify_description(
+                row.get("name"),
+                row.get("ref"),
+                row,
+                row.get("move_id"),
+                move_hint_resolver,
+                remesa_resolver,
+            )
+            remesa_match = re.search(r"\bremesa\s+(.+)$", raw_name, re.IGNORECASE)
+            if remesa_match:
+                remesa_code = remesa_match.group(1).strip()
+                if REMESA_FAKE_RE.match(remesa_code) and desc.startswith(u"[REMESA]"):
+                    unresolved_fake_remeses.add(remesa_code)
+
+            signed = amount_signed(row.get("debit"), row.get("credit"))
+            line = u"%s;%s;%s;%s;%s\n" % (
+                to_text(row.get("id")),
+                to_text(row.get("date")),
+                account_code,
+                desc.replace(u";", u","),
+                format_amount(signed),
+            )
+            fh.write(line)
+
+    print("CSV generat: %s (%s línies)" % (output_path, len(rows)))
+    if unresolved_fake_remeses:
+        print("AVÍS: %s remeses fake sense factura trobada" % len(unresolved_fake_remeses))
+        print("Exemples: %s" % ", ".join(sorted(unresolved_fake_remeses)[:10]))
+
+
+def parse_args(argv):
+    if argparse is None:
+        raise RuntimeError("argparse no disponible")
+
+    parser = argparse.ArgumentParser(
+        description="Exporta account.move.line a CSV amb classificació de descripcions"
+    )
+    parser.add_argument("--account", required=True, help="Codi compte comptable (ex: 572000000005)")
+    parser.add_argument("--date-from", required=True, help="Data inici (YYYY-MM-DD)")
+    parser.add_argument("--date-to", required=True, help="Data fi (YYYY-MM-DD)")
+    parser.add_argument("--output", required=True, help="Ruta fitxer CSV de sortida")
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv or sys.argv[1:])
+    export_csv(args.account, args.date_from, args.date_to, args.output)
+
+
+if __name__ == "__main__":
+    main()
