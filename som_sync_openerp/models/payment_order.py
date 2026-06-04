@@ -4,6 +4,7 @@ import requests
 from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
+import logging
 
 
 class PaymentOrder(osv.osv):
@@ -33,7 +34,7 @@ class PaymentOrder(osv.osv):
         mapping = {
             # (is_grouped, is_refund): 'model_name'
             (True, True): 'payment_order_batches_refunds',  # TODO: does not exists this endpoint!!
-            (True, False): 'payment_order_batches',
+            (True, False): 'payment_orders/batches',
             (False, True): 'payment_order_refunds',
             (False, False): 'payment_orders',
         }
@@ -79,37 +80,57 @@ class PaymentOrder(osv.osv):
     def _get_payment_method_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
         mapping = {
             # (is_grouped, is_refund): 'model_name'
-            (True, True): 'payment_method_id',  # payment_order_batches_refunds
-            (True, False): 'payment_method_id',  # payment_order_batches
+            (True, True): 'payment_method_line_id',  # payment_order_batches_refunds
+            (True, False): 'payment_method_line_id',  # payment_orders/batches
             (False, True): 'method_id',  # payment_order_refunds
-            (False, False): 'payment_method_id',  # payment_orders
+            (False, False): 'payment_method_line_id',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
     # ----------------------------------
 
     def _is_order_grouped_invoices(self, cr, uid, payment_order):
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info('Checking if payment order %s has grouped invoices', payment_order.id)
+        # We consider that a payment order has grouped invoices when at least one of its lines
+        # is not directly linked to an invoice but has some invoice in its move lines.
+        # We assume that if there are grouped invoices, they are all grouped and there are no
+        # mixed cases with grouped and non-grouped invoices in the same payment order.
         for line in payment_order.line_ids:
             without_ml_inv_ref = not line.ml_inv_ref
             has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
             if without_ml_inv_ref and has_invoices:
                 return True
-        return False
+            else:
+                return False
 
     def _is_order_splitted_invoices(self, cr, uid, payment_order):
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info('Checking if payment order %s has splitted invoices', payment_order.id)
+        # We consider that a payment order has splitted invoices when at least one of its lines
+        # is not directly linked to an invoice and has no invoices in its move lines.
+        # We assume that if there are splitted invoices, they are all splitted and there are no
+        # mixed cases with splitted and non-splitted invoices in the same payment order.
         for line in payment_order.line_ids:
             without_ml_inv_ref = not line.ml_inv_ref
             has_invoices = any([aml.invoice for aml in line.move_line_id.move_id.line_id])
             if without_ml_inv_ref and not has_invoices:
                 return True
-        return False
+            else:
+                return False
 
     def _is_order_refund(self, cr, uid, payment_order):
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info('Checking if payment order %s is refund', payment_order.id)
         # TODO: cover case when grouped invoices with mixed types (refund and non refund)??
+        # We consider that if the first line of the payment order is linked to a refund invoice,
+        # then the payment order is a refund.
+        # We assume that there are no mixed payment orders with refund and non-refund invoices.
         for line in payment_order.line_ids:
             if line.ml_inv_ref \
                     and line.ml_inv_ref.type == 'out_invoice' and line.ml_inv_ref.amount_total < 0:
                 return True
-        return False
+            else:
+                return False
 
     def _get_order_lines_from_invoices(self, cr, uid, payment_line, context=None):
         """
@@ -212,6 +233,10 @@ class PaymentOrder(osv.osv):
         return payment_ids, round(amount_total, 2)
 
     def _build_splitted_related_values(self, cr, uid, payment_order, name, context=None):
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info(
+            'Building related values for payment order {} with splitted invoices'.format(
+                payment_order.id))
         if context is None:
             context = {}
         conf_obj = self.pool.get('res.config')
@@ -235,6 +260,11 @@ class PaymentOrder(osv.osv):
 
     def _build_normal_related_values(
             self, cr, uid, payment_order, name, is_grouped, is_refund, context=None):
+
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info(
+            'Building related values for payment order {}'.format(
+                payment_order.id))
         if context is None:
             context = {}
         conf_obj = self.pool.get('res.config')
@@ -260,6 +290,9 @@ class PaymentOrder(osv.osv):
         # at this point we're sure that invoices are synced, and we have to treat the discrepancies
         # if there are any, in order to update the amounts to sync with Odoo and avoid sync issues
         inv_obj = self.pool.get('account.invoice')
+        logger.info(
+            'Processing lines with discrepancies for payment order {}: lines: {}'.format(
+                payment_order.id, len(lines)))
         inv_obj.process_lines_with_discrepancies(
             cr, uid, pl_inv_ids, lines, is_grouped=is_grouped, context=context)
 
@@ -299,6 +332,11 @@ class PaymentOrder(osv.osv):
         is_refund = self._is_order_refund(cr, uid, payment_order)
         is_grouped = self._is_order_grouped_invoices(cr, uid, payment_order)
         is_splitted = self._is_order_splitted_invoices(cr, uid, payment_order)
+
+        logger = logging.getLogger('openerp.odoo.sync')
+        logger.info(
+            'Payment order {} - is_refund: {}, is_grouped: {}, is_splitted: {}'.format(
+                payment_order.id, is_refund, is_grouped, is_splitted))
 
         if is_refund:
             name = 'RECT_{}'.format(payment_order.name)
@@ -345,7 +383,7 @@ class PaymentOrder(osv.osv):
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
         """
             Request:
-            https://*****/api/v1/payment_orders/status/13228  # noqa:E501
+            https://*****/api/v1/payment_orders/13228/status  # noqa:E501
 
             Response:
             {
@@ -367,7 +405,7 @@ class PaymentOrder(osv.osv):
         odoo_url_api, odoo_api_key = sync_obj._get_conn_params(cr, uid)
         sync_vals = {}
 
-        url_base = "{}payment_orders/status/{}".format(
+        url_base = "{}payment_orders/{}/status".format(
             odoo_url_api, erp_id
         )
         headers = {

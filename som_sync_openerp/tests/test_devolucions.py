@@ -72,12 +72,12 @@ class TestDevolucions(testing.OOTestCaseWithCursor):
                 continue
             invoice_id = invoice_ids[0]
             expected_lines.append({
-                'invoice_id': odoo_by_invoice_id[invoice_id],
+                'invoice_ids': [odoo_by_invoice_id[invoice_id]],
                 'amount': numfact['import'],
             })
 
         self.assertEqual(
-            sorted(related_values['lines'], key=lambda x: x['invoice_id']),
-            sorted(expected_lines, key=lambda x: x['invoice_id'])
+            sorted(related_values['lines'], key=lambda x: x['invoice_ids'][0]),
+            sorted(expected_lines, key=lambda x: x['invoice_ids'][0])
         )
         self.assertEqual(mock_common_sync_model_create_update.call_count, len(expected_lines))

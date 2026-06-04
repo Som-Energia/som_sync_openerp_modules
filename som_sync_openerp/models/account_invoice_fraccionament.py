@@ -46,7 +46,7 @@ class AccountInvoiceFraccionament(osv.osv):
         {
             'erp_id': <erp id of the fraccionament>,
             'invoice_id': <odoo_id of the invoice>,
-            'payment_method_id': <odoo_id of the payment method>,
+            'payment_method_line_id': <odoo_id of the payment method line>,
             'amount_total': <total amount>,
             'lines': [
                 {
@@ -95,7 +95,7 @@ class AccountInvoiceFraccionament(osv.osv):
         res = {
             'erp_id': invoice_erp_id,
             'invoice_id': invoice_odoo_id,
-            'payment_method_id': payment_method_odoo_id,
+            'payment_method_line_id': payment_method_odoo_id,
             'amount_total': fraccionament.import_a_fraccionar,
             'lines': lines,
         }

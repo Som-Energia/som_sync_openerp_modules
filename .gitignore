@@ -128,9 +128,11 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Som things
 *dbconfig.py
+*configdb.py
 
-# Agents things
+# AI things
 .atl/
 .pi/
 .pi-lens/

@@ -207,6 +207,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                     'quantity_erp': 1,
                 }
             ],
+            'ref': '',
         }
         self.assertEqual(related_values, expected_values)
 
