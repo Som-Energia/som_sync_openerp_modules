@@ -14,8 +14,9 @@ create/update sync flow.
 The order of MASTER_MODELS is intentional:
 - account.account must be synced before res.partner because partners depend on
   receivable/payable accounts.
-- res.partner must be synced before res.partner.bank because bank accounts need
-  the partner odoo.sync mapping to build their endpoint suffix.
+- res.partner must be synced before res.partner.address and res.partner.bank
+  because both need the partner odoo.sync mapping to build their endpoint
+  suffix.
 
 Each model domain filters out records that cannot build a valid Odoo endpoint
 suffix, such as partners without VAT, states without country/REE code, or bank
@@ -50,6 +51,12 @@ MASTER_MODELS = [
         'model': 'res.partner',
         'domain': [
             ('vat', '!=', False),
+        ],
+    },
+    {
+        'model': 'res.partner.address',
+        'domain': [
+            ('partner_id', '!=', False),
         ],
     },
     {
