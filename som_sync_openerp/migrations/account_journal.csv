@@ -1,4 +1,4 @@
-odoo_id,erp_id,Nombre del diario,Tipo
+"odoo_id","erp_id","Nombre del diario","Tipo"
 481,29, DIARI DEVOLUCIONS DE REBUTS,Revisar amb Pedro
 500,95,Acord de Fraccionaments,Ventas
 499,92,Amortització GenerationkWh,Compra
