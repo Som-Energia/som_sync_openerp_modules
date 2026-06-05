@@ -2,6 +2,10 @@
 """
 Script to launch the initial massive sync of ERP master models to Odoo.
 
+This script is intended to be executed directly from IPython, not imported as a module.
+
+It intentionally performs the sync at top level when loaded.
+
 Only non-static models should be included here. Static models such as
 account.journal, account.tax or payment.type are resolved through static
 odoo.sync mappings loaded from migration CSV files, not through the HTTP
@@ -60,11 +64,33 @@ MASTER_MODELS = [
 
 def sync_model(model_name, domain):
     ids_to_sync = O.model(model_name).search(domain)
+    failures = []
 
     print('Syncing %s records of model %s' % (len(ids_to_sync), model_name))
     for id in tqdm(ids_to_sync):
-        O.OdooSync.common_sync_model_create_update(model_name, 'sync', id)
+        try:
+            O.OdooSync.common_sync_model_create_update(model_name, 'sync', id)
+        except Exception as e:
+            failures.append((model_name, id, e))
+            print('Failed syncing %s %s: %s' % (model_name, id, e))
+
+    print(
+        'Finished %s: %s ok, %s failed' % (
+            model_name,
+            len(ids_to_sync) - len(failures),
+            len(failures),
+        )
+    )
+    return failures
 
 
+all_failures = []
 for master_model in MASTER_MODELS:
-    sync_model(master_model['model'], master_model['domain'])
+    all_failures.extend(sync_model(master_model['model'], master_model['domain']))
+
+if all_failures:
+    print('Sync finished with failures:')
+    for model_name, id, error in all_failures:
+        print('- %s %s: %s' % (model_name, id, error))
+else:
+    print('Sync finished without failures')
