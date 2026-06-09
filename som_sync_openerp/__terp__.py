@@ -11,7 +11,6 @@
         'base_extended_som',
         'base_iban',
         'board',
-        'custom_search',
         'l10n_ES_partner',
         'partner_address_tipovia',
         'remeses_base',

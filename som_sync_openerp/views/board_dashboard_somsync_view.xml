@@ -1,83 +1,69 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <openerp>
-    <data noupdate="1">
+    <data noupdate="0">
 
         <!-- ============================================================ -->
-        <!-- custom.search records: SQL queries returning metrics          -->
-        <!-- Each query returns (name, value) for a single metric          -->
+        <!-- ir.ui.view: tree views for each metric panel                  -->
         <!-- ============================================================ -->
 
-        <!-- Factures sincronitzables -->
-        <record id="custom_search_dashboard_somsync_inv_syncable"
-                model="custom.search">
-            <field name="name">[DASHBOARDS][SOM Sync] Factures sincronitzables des de 01/01/2026</field>
-            <field name="query">
-SELECT
-    'Factures sincronitzables' AS name,
-    COUNT(*) AS value
-FROM account_invoice ai
-INNER JOIN account_journal aj ON ai.journal_id = aj.id
-WHERE aj.som_sync_odoo_invoices = True
-  AND ai.state IN ('open', 'paid')
-  AND ai.date_invoice &gt;= '2026-01-01'
+        <record model="ir.ui.view"
+                id="view_dashboard_somsync_inv_syncable_tree">
+            <field name="name">board.dashboard.somsync.summary.inv_syncable.tree</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <tree string="Factures sincronitzables" create="false" edit="false" delete="false">
+                    <field name="model_name"/>
+                    <field name="metric"/>
+                    <field name="value"/>
+                </tree>
             </field>
         </record>
 
-        <!-- Factures sincronitzades -->
-        <record id="custom_search_dashboard_somsync_inv_synced"
-                model="custom.search">
-            <field name="name">[DASHBOARDS][SOM Sync] Factures sincronitzades des de 01/01/2026</field>
-            <field name="query">
-SELECT
-    'Factures sincronitzades' AS name,
-    COUNT(*) AS value
-FROM account_invoice ai
-INNER JOIN account_journal aj ON ai.journal_id = aj.id
-INNER JOIN ir_model im ON im.model = 'account.invoice'
-INNER JOIN odoo_sync os ON os.model = im.id AND os.res_id = ai.id
-    AND os.sync_state IN ('synced', 'synced_with_warning')
-WHERE aj.som_sync_odoo_invoices = True
-  AND ai.state IN ('open', 'paid')
-  AND ai.date_invoice &gt;= '2026-01-01'
+        <record model="ir.ui.view"
+                id="view_dashboard_somsync_inv_synced_tree">
+            <field name="name">board.dashboard.somsync.summary.inv_synced.tree</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <tree string="Factures sincronitzades" create="false" edit="false" delete="false">
+                    <field name="model_name"/>
+                    <field name="metric"/>
+                    <field name="value"/>
+                </tree>
             </field>
         </record>
 
-        <!-- Assentaments sincronitzables -->
-        <record id="custom_search_dashboard_somsync_move_syncable"
-                model="custom.search">
-            <field name="name">[DASHBOARDS][SOM Sync] Assentaments sincronitzables des de 01/01/2026</field>
-            <field name="query">
-SELECT
-    'Assentaments sincronitzables' AS name,
-    COUNT(*) AS value
-FROM account_move am
-INNER JOIN account_journal aj ON am.journal_id = aj.id
-WHERE aj.som_sync_odoo_account_moves = True
-  AND am.date &gt;= '2026-01-01'
+        <record model="ir.ui.view"
+                id="view_dashboard_somsync_move_syncable_tree">
+            <field name="name">board.dashboard.somsync.summary.move_syncable.tree</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <tree string="Assentaments sincronitzables" create="false" edit="false" delete="false">
+                    <field name="model_name"/>
+                    <field name="metric"/>
+                    <field name="value"/>
+                </tree>
             </field>
         </record>
 
-        <!-- Assentaments sincronitzats -->
-        <record id="custom_search_dashboard_somsync_move_synced"
-                model="custom.search">
-            <field name="name">[DASHBOARDS][SOM Sync] Assentaments sincronitzats des de 01/01/2026</field>
-            <field name="query">
-SELECT
-    'Assentaments sincronitzats' AS name,
-    COUNT(*) AS value
-FROM account_move am
-INNER JOIN account_journal aj ON am.journal_id = aj.id
-INNER JOIN ir_model im ON im.model = 'account.move'
-INNER JOIN odoo_sync os ON os.model = im.id AND os.res_id = am.id
-    AND os.sync_state IN ('synced', 'synced_with_warning')
-WHERE aj.som_sync_odoo_account_moves = True
-  AND am.date &gt;= '2026-01-01'
+        <record model="ir.ui.view"
+                id="view_dashboard_somsync_move_synced_tree">
+            <field name="name">board.dashboard.somsync.summary.move_synced.tree</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">tree</field>
+            <field name="arch" type="xml">
+                <tree string="Assentaments sincronitzats" create="false" edit="false" delete="false">
+                    <field name="model_name"/>
+                    <field name="metric"/>
+                    <field name="value"/>
+                </tree>
             </field>
         </record>
 
         <!-- ============================================================ -->
-        <!-- ir.actions.act_window: link to custom.search.results         -->
-        <!-- context[b'search_id'] = ref to the custom.search record      -->
+        <!-- ir.actions.act_window + view bindings                         -->
         <!-- ============================================================ -->
 
         <record model="ir.actions.act_window"
@@ -87,9 +73,15 @@ WHERE aj.som_sync_odoo_account_moves = True
             <field name="view_type">form</field>
             <field name="view_mode">tree,form</field>
             <field name="limit" eval="0"/>
-            <field name="res_model">custom.search.results</field>
-            <field name="context" eval="{b'search_id': ref('custom_search_dashboard_somsync_inv_syncable')}"/>
-            <field name="domain">[]</field>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.invoice'), ('metric', '=', 'syncable')]</field>
+        </record>
+        <record model="ir.actions.act_window.view"
+                id="action_view_somsync_inv_syncable">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">tree</field>
+            <field name="view_id" ref="view_dashboard_somsync_inv_syncable_tree"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_inv_syncable"/>
         </record>
 
         <record model="ir.actions.act_window"
@@ -99,9 +91,15 @@ WHERE aj.som_sync_odoo_account_moves = True
             <field name="view_type">form</field>
             <field name="view_mode">tree,form</field>
             <field name="limit" eval="0"/>
-            <field name="res_model">custom.search.results</field>
-            <field name="context" eval="{b'search_id': ref('custom_search_dashboard_somsync_inv_synced')}"/>
-            <field name="domain">[]</field>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.invoice'), ('metric', '=', 'synced')]</field>
+        </record>
+        <record model="ir.actions.act_window.view"
+                id="action_view_somsync_inv_synced">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">tree</field>
+            <field name="view_id" ref="view_dashboard_somsync_inv_synced_tree"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_inv_synced"/>
         </record>
 
         <record model="ir.actions.act_window"
@@ -111,9 +109,15 @@ WHERE aj.som_sync_odoo_account_moves = True
             <field name="view_type">form</field>
             <field name="view_mode">tree,form</field>
             <field name="limit" eval="0"/>
-            <field name="res_model">custom.search.results</field>
-            <field name="context" eval="{b'search_id': ref('custom_search_dashboard_somsync_move_syncable')}"/>
-            <field name="domain">[]</field>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.move'), ('metric', '=', 'syncable')]</field>
+        </record>
+        <record model="ir.actions.act_window.view"
+                id="action_view_somsync_move_syncable">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">tree</field>
+            <field name="view_id" ref="view_dashboard_somsync_move_syncable_tree"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_move_syncable"/>
         </record>
 
         <record model="ir.actions.act_window"
@@ -123,9 +127,15 @@ WHERE aj.som_sync_odoo_account_moves = True
             <field name="view_type">form</field>
             <field name="view_mode">tree,form</field>
             <field name="limit" eval="0"/>
-            <field name="res_model">custom.search.results</field>
-            <field name="context" eval="{b'search_id': ref('custom_search_dashboard_somsync_move_synced')}"/>
-            <field name="domain">[]</field>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.move'), ('metric', '=', 'synced')]</field>
+        </record>
+        <record model="ir.actions.act_window.view"
+                id="action_view_somsync_move_synced">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">tree</field>
+            <field name="view_id" ref="view_dashboard_somsync_move_synced_tree"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_move_synced"/>
         </record>
 
         <!-- ============================================================ -->
