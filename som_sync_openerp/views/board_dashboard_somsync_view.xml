@@ -25,7 +25,7 @@
             <field name="view_mode">graph,tree,form</field>
             <field name="limit" eval="0"/>
             <field name="res_model">board.dashboard.somsync.summary</field>
-            <field name="domain">[('model_name', '=', 'account.invoice')]</field>
+            <field name="domain">[('model_name', '=', 'account.invoice'), ('metric', '=', 'syncable')]</field>
         </record>
         <record model="ir.actions.act_window.view" id="action_view_somsync_inv_syncable">
             <field name="sequence" eval="1"/>
@@ -58,7 +58,7 @@
             <field name="view_mode">graph,tree,form</field>
             <field name="limit" eval="0"/>
             <field name="res_model">board.dashboard.somsync.summary</field>
-            <field name="domain">[('model_name', '=', 'account.invoice'), ('sync_state', 'in', ['synced', 'synced_with_warning'])]</field>
+            <field name="domain">[('model_name', '=', 'account.invoice'), ('metric', '=', 'synced')]</field>
         </record>
         <record model="ir.actions.act_window.view" id="action_view_somsync_inv_synced">
             <field name="sequence" eval="1"/>
@@ -92,7 +92,7 @@
             <field name="view_mode">graph,tree,form</field>
             <field name="limit" eval="0"/>
             <field name="res_model">board.dashboard.somsync.summary</field>
-            <field name="domain">[('model_name', '=', 'account.move')]</field>
+            <field name="domain">[('model_name', '=', 'account.move'), ('metric', '=', 'syncable')]</field>
         </record>
         <record model="ir.actions.act_window.view" id="action_view_somsync_move_syncable">
             <field name="sequence" eval="1"/>
@@ -125,7 +125,7 @@
             <field name="view_mode">graph,tree,form</field>
             <field name="limit" eval="0"/>
             <field name="res_model">board.dashboard.somsync.summary</field>
-            <field name="domain">[('model_name', '=', 'account.move'), ('sync_state', 'in', ['synced', 'synced_with_warning'])]</field>
+            <field name="domain">[('model_name', '=', 'account.move'), ('metric', '=', 'synced')]</field>
         </record>
         <record model="ir.actions.act_window.view" id="action_view_somsync_move_synced">
             <field name="sequence" eval="1"/>

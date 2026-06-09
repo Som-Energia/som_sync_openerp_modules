@@ -162,9 +162,20 @@ wizard/
 
 El dashboard utilitza el patro `board.board` amb indicators:
 
-- **SQL view**: `board_dashboard_somsync_summary` (_auto=False) fa UNION ALL de factures i assentaments sincronitzables amb el seu estat de sync (LEFT JOIN odoo.sync)
+- **SQL view pre-agregada**: `board_dashboard_somsync_summary` (_auto=False) retorna nomes 4 files (una per metrica), no 140M+ files
 - **4 indicators**: factures syncable, factures synced, assentaments syncable, assentaments synced
 - **Filtre per data**: 01/01/2026 (fixe al SQL view)
+- **Optimitzacio**: Usa COUNT(*) + INNER JOIN en comptes de LEFT JOIN + files individuals. Les "synced" fan INNER JOIN amb odoo.sync (nomes registres que existeixen).
 - **Dependencia**: modul `board`
 
-Per actualitzar les dades, recalcula la SQL view (reinstall del modul o executar l'init).
+### Rendiment
+
+Amb 40M+ factures i 100M+ assentaments:
+- Les queries de "syncable" fan un sol scan amb COUNT(*)
+- Les queries de "synced" fan INNER JOIN (no LEFT JOIN) amb odoo.sync, reduint el treball
+- La SQL view retorna 4 files, no 140M+
+
+### Refresh
+
+Les dades es recalculen quan es reinstal·la el modul (executa `init()`).
+Per actualitzar sense reinstal·lar: `DROP VIEW IF EXISTS board_dashboard_somsync_summary;` i tornar a executar l'sql del fitxer.
