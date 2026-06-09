@@ -127,7 +127,7 @@ models/
   account_journal.py        # Camps som_sync_odoo_*
   res_partner.py            # Sync partners (+ PATCH bidireccional)
   payment_order.py          # Sync ordres pagament (complex: grouped/refund/splitted)
-  board_dashboard_somsync.py # Dashboard de sincronitzacio
+  board_dashboard_somsync.py # SQL view + model per dashboard (board.board indicators)
   ...
 views/
   odoo_sync_view.xml        # Form/tree odoo.sync + accions
@@ -160,7 +160,11 @@ wizard/
 
 ## Dashboard
 
-El dashboard (`board.dashboard.somsync`) mostra comptes calculats via SQL:
-- Factures/asseguts sincronitzables vs sincronitzats
-- Data de tall: 01/01/2026 (configurable al model)
-- boto "Actualitzar" per recalcular
+El dashboard utilitza el patro `board.board` amb indicators:
+
+- **SQL view**: `board_dashboard_somsync_summary` (_auto=False) fa UNION ALL de factures i assentaments sincronitzables amb el seu estat de sync (LEFT JOIN odoo.sync)
+- **4 indicators**: factures syncable, factures synced, assentaments syncable, assentaments synced
+- **Filtre per data**: 01/01/2026 (fixe al SQL view)
+- **Dependencia**: modul `board`
+
+Per actualitzar les dades, recalcula la SQL view (reinstall del modul o executar l'init).

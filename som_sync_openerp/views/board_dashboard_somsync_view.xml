@@ -1,88 +1,150 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <openerp>
     <data>
-        <!-- Vista form del dashboard -->
-        <record model="ir.ui.view" id="view_board_dashboard_somsync_form">
-            <field name="name">board.dashboard.somsync.form</field>
-            <field name="model">board.dashboard.somsync</field>
-            <field name="type">form</field>
-            <field name="arch" type="xml">
-                <form string="Dashboard Sincronització" version="7.0">
-                    <sheet>
-                        <div class="oe_title">
-                            <h1>Dashboard Sincronització OpenERP-Odoo</h1>
-                        </div>
-                        <group string="Factures (account.invoice)" colspan="4">
-                            <group>
-                                <field name="total_invoices_syncable" readonly="1"
-                                    string="Sincronitzables" widget="integer"
-                                    options="{'title': 'Factures amb journal habilitat i estat open/paid'}"/>
-                            </group>
-                            <group>
-                                <field name="total_invoices_synced" readonly="1"
-                                    string="Sincronitzades" widget="integer"
-                                    options="{'title': 'Factures amb sync_state synced o synced_with_warning'}"/>
-                            </group>
-                        </group>
-                        <group string="Assentaments (account.move)" colspan="4">
-                            <group>
-                                <field name="total_moves_syncable" readonly="1"
-                                    string="Sincronitzables" widget="integer"
-                                    options="{'title': 'Assentaments amb journal habilitat'}"/>
-                            </group>
-                            <group>
-                                <field name="total_moves_synced" readonly="1"
-                                    string="Sincronitzats" widget="integer"
-                                    options="{'title': 'Assentaments amb sync_state synced o synced_with_warning'}"/>
-                            </group>
-                        </group>
-                        <separator string="Resum total" colspan="4"/>
-                        <group colspan="4">
-                            <group>
-                                <field name="total_syncable" readonly="1"
-                                    string="Total sincronitzables"/>
-                            </group>
-                            <group>
-                                <field name="total_synced" readonly="1"
-                                    string="Total sincronitzats"/>
-                            </group>
-                            <group>
-                                <field name="pct_synced" readonly="1"
-                                    string="% Sincronitzats" widget="float"
-                                    options="{'digits': [5,2]}"/>
-                            </group>
-                        </group>
-                        <group colspan="4">
-                            <field name="date_start" readonly="1"
-                                string="Data inici filtre"/>
-                        </group>
-                    </sheet>
-                    <footer>
-                        <button string="Actualitzar" name="refresh_dashboard"
-                            type="object" class="oe_highlight"/>
-                        <button string="Tancar" class="oe_highlight"
-                            special="cancel"/>
-                    </footer>
-                </form>
-            </field>
+        <!-- Board definition -->
+        <record model="board.board" id="dashboard_somsync">
+            <field name="name" eval="'Sincronitzacio OpenERP-Odoo'"/>
         </record>
 
-        <!-- Acció per obrir el dashboard -->
-        <record model="ir.actions.act_window" id="action_board_dashboard_somsync">
-            <field name="name">Dashboard Sincronització</field>
+        <!-- ===== Factures ===== -->
+        <!-- Indicador: Factures sincronitzables -->
+        <record model="ir.ui.view" id="view_dashboard_somsync_inv_syncable">
+            <field name="name">Factures sincronitzables</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">graph</field>
+            <field name="priority" eval="16"/>
+            <field name="version" eval="2"/>
+            <field name="arch" type="xml">
+                <graph type="indicator"/>
+            </field>
+        </record>
+        <record model="ir.actions.act_window" id="action_dashboard_somsync_inv_syncable">
+            <field name="name">Factures sincronitzables</field>
             <field name="type">ir.actions.act_window</field>
-            <field name="res_model">board.dashboard.somsync</field>
             <field name="view_type">form</field>
-            <field name="view_mode">form</field>
-            <field name="context">{'default_display_name': 'Dashboard Sincronització'}</field>
-            <field name="target">new</field>
+            <field name="view_mode">graph,tree,form</field>
+            <field name="limit" eval="0"/>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.invoice')]</field>
+        </record>
+        <record model="ir.actions.act_window.view" id="action_view_somsync_inv_syncable">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">graph</field>
+            <field name="view_id" ref="view_dashboard_somsync_inv_syncable"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_inv_syncable"/>
+        </record>
+        <record model="board.board.line" id="board_line_somsync_inv_syncable">
+            <field name="board_id" ref="dashboard_somsync"/>
+            <field name="sequence" eval="1"/>
+            <field name="name">Factures sincronitzables</field>
+            <field name="action_id" ref="action_dashboard_somsync_inv_syncable"/>
+        </record>
+
+        <!-- Indicador: Factures sincronitzades -->
+        <record model="ir.ui.view" id="view_dashboard_somsync_inv_synced">
+            <field name="name">Factures sincronitzades</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">graph</field>
+            <field name="priority" eval="16"/>
+            <field name="version" eval="2"/>
+            <field name="arch" type="xml">
+                <graph type="indicator"/>
+            </field>
+        </record>
+        <record model="ir.actions.act_window" id="action_dashboard_somsync_inv_synced">
+            <field name="name">Factures sincronitzades</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">graph,tree,form</field>
+            <field name="limit" eval="0"/>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.invoice'), ('sync_state', 'in', ['synced', 'synced_with_warning'])]</field>
+        </record>
+        <record model="ir.actions.act_window.view" id="action_view_somsync_inv_synced">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">graph</field>
+            <field name="view_id" ref="view_dashboard_somsync_inv_synced"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_inv_synced"/>
+        </record>
+        <record model="board.board.line" id="board_line_somsync_inv_synced">
+            <field name="board_id" ref="dashboard_somsync"/>
+            <field name="sequence" eval="2"/>
+            <field name="name">Factures sincronitzades</field>
+            <field name="action_id" ref="action_dashboard_somsync_inv_synced"/>
+        </record>
+
+        <!-- ===== Assentaments ===== -->
+        <!-- Indicador: Assentaments sincronitzables -->
+        <record model="ir.ui.view" id="view_dashboard_somsync_move_syncable">
+            <field name="name">Assentaments sincronitzables</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">graph</field>
+            <field name="priority" eval="16"/>
+            <field name="version" eval="2"/>
+            <field name="arch" type="xml">
+                <graph type="indicator"/>
+            </field>
+        </record>
+        <record model="ir.actions.act_window" id="action_dashboard_somsync_move_syncable">
+            <field name="name">Assentaments sincronitzables</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">graph,tree,form</field>
+            <field name="limit" eval="0"/>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.move')]</field>
+        </record>
+        <record model="ir.actions.act_window.view" id="action_view_somsync_move_syncable">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">graph</field>
+            <field name="view_id" ref="view_dashboard_somsync_move_syncable"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_move_syncable"/>
+        </record>
+        <record model="board.board.line" id="board_line_somsync_move_syncable">
+            <field name="board_id" ref="dashboard_somsync"/>
+            <field name="sequence" eval="3"/>
+            <field name="name">Assentaments sincronitzables</field>
+            <field name="action_id" ref="action_dashboard_somsync_move_syncable"/>
+        </record>
+
+        <!-- Indicador: Assentaments sincronitzats -->
+        <record model="ir.ui.view" id="view_dashboard_somsync_move_synced">
+            <field name="name">Assentaments sincronitzats</field>
+            <field name="model">board.dashboard.somsync.summary</field>
+            <field name="type">graph</field>
+            <field name="priority" eval="16"/>
+            <field name="version" eval="2"/>
+            <field name="arch" type="xml">
+                <graph type="indicator"/>
+            </field>
+        </record>
+        <record model="ir.actions.act_window" id="action_dashboard_somsync_move_synced">
+            <field name="name">Assentaments sincronitzats</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">graph,tree,form</field>
+            <field name="limit" eval="0"/>
+            <field name="res_model">board.dashboard.somsync.summary</field>
+            <field name="domain">[('model_name', '=', 'account.move'), ('sync_state', 'in', ['synced', 'synced_with_warning'])]</field>
+        </record>
+        <record model="ir.actions.act_window.view" id="action_view_somsync_move_synced">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">graph</field>
+            <field name="view_id" ref="view_dashboard_somsync_move_synced"/>
+            <field name="act_window_id" ref="action_dashboard_somsync_move_synced"/>
+        </record>
+        <record model="board.board.line" id="board_line_somsync_move_synced">
+            <field name="board_id" ref="dashboard_somsync"/>
+            <field name="sequence" eval="4"/>
+            <field name="name">Assentaments sincronitzats</field>
+            <field name="action_id" ref="action_dashboard_somsync_move_synced"/>
         </record>
 
         <!-- Menuitem -->
         <menuitem
             id="menu_board_dashboard_somsync"
-            name="Dashboard Sincronització"
-            action="action_board_dashboard_somsync"
+            name="Dashboard Sincronitzacio"
+            action="action_dashboard_somsync_inv_syncable"
             parent="menu_folder_odoo_sync"
             sequence="1"
             icon="terp-graph"
