@@ -164,11 +164,25 @@ WHERE aj.som_sync_odoo_account_moves = True
             <field name="action_id" ref="action_dashboard_somsync_move_synced"/>
         </record>
 
-        <!-- Menuitem -->
+        <!-- ============================================================ -->
+        <!-- Menuitem: obre el board.board en form view                    -->
+        <!-- ============================================================ -->
+
+        <record model="ir.actions.act_window"
+                id="action_dashboard_somsync_board">
+            <field name="name">Dashboard Sincronitzacio</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="res_model">board.board</field>
+            <field name="domain">[('name', '=', 'Sincronitzacio OpenERP-Odoo')]</field>
+            <field name="context">{'active_test': False}</field>
+        </record>
+
         <menuitem
             id="menu_board_dashboard_somsync"
             name="Dashboard Sincronitzacio"
-            action="action_dashboard_somsync_inv_syncable"
+            action="action_dashboard_somsync_board"
             parent="menu_folder_odoo_sync"
             sequence="1"
             icon="terp-graph"

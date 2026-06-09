@@ -157,6 +157,20 @@ wizard/
 - **oorq**: Jobs asincrons amb `@job(queue='default')` decorator
 - **PATCH**: Noms `res.partner` i `res.partner.address` tenen actualitzacio bidireccional
 - **Discrepacies imports**: `synced_with_warning` amb tolerancia configurable (`odoo_sync_invoice_amount_tolerance`, default 0.02EUR)
+- **Noms de taules BD**: OpenERP 5 NO usa herència PostgreSQL. Els noms de taules difereixen dels noms de models:
+  - `ir.actions.act_window` → taula `ir_act_window` (NO `ir_actions_act_window`)
+  - `ir.actions` → taula `ir_actions` (sense columna `res_model`)
+  - `ir.model` → taula `ir_model`
+  - `ir.model.data` → taula `ir_model_data`
+  - `board.board.line` → taula `board_board_line`
+  - Per trobar noms reals: `SELECT tablename FROM pg_tables WHERE schemaname='public'`
+- **Neteja de models**: Quan elimines un model Python, cal netejar manualment les referències a la BD:
+  1. `DELETE FROM ir_model_data WHERE model='ir.model' AND res_id=ID`
+  2. `DELETE FROM ir_act_window WHERE res_model='nom.model'`
+  3. `DELETE FROM board_board_line WHERE action_id IN (...)`
+  4. `DELETE FROM ir_model WHERE id=ID`
+  5. `DROP VIEW IF EXISTS vista_sql`
+  6. Reiniciar servidor ERP per netejar el pool
 
 ## Dashboard
 
