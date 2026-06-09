@@ -29,6 +29,7 @@
         "wizard/wizard_sync_object_odoo_view.xml",
         "wizard/wizard_open_related_model_record_view.xml",
         "wizard/wizard_open_related_odoo_record_view.xml",
+        "views/board_dashboard_somsync_view.xml",
         "security/ir.model.access.csv",
     ],
     "installable": True,

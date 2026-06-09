@@ -19,3 +19,4 @@ from . import res_partner
 from . import res_partner_address
 from . import giscedata_facturacio_devolucio
 from . import account_invoice_fraccionament
+from . import board_dashboard_somsync
