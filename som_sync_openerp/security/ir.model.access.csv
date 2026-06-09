@@ -8,5 +8,4 @@
 "access_wizard_sync_object_odoo","wizard.sync.object.odoo","model_wizard_sync_object_odoo","base.group_user",1,1,1,1
 "access_wizard_open_related_record","wizard.open.related.record","model_wizard_open_related_record","base.group_user",1,1,1,1
 "access_wizard_open_related_odoo_record","wizard.open.related.odoo.record","model_wizard_open_related_odoo_record","base.group_user",1,1,1,1
-"access_user_board_dashboard_somsync","board.dashboard.somsync","model_board_dashboard_somsync","base.group_user",1,1,1,0
-"access_admin_board_dashboard_somsync","board.dashboard.somsync","model_board_dashboard_somsync","base.group_system",1,1,1,1
+"access_user_board_dashboard_somsync","board.dashboard.somsync.summary","model_board_dashboard_somsync_summary","base.group_user",1,1,1,0
