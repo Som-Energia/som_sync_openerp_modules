@@ -127,7 +127,7 @@ models/
   account_journal.py        # Camps som_sync_odoo_*
   res_partner.py            # Sync partners (+ PATCH bidireccional)
   payment_order.py          # Sync ordres pagament (complex: grouped/refund/splitted)
-  board_dashboard_somsync.py # SQL view + model per dashboard (board.board indicators)
+  # (sense model Python per dashboard - les queries SQL son als custom.search records)
   ...
 views/
   odoo_sync_view.xml        # Form/tree odoo.sync + accions
@@ -160,22 +160,30 @@ wizard/
 
 ## Dashboard
 
-El dashboard utilitza el patro `board.board` amb indicators:
+El dashboard utilitza el patro `custom.search` + `custom.search.results` + `board.board`:
 
-- **SQL view pre-agregada**: `board_dashboard_somsync_summary` (_auto=False) retorna nomes 4 files (una per metrica), no 140M+ files
-- **4 indicators**: factures syncable, factures synced, assentaments syncable, assentaments synced
-- **Filtre per data**: 01/01/2026 (fixe al SQL view)
-- **Optimitzacio**: Usa COUNT(*) + INNER JOIN en comptes de LEFT JOIN + files individuals. Les "synced" fan INNER JOIN amb odoo.sync (nomes registres que existeixen).
-- **Dependencia**: modul `board`
+- **4 custom.search records**: cadascun amb una query SQL que retorna una fila (name, value) per metrica
+- **4 act_window actions**: `res_model='custom.search.results'` amb `context[b'search_id']` apuntant al custom.search
+- **4 board.board.line**: un per metrica al board.board
+- **Filtre per data**: 01/01/2026 (fixe a les queries SQL)
+- **Optimitzacio**: COUNT(*) + INNER JOIN. Les "synced" fan INNER JOIN amb odoo.sync
+- **Dependencia**: moduls `board` i `custom_search`
+
+### Patro custom.search
+
+1. `custom.search` conté la query SQL (campo `query`)
+2. `custom.search.results` executa la query via `read()` i genera vistes dinàmiques via `fields_view_get()`
+3. `ir.actions.act_window` enllaça `custom.search.results` amb `context[b'search_id']` = ref del custom.search
+4. `board.board.line` mostra l'acció al dashboard
 
 ### Rendiment
 
 Amb 40M+ factures i 100M+ assentaments:
 - Les queries de "syncable" fan un sol scan amb COUNT(*)
 - Les queries de "synced" fan INNER JOIN (no LEFT JOIN) amb odoo.sync, reduint el treball
-- La SQL view retorna 4 files, no 140M+
+- Cada query retorna 1 fila, no 140M+
 
 ### Refresh
 
-Les dades es recalculen quan es reinstal·la el modul (executa `init()`).
-Per actualitzar sense reinstal·lar: `DROP VIEW IF EXISTS board_dashboard_somsync_summary;` i tornar a executar l'sql del fitxer.
+Les dades es recalculen cada cop que es carrega el dashboard (executa la query SQL en temps real).
+No cal reinstal·lar el modul.
