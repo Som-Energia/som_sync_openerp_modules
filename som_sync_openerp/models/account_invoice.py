@@ -341,7 +341,8 @@ class AccountInvoice(osv.osv):
         """
         config_obj = self.pool.get('res.config')
         try:
-            odoo_payment_method_id = int(config_obj.get(cr, uid, 'odoo_provider_payment_method', 375))
+            odoo_payment_method_id = int(
+                config_obj.get(cr, uid, 'odoo_provider_payment_method', 375))
         except (TypeError, ValueError):
             odoo_payment_method_id = 375
         if context is None:
