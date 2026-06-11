@@ -127,6 +127,13 @@
                 Odoo payment.method for fraccionaments.
             </field>
         </record>
+        <record id="odoo_default_erp_payment_term" model="res.config">
+            <field name="name">odoo_default_erp_payment_term</field>
+            <field name="value">0</field>
+            <field name="description">
+                Default ERP account.payment.term id used when an invoice has no payment term.
+            </field>
+        </record>
         <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">
             <field name="name">Actualitzar sincronitzacions pendents d'Odoo</field>
             <field name="active" eval="0"/>

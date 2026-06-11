@@ -2,6 +2,10 @@
 from osv import osv
 from service.security import Sudo
 import json
+import logging
+
+
+logger = logging.getLogger('openerp.odoo.sync')
 
 
 class AccountInvoice(osv.osv):
@@ -327,8 +331,7 @@ class AccountInvoice(osv.osv):
 
     def hook_last_modifications(self, cr, uid, data, context=None):
         """
-        Modify the payment method for providers invoices with a config
-          variable odoo_provider_payment_method
+        Modify invoice data with configurable defaults before sending it to Odoo.
 
         :param self: Description
         :param cr: Description
@@ -337,12 +340,44 @@ class AccountInvoice(osv.osv):
         :param context: Description
         """
         config_obj = self.pool.get('res.config')
-        odoo_payment_method_id = config_obj.get(cr, uid, 'odoo_provider_payment_method', 375)
+        odoo_payment_method_id = int(config_obj.get(cr, uid, 'odoo_provider_payment_method', 375))
         if context is None:
             context = {}
         if data['move_type'] in ['in_refund', 'in_invoice']:
             data['preferred_payment_method_line_id'] = odoo_payment_method_id
+        if not data.get('invoice_payment_term_id'):
+            default_payment_term_id = self._get_default_odoo_payment_term_id(cr, uid)
+            if default_payment_term_id:
+                data['invoice_payment_term_id'] = default_payment_term_id
         return data
+
+    def _get_default_odoo_payment_term_id(self, cr, uid):
+        config_obj = self.pool.get('res.config')
+        sync_obj = self.pool.get('odoo.sync')
+        erp_payment_term_id = config_obj.get(cr, uid, 'odoo_default_erp_payment_term', 0)
+        try:
+            erp_payment_term_id = int(erp_payment_term_id)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid odoo_default_erp_payment_term config value: %s",
+                erp_payment_term_id,
+            )
+            return False
+
+        if not erp_payment_term_id:
+            logger.warning("odoo_default_erp_payment_term is not configured")
+            return False
+
+        odoo_payment_term_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.payment.term', erp_payment_term_id)
+        if not odoo_payment_term_id:
+            logger.warning(
+                "No Odoo mapping found for default ERP payment term %s",
+                erp_payment_term_id,
+            )
+            return False
+
+        return odoo_payment_term_id
 
     def _get_amount_tolerance(self, cr, uid):
         """

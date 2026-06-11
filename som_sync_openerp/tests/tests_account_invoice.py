@@ -349,11 +349,13 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         input_data = {
             'move_type': u'out_invoice',
             'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': 123,
             'ref': 'INVXXX',
         }
         result_data = {
             'move_type': u'out_invoice',
             'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': 123,
             'ref': 'INVXXX',
         }
         hook_data = self.ai_obj.hook_last_modifications(
@@ -365,19 +367,97 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         input_data = {
             'move_type': u'in_invoice',
             'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': 123,
             'ref': False,
         }
         result_data = {
             'move_type': u'in_invoice',
             'preferred_payment_method_line_id': 375,
-            'ref': '',
+            'invoice_payment_term_id': 123,
+            'ref': False,
         }
 
         hook_data = self.ai_obj.hook_last_modifications(
-            self.cursor, self.uid, result_data
+            self.cursor, self.uid, input_data
         )
 
         self.assertEqual(hook_data, result_data)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__hook_last_modifications_sets_default_payment_term(
+            self, mock_get_odoo_id_by_erp_id):
+        mock_get_odoo_id_by_erp_id.return_value = 999
+        config_obj = self.openerp.pool.get('res.config')
+        config_obj.set(self.cursor, self.uid, 'odoo_default_erp_payment_term', '15')
+        input_data = {
+            'move_type': u'out_invoice',
+            'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': False,
+            'ref': 'INVXXX',
+        }
+
+        hook_data = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, input_data
+        )
+
+        self.assertEqual(hook_data['invoice_payment_term_id'], 999)
+        mock_get_odoo_id_by_erp_id.assert_called_once_with(
+            self.cursor, self.uid, 'account.payment.term', 15)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__hook_last_modifications_keeps_payment_term_when_mapping_missing(
+            self, mock_get_odoo_id_by_erp_id):
+        mock_get_odoo_id_by_erp_id.return_value = False
+        config_obj = self.openerp.pool.get('res.config')
+        config_obj.set(self.cursor, self.uid, 'odoo_default_erp_payment_term', '15')
+        input_data = {
+            'move_type': u'out_invoice',
+            'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': False,
+            'ref': 'INVXXX',
+        }
+
+        hook_data = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, input_data
+        )
+
+        self.assertFalse(hook_data['invoice_payment_term_id'])
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__hook_last_modifications_keeps_payment_term_when_default_not_configured(
+            self, mock_get_odoo_id_by_erp_id):
+        config_obj = self.openerp.pool.get('res.config')
+        config_obj.set(self.cursor, self.uid, 'odoo_default_erp_payment_term', '0')
+        input_data = {
+            'move_type': u'out_invoice',
+            'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': False,
+            'ref': 'INVXXX',
+        }
+
+        hook_data = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, input_data
+        )
+
+        self.assertFalse(hook_data['invoice_payment_term_id'])
+        mock_get_odoo_id_by_erp_id.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__hook_last_modifications_does_not_override_payment_term(
+            self, mock_get_odoo_id_by_erp_id):
+        input_data = {
+            'move_type': u'out_invoice',
+            'preferred_payment_method_line_id': 400,
+            'invoice_payment_term_id': 123,
+            'ref': 'INVXXX',
+        }
+
+        hook_data = self.ai_obj.hook_last_modifications(
+            self.cursor, self.uid, input_data
+        )
+
+        self.assertEqual(hook_data['invoice_payment_term_id'], 123)
+        mock_get_odoo_id_by_erp_id.assert_not_called()
 
     def test__hook_after_odoo_creation_with_discrepancies(self):
         """
