@@ -226,6 +226,56 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         return fracc_id
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__get_journal_odoo_id_uses_payment_mode_bank(self, mock_get_odoo_id_by_erp_id):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        journal_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_journal_syncronizable"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        mock_get_odoo_id_by_erp_id.return_value = 13
+
+        journal_odoo_id = self.po_obj._get_journal_odoo_id(
+            self.cursor, self.uid, payment_order
+        )
+
+        self.assertEqual(journal_odoo_id, 13)
+        mock_get_odoo_id_by_erp_id.assert_called_once_with(
+            self.cursor, self.uid, 'account.journal', journal_id)
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__get_journal_odoo_id_returns_false_when_payment_mode_has_no_bank(
+            self, mock_get_odoo_id_by_erp_id):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        with mock.patch.object(payment_order, 'mode', False, create=True):
+            journal_odoo_id = self.po_obj._get_journal_odoo_id(
+                self.cursor, self.uid, payment_order
+            )
+
+        self.assertFalse(journal_odoo_id)
+        mock_get_odoo_id_by_erp_id.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__get_journal_odoo_id_returns_false_when_journal_has_no_odoo_mapping(
+            self, mock_get_odoo_id_by_erp_id):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        mock_get_odoo_id_by_erp_id.return_value = False
+
+        journal_odoo_id = self.po_obj._get_journal_odoo_id(
+            self.cursor, self.uid, payment_order
+        )
+
+        self.assertFalse(journal_odoo_id)
+        mock_get_odoo_id_by_erp_id.assert_called_once()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_inbound(self, mock_syncronize_sync, mock_erp_id, mock_odoo_id):
@@ -307,10 +357,11 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(related_values, expected_values)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_splitted_returns_payment_ids_and_amount(
-            self, mock_sync_create_update, mock_get_odoo_id):
+            self, mock_sync_create_update, mock_get_odoo_id, mock_get_odoo_id_by_erp_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
@@ -323,6 +374,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         mock_sync_create_update.return_value = (999, 1)
         mock_get_odoo_id.side_effect = [odoo_payment_id_1, odoo_payment_id_2]
+        mock_get_odoo_id_by_erp_id.return_value = 13
 
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=200.0)
@@ -340,15 +392,17 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(related_values, expected_values)
 
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_splitted_amount_is_rounded(
-            self, mock_sync_create_update, mock_get_odoo_id):
+            self, mock_sync_create_update, mock_get_odoo_id, mock_get_odoo_id_by_erp_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         mock_sync_create_update.return_value = (999, 1)
         mock_get_odoo_id.return_value = 999
+        mock_get_odoo_id_by_erp_id.return_value = 13
 
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.005)
         self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.005)

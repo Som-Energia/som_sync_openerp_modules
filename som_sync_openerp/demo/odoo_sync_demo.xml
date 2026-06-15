@@ -61,6 +61,7 @@
             <field name="type">general</field>
             <field name="som_sync_odoo_account_moves">True</field>
             <field name="som_sync_odoo_invoices">False</field>
+            <field name="som_sync_bank_id" ref="base.res_partner_bank_0001"/>
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>
@@ -79,6 +80,7 @@
             <field name="type">purchase</field>
             <field name="som_sync_odoo_invoices">True</field>
             <field name="som_sync_odoo_account_moves">False</field>
+            <field name="som_sync_bank_id" ref="base.res_partner_bank_0002"/>
             <field name="view_id" ref="account.account_journal_view"/>
             <field name="sequence_id" ref="account.sequence_journal"/>
         </record>

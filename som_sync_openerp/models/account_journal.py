@@ -13,6 +13,9 @@ class AccountJournal(osv.osv):
         'som_sync_odoo_invoices': fields.boolean(
             'Sync with Odoo Invoices',
             help='If checked, this journal will be synchronize Invoices with Odoo.'),
+        'som_sync_bank_id': fields.many2one(
+            'res.partner.bank', 'Bank account for Odoo sync',
+            help='Bank account used to resolve the Odoo journal for payment order sync.'),
     }
 
     _defaults = {
