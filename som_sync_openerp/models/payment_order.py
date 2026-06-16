@@ -102,12 +102,18 @@ class PaymentOrder(osv.osv):
             return False
 
         journal_ids = journal_obj.search(
-            cr, uid, [('som_sync_bank_id', '=', payment_order.mode.bank_id.id)], limit=1,
+            cr, uid, [('som_sync_bank_id', '=', payment_order.mode.bank_id.id)],
             context=context)
         if not journal_ids:
             logger.warning(
                 'No account.journal found for bank account %s in payment order %s',
                 payment_order.mode.bank_id.id, payment_order.id,
+            )
+            return False
+        if len(journal_ids) > 1:
+            logger.warning(
+                'Multiple journal records found for bank account %s in payment order %s: %s',
+                payment_order.mode.bank_id.id, payment_order.id, journal_ids,
             )
             return False
 
