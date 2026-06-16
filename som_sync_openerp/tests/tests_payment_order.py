@@ -276,6 +276,22 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_get_odoo_id_by_erp_id.assert_called_once()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    def test__get_journal_odoo_id_returns_false_when_no_journal_matches_bank(
+            self, mock_get_odoo_id_by_erp_id):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+
+        with mock.patch.object(self.aj_obj, 'search', return_value=[]):
+            journal_odoo_id = self.po_obj._get_journal_odoo_id(
+                self.cursor, self.uid, payment_order
+            )
+
+        self.assertFalse(journal_odoo_id)
+        mock_get_odoo_id_by_erp_id.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_inbound(self, mock_syncronize_sync, mock_erp_id, mock_odoo_id):
