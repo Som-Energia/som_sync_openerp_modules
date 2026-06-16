@@ -102,7 +102,7 @@ class PaymentOrder(osv.osv):
             return False
 
         journal_ids = journal_obj.search(
-            cr, uid, [('som_sync_bank_id', '=', payment_order.mode.bank_id.id)],
+            cr, uid, [('company_bank_id', '=', payment_order.mode.bank_id.id)],
             context=context)
         if not journal_ids:
             logger.warning(

@@ -302,7 +302,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             'name': 'Duplicate bank journal',
             'code': 'DupBank',
             'type': 'general',
-            'som_sync_bank_id': payment_order.mode.bank_id.id,
+            'company_bank_id': payment_order.mode.bank_id.id,
             'view_id': self.imd_obj.get_object_reference(
                 self.cursor, self.uid, 'account', 'account_journal_view'
             )[1],

@@ -16,7 +16,7 @@ def up(cursor, installed_version):
     logger.info("Creating pooler")
     pool = pooler.get_pool(cursor.dbname)
 
-    logger.info("Creating new field som_sync_bank_id on model account.journal")
+    logger.info("Creating new field company_bank_id on model account.journal")
     pool.get('account.journal')._auto_init(
         cursor, context={'module': 'som_sync_openerp'}
     )

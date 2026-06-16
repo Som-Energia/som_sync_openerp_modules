@@ -13,14 +13,14 @@ class AccountJournal(osv.osv):
         'som_sync_odoo_invoices': fields.boolean(
             'Sync with Odoo Invoices',
             help='If checked, this journal will be synchronize Invoices with Odoo.'),
-        'som_sync_company_partner_id': fields.related(
+        'company_partner_id': fields.related(
             'company_id', 'partner_id',
             type='many2one', relation='res.partner',
             string='Company Partner', readonly=True,
         ),
-        'som_sync_bank_id': fields.many2one(
+        'company_bank_id': fields.many2one(
             'res.partner.bank', 'Bank account for Odoo sync',
-            domain="[('partner_id', '=', som_sync_company_partner_id)]",
+            domain="[('partner_id', '=', company_partner_id)]",
             help='Bank account used to resolve the Odoo journal for payment order sync.'),
     }
 
@@ -28,6 +28,14 @@ class AccountJournal(osv.osv):
         'som_sync_odoo_account_moves': lambda *a, **k: False,
         'som_sync_odoo_invoices': lambda *a, **k: False,
     }
+
+    _sql_constraints = [
+        (
+            'company_bank_id_unique',
+            'unique(company_bank_id)',
+            'A bank account can only be linked to one journal.',
+        ),
+    ]
 
 
 AccountJournal()
