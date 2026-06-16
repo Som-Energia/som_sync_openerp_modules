@@ -5,6 +5,7 @@ from destral.patch import PatchNewCursors
 import mock
 import netsvc
 from ..models import odoo_sync
+from ..models.odoo_exceptions import ForeingKeyNotAvailable
 import unittest
 
 
@@ -260,7 +261,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_get_odoo_id_by_erp_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
-    def test__get_journal_odoo_id_returns_false_when_journal_has_no_odoo_mapping(
+    def test__get_journal_odoo_id_raises_when_journal_has_no_odoo_mapping(
             self, mock_get_odoo_id_by_erp_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
@@ -268,11 +269,10 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
         mock_get_odoo_id_by_erp_id.return_value = False
 
-        journal_odoo_id = self.po_obj._get_journal_odoo_id(
-            self.cursor, self.uid, payment_order
-        )
-
-        self.assertFalse(journal_odoo_id)
+        with self.assertRaises(ForeingKeyNotAvailable):
+            self.po_obj._get_journal_odoo_id(
+                self.cursor, self.uid, payment_order
+            )
         mock_get_odoo_id_by_erp_id.assert_called_once()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")

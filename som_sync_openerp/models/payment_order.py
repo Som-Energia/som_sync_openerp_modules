@@ -4,6 +4,7 @@ import requests
 from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
+from .odoo_exceptions import ForeingKeyNotAvailable
 import logging
 
 
@@ -118,7 +119,9 @@ class PaymentOrder(osv.osv):
                 'No Odoo mapping found for account.journal %s in payment order %s',
                 journal_ids[0], payment_order.id,
             )
-            return False
+            raise ForeingKeyNotAvailable(
+                'account.journal,{}'.format(journal_ids[0])
+            )
         return journal_odoo_id
     # ----------------------------------
 
