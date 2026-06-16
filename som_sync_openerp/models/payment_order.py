@@ -110,12 +110,6 @@ class PaymentOrder(osv.osv):
                 payment_order.mode.bank_id.id, payment_order.id,
             )
             return False
-        if len(journal_ids) > 1:
-            logger.warning(
-                'Multiple journal records found for bank account %s in payment order %s: %s',
-                payment_order.mode.bank_id.id, payment_order.id, journal_ids,
-            )
-            return False
 
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(
             cr, uid, 'account.journal', journal_ids[0])
