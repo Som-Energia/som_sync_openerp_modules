@@ -96,29 +96,25 @@ class PaymentOrder(osv.osv):
         journal_obj = self.pool.get('account.journal')
 
         if not payment_order.mode or not payment_order.mode.bank_id:
-            logger.warning(
-                'Payment order %s has no payment mode bank configured',
-                payment_order.id,
-            )
-            return False
+            msg = 'Payment order {} has no payment mode bank configured'.format(payment_order.id)
+            logger.warning(msg)
+            raise Exception(msg)
 
         journal_ids = journal_obj.search(
             cr, uid, [('company_bank_id', '=', payment_order.mode.bank_id.id)],
             context=context)
         if not journal_ids:
-            logger.warning(
-                'No account.journal found for bank account %s in payment order %s',
-                payment_order.mode.bank_id.id, payment_order.id,
-            )
-            return False
+            msg = 'No account.journal found for bank account {} in payment order {}'.format(
+                payment_order.mode.bank_id.id, payment_order.id)
+            logger.warning(msg)
+            raise Exception(msg)
 
         journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(
             cr, uid, 'account.journal', journal_ids[0])
         if not journal_odoo_id:
-            logger.warning(
-                'No Odoo mapping found for account.journal %s in payment order %s',
-                journal_ids[0], payment_order.id,
-            )
+            msg = 'No Odoo mapping found for account.journal {} in payment order {}'.format(
+                journal_ids[0], payment_order.id)
+            logger.warning(msg)
             raise ForeingKeyNotAvailable(
                 'account.journal,{}'.format(journal_ids[0])
             )

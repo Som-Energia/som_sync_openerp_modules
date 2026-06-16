@@ -246,18 +246,18 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'account.journal', journal_id)
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
-    def test__get_journal_odoo_id_returns_false_when_payment_mode_has_no_bank(
+    def test__get_journal_odoo_id_raises_when_payment_mode_has_no_bank(
             self, mock_get_odoo_id_by_erp_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
         with mock.patch.object(payment_order, 'mode', False, create=True):
-            journal_odoo_id = self.po_obj._get_journal_odoo_id(
-                self.cursor, self.uid, payment_order
-            )
+            with self.assertRaises(Exception):
+                self.po_obj._get_journal_odoo_id(
+                    self.cursor, self.uid, payment_order
+                )
 
-        self.assertFalse(journal_odoo_id)
         mock_get_odoo_id_by_erp_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
@@ -276,7 +276,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_get_odoo_id_by_erp_id.assert_called_once()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
-    def test__get_journal_odoo_id_returns_false_when_no_journal_matches_bank(
+    def test__get_journal_odoo_id_raises_when_no_journal_matches_bank(
             self, mock_get_odoo_id_by_erp_id):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
@@ -284,11 +284,11 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
 
         with mock.patch.object(self.aj_obj, 'search', return_value=[]):
-            journal_odoo_id = self.po_obj._get_journal_odoo_id(
-                self.cursor, self.uid, payment_order
-            )
+            with self.assertRaises(Exception):
+                self.po_obj._get_journal_odoo_id(
+                    self.cursor, self.uid, payment_order
+                )
 
-        self.assertFalse(journal_odoo_id)
         mock_get_odoo_id_by_erp_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
