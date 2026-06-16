@@ -8,6 +8,8 @@
                 <xpath expr="//field[@name='type']" position="after">
                     <field name="som_sync_odoo_account_moves"/>
                     <field name="som_sync_odoo_invoices"/>
+                    <field name="company_partner_id" invisible="1"/>
+                    <field name="company_bank_id"/>
                 </xpath>
             </field>
         </record>

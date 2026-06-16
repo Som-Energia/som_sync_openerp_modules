@@ -4,6 +4,7 @@ import requests
 from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
+from .odoo_exceptions import ForeingKeyNotAvailable
 import logging
 
 
@@ -86,6 +87,38 @@ class PaymentOrder(osv.osv):
             (False, False): 'payment_method_line_id',  # payment_orders
         }
         return mapping.get((is_grouped, is_refund))
+
+    def _get_journal_odoo_id(self, cr, uid, payment_order, context=None):
+        if context is None:
+            context = {}
+        logger = logging.getLogger('openerp.odoo.sync')
+        sync_obj = self.pool.get('odoo.sync')
+        journal_obj = self.pool.get('account.journal')
+
+        if not payment_order.mode or not payment_order.mode.bank_id:
+            msg = 'Payment order {} has no payment mode bank configured'.format(payment_order.id)
+            logger.warning(msg)
+            raise Exception(msg)
+
+        journal_ids = journal_obj.search(
+            cr, uid, [('company_bank_id', '=', payment_order.mode.bank_id.id)],
+            context=context)
+        if not journal_ids:
+            msg = 'No account.journal found for bank account {} in payment order {}'.format(
+                payment_order.mode.bank_id.id, payment_order.id)
+            logger.warning(msg)
+            raise Exception(msg)
+
+        journal_odoo_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.journal', journal_ids[0])
+        if not journal_odoo_id:
+            msg = 'No Odoo mapping found for account.journal {} in payment order {}'.format(
+                journal_ids[0], payment_order.id)
+            logger.warning(msg)
+            raise ForeingKeyNotAvailable(
+                'account.journal,{}'.format(journal_ids[0])
+            )
+        return journal_odoo_id
     # ----------------------------------
 
     def _is_order_grouped_invoices(self, cr, uid, payment_order):
@@ -241,9 +274,8 @@ class PaymentOrder(osv.osv):
             context = {}
         conf_obj = self.pool.get('res.config')
 
-        # TODO: we need to get to bank journal from the payment_mode,
-        # but it is not payment_order.mode.journal, by now harcoded
-        journal_odoo_id = 13
+        journal_odoo_id = self._get_journal_odoo_id(
+            cr, uid, payment_order, context=context)
         metode_pagament_id = eval(
             conf_obj.get(cr, uid, 'odoo_customer_fraccionaments_payment_method', 0))
 
@@ -269,9 +301,8 @@ class PaymentOrder(osv.osv):
             context = {}
         conf_obj = self.pool.get('res.config')
 
-        # TODO: we need to get to bank journal from the payment_mode,
-        # but it is not payment_order.mode.journal, by now harcoded
-        journal_odoo_id = 13
+        journal_odoo_id = self._get_journal_odoo_id(
+            cr, uid, payment_order, context=context)
         lines = []
         pl_inv_ids = []
 
