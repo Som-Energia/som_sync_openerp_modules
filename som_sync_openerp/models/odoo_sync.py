@@ -316,9 +316,11 @@ class OdooSync(osv.osv):
             ('model.model', '=', model),
             ('res_id', '=', openerp_id),
         ], limit=1)
+        sync_state_before_retry = False
         if sync_id:
-            state = sync_obj.read(cursor, uid, sync_id[0], ['sync_state'])['sync_state']
-            if state == 'pending':
+            sync_state_before_retry = sync_obj.read(
+                cursor, uid, sync_id[0], ['sync_state'])['sync_state']
+            if sync_state_before_retry == 'pending':
                 logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
                 context['update_pending_state_sync'] = True
                 return self.common_update_pending_state(cursor, uid, sync_id[0], context=context)
@@ -413,7 +415,8 @@ class OdooSync(osv.osv):
                         'update_odoo_created_sync': True,
                     })
                 sync_state = 'synced' if odoo_id else 'error'
-                if odoo_id and not sync_id and hasattr(rp_obj, 'get_sync_state_on_creation'):
+                if odoo_id and hasattr(rp_obj, 'get_sync_state_on_creation') and (
+                        not sync_id or sync_state_before_retry == 'error'):
                     sync_state = rp_obj.get_sync_state_on_creation(
                         cursor, uid, openerp_id, context=context)
 

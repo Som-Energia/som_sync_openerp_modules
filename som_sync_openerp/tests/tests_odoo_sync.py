@@ -719,6 +719,42 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
     @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__payment_order_retry_after_error_keeps_pending(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_create_odoo_record, mock_update_odoo_id, mock_get_sync_state):
+        payment_order_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
+        )[1]
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': payment_order_id,
+            'sync_state': 'error',
+        })
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {
+            'pnt_erp_id': payment_order_id,
+        }
+        mock_create_odoo_record.return_value = (4321, '')
+        mock_get_sync_state.return_value = 'pending'
+
+        odoo_id, erp_id = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'payment.order', 'sync', payment_order_id, context={}
+        )
+
+        self.assertEqual(odoo_id, 4321)
+        self.assertEqual(erp_id, payment_order_id)
+        mock_update_odoo_id.assert_called_once()
+        _, kwargs = mock_update_odoo_id.call_args
+        self.assertEqual(kwargs['context']['sync_state'], 'pending')
+
+    @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.get_sync_state_on_creation')
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     def test__syncronize_sync__payment_order_splitted_first_create_sets_synced(
             self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
             mock_create_odoo_record, mock_update_odoo_id, mock_get_sync_state):
