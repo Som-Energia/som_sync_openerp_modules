@@ -32,14 +32,10 @@ class PaymentOrder(osv.osv):
         if is_splitted:
             return 'payment_orders/payments'
 
-        mapping = {
-            # (is_grouped, is_refund): 'model_name'
-            (True, True): 'payment_order_batches_refunds',  # TODO: does not exists this endpoint!!
-            (True, False): 'payment_orders/batches',
-            (False, True): 'payment_order_refunds',
-            (False, False): 'payment_orders',
-        }
-        return mapping.get((is_grouped, is_refund))
+        if is_grouped or is_refund:
+            return 'payment_orders/batches'
+
+        return 'payment_orders'
 
     def get_sync_state_on_creation(self, cr, uid, id, context=None):
         endpoint = self.get_mapping_model_post(cr, uid, id, context=context)
@@ -69,24 +65,14 @@ class PaymentOrder(osv.osv):
     # TODO: ask Punt to unify field names in API
     # ----------------------------------
     def _get_journal_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
-        mapping = {
-            # (is_grouped, is_refund): 'model_name'
-            (True, True): 'journal_id',  # payment_order_batches_refunds
-            (True, False): 'destination_journal_id',  # payment_order_batches
-            (False, True): 'journal_id',  # payment_order_refunds
-            (False, False): 'destination_journal_id',  # payment_orders
-        }
-        return mapping.get((is_grouped, is_refund))
+        if is_grouped or is_refund:
+            return 'destination_journal_id'
+        return 'destination_journal_id'
 
     def _get_payment_method_odoo_field_name(self, cr, uid, is_grouped, is_refund, context=None):
-        mapping = {
-            # (is_grouped, is_refund): 'model_name'
-            (True, True): 'payment_method_line_id',  # payment_order_batches_refunds
-            (True, False): 'payment_method_line_id',  # payment_orders/batches
-            (False, True): 'method_id',  # payment_order_refunds
-            (False, False): 'payment_method_line_id',  # payment_orders
-        }
-        return mapping.get((is_grouped, is_refund))
+        if is_grouped or is_refund:
+            return 'payment_method_line_id'
+        return 'payment_method_line_id'
 
     def _get_journal_odoo_id(self, cr, uid, payment_order, context=None):
         if context is None:
@@ -182,6 +168,15 @@ class PaymentOrder(osv.osv):
             cr, uid, 'payment.line', payment_line.id, context=context)
         payment_line_vals['amount'] = abs(payment_line_vals['amount'])
         return payment_line_vals, [payment_line.ml_inv_ref.id] if payment_line.ml_inv_ref else None
+
+    def _get_order_line_from_batch_invoice(self, cr, uid, payment_line, context=None):
+        if context is None:
+            context = {}
+        payment_line_vals, erp_invoice_ids = self._get_order_lines_from_invoices(
+            cr, uid, payment_line, context=context)
+        invoice_id = payment_line_vals.pop('invoice_id', False)
+        payment_line_vals['invoice_ids'] = [invoice_id] if invoice_id else []
+        return payment_line_vals, erp_invoice_ids
 
     def _get_order_line_from_grouped_invoices(self, cr, uid, payment_line, context=None):
         """
@@ -306,8 +301,12 @@ class PaymentOrder(osv.osv):
         lines = []
         pl_inv_ids = []
 
+        is_batch = is_grouped or is_refund
+
         if is_grouped:
             function_to_get_lines = self._get_order_line_from_grouped_invoices
+        elif is_refund:
+            function_to_get_lines = self._get_order_line_from_batch_invoice
         else:
             function_to_get_lines = self._get_order_lines_from_invoices
 
@@ -325,14 +324,14 @@ class PaymentOrder(osv.osv):
             'Processing lines with discrepancies for payment order {}: lines: {}'.format(
                 payment_order.id, len(lines)))
         inv_obj.process_lines_with_discrepancies(
-            cr, uid, pl_inv_ids, lines, is_grouped=is_grouped, context=context)
+            cr, uid, pl_inv_ids, lines, is_grouped=is_batch, context=context)
 
         po_total_amount = round(sum([line['amount'] for line in lines]), 2)
 
         if payment_order.type == 'payable':
             metode_pagament_id = eval(conf_obj.get(cr, uid, 'odoo_provider_payment_method', 0))
             # all amounts to negative when payment_order_batch payable
-            if is_grouped:
+            if is_batch:
                 po_total_amount = -abs(po_total_amount)
                 for line in lines:
                     line['amount'] = -abs(line['amount'])
