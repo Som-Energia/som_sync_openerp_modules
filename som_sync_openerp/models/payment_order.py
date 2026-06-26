@@ -169,15 +169,6 @@ class PaymentOrder(osv.osv):
         payment_line_vals['amount'] = abs(payment_line_vals['amount'])
         return payment_line_vals, [payment_line.ml_inv_ref.id] if payment_line.ml_inv_ref else None
 
-    def _get_order_line_from_batch_invoice(self, cr, uid, payment_line, context=None):
-        if context is None:
-            context = {}
-        payment_line_vals, erp_invoice_ids = self._get_order_lines_from_invoices(
-            cr, uid, payment_line, context=context)
-        invoice_id = payment_line_vals.pop('invoice_id', False)
-        payment_line_vals['invoice_ids'] = [invoice_id] if invoice_id else []
-        return payment_line_vals, erp_invoice_ids
-
     def _get_order_line_from_grouped_invoices(self, cr, uid, payment_line, context=None):
         """
          This method is used to get the values of the payment line to sync with Odoo
@@ -208,6 +199,13 @@ class PaymentOrder(osv.osv):
         payment_line_vals = {'amount': round(amount_total, 2)}
         payment_line_vals['invoice_ids'] = odoo_invoice_ids
         return payment_line_vals, erp_invoice_ids
+
+    def _convert_refund_lines_to_batch_lines(self, lines):
+        for line in lines:
+            invoice_id = line.pop('invoice_id', False)
+            if not invoice_id:
+                raise Exception('Refund batch line missing invoice_id')
+            line['invoice_ids'] = [invoice_id]
 
     def _get_order_payment_lines_from_splitted_invoices(self, cr, uid, payment_order, context=None):
         """
@@ -302,11 +300,10 @@ class PaymentOrder(osv.osv):
         pl_inv_ids = []
 
         is_batch = is_grouped or is_refund
+        discrepancy_is_grouped = is_grouped
 
         if is_grouped:
             function_to_get_lines = self._get_order_line_from_grouped_invoices
-        elif is_refund:
-            function_to_get_lines = self._get_order_line_from_batch_invoice
         else:
             function_to_get_lines = self._get_order_lines_from_invoices
 
@@ -324,7 +321,10 @@ class PaymentOrder(osv.osv):
             'Processing lines with discrepancies for payment order {}: lines: {}'.format(
                 payment_order.id, len(lines)))
         inv_obj.process_lines_with_discrepancies(
-            cr, uid, pl_inv_ids, lines, is_grouped=is_batch, context=context)
+            cr, uid, pl_inv_ids, lines, is_grouped=discrepancy_is_grouped, context=context)
+
+        if is_refund and not is_grouped:
+            self._convert_refund_lines_to_batch_lines(lines)
 
         po_total_amount = round(sum([line['amount'] for line in lines]), 2)
 
