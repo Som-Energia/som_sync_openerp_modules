@@ -374,6 +374,91 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.assertEqual(related_values, expected_values)
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_refund_uses_batch_contract(
+            self, mock_syncronize_sync, mock_erp_id, mock_odoo_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        odoo_invoice_id = 99
+        odoo_journal_id = 13
+        erp_invoice_id = 1
+
+        mock_syncronize_sync.return_value = (odoo_invoice_id, erp_invoice_id)
+        mock_erp_id.return_value = invoice_id
+        mock_odoo_id.return_value = odoo_journal_id
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        related_values = self.po_obj.get_related_values(
+            self.cursor, self.uid, remesa_id
+        )
+
+        expected_values = {
+            'amount': 1000.0,
+            'batch_type': 'inbound',
+            'destination_journal_id': odoo_journal_id,
+            'lines': [
+                {
+                    'amount': 1000.0,
+                    'invoice_ids': [odoo_invoice_id],
+                }
+            ],
+            'payment_method_line_id': 373,
+            'name': u'RECT_Remesa 0001',
+        }
+        self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "search")
+    @mock.patch.object(odoo_sync.OdooSync, "read")
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_refund_with_discrepancy_keeps_non_grouped_formula(
+            self, mock_syncronize_sync, mock_erp_id, mock_get_odoo_id_by_erp_id,
+            mock_read, mock_search):
+        import json
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
+        )[1]
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        odoo_invoice_id = 99
+        odoo_journal_id = 13
+
+        mock_syncronize_sync.return_value = (odoo_invoice_id, invoice_id)
+        mock_erp_id.return_value = invoice_id
+        mock_get_odoo_id_by_erp_id.return_value = odoo_journal_id
+        mock_search.return_value = [1]
+        mock_read.return_value = [{
+            'res_id': invoice_id,
+            'odoo_id': odoo_invoice_id,
+            'odoo_last_update_result': json.dumps({
+                'data': {
+                    'metadata': [{
+                        'pnt_amount_total_erp_difference': 5.0,
+                        'move_type': 'out_refund',
+                    }]
+                }
+            })
+        }]
+        self.utils_open_invoice_add_to_order_with_ml_inv_ref(invoice_id, remesa_id)
+
+        related_values = self.po_obj.get_related_values(
+            self.cursor, self.uid, remesa_id
+        )
+
+        self.assertEqual(related_values['amount'], 1005.0)
+        self.assertEqual(related_values['lines'], [{
+            'amount': 1005.0,
+            'invoice_ids': [odoo_invoice_id],
+        }])
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values_splitted_returns_payment_ids_and_amount(
@@ -887,7 +972,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
         self.assertEqual(result, 'payment_orders/batches')
 
-    def test__get_mapping_model_post_returns_payment_order_refunds_when_refund(self):
+    def test__get_mapping_model_post_returns_payment_order_batches_when_refund(self):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
         )[1]
@@ -898,7 +983,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
 
-        self.assertEqual(result, 'payment_order_refunds')
+        self.assertEqual(result, 'payment_orders/batches')
 
     def test__get_sync_state_on_creation_returns_pending_when_normal(self):
         invoice_id = self.imd_obj.get_object_reference(
