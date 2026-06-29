@@ -909,6 +909,7 @@ class OdooSync(osv.osv):
             ('draft', 'Draft'),
             ('error', 'Error'),
             ('pending', 'Pending'),
+            ('pending_manual_action', 'Pending manual action'),
             ('static', 'Static'),
             ('synced', 'Synced'),
             ('synced_with_warning', 'Synced with warning'),

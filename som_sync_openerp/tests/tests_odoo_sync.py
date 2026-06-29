@@ -839,6 +839,20 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertFalse(result)
 
+    def test_common_update_pending_state__pending_manual_action(self):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending_manual_action',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
+
     def test_common_update_pending_state__no_update_pending_state_method(self):
         # Create a sync record for a model without update_pending_state method
         model_id = self.openerp.pool.get('ir.model').search(
@@ -853,6 +867,29 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
 
         self.assertFalse(result)
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_update_pending_state")
+    def test__cron_update_pending_state__skips_pending_manual_action(
+            self, mock_common_update_pending_state):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        pending_sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending',
+        })
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 456,
+            'sync_state': 'pending_manual_action',
+        })
+
+        self.sync_obj._cron_update_pending_state(self.cursor, self.uid)
+
+        mock_common_update_pending_state.assert_called_once_with(
+            self.cursor, self.uid, pending_sync_id, context={}
+        )
 
 
 class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
