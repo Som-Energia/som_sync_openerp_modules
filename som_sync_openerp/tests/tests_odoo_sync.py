@@ -802,6 +802,32 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, sync_id, context={'update_pending_state_sync': True}
         )
 
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "common_update_pending_state")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__pending_manual_action_skips_retry(
+            self, mock_sync_model_enabled_amplified, mock_create_odoo_record,
+            mock_common_update_pending_state, mock_update_odoo_id):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987654,
+            'sync_state': 'pending_manual_action',
+        })
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+
+        result = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'payment.order', 'sync', 987654, context={}
+        )
+
+        self.assertFalse(result)
+        mock_common_update_pending_state.assert_not_called()
+        mock_create_odoo_record.assert_not_called()
+        mock_update_odoo_id.assert_not_called()
+
     @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.update_pending_state')
     def test_common_update_pending_state__calls_update_pending_state(
             self, mock_update_pending_state):
@@ -839,6 +865,20 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertFalse(result)
 
+    def test_common_update_pending_state__pending_manual_action(self):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending_manual_action',
+        })
+
+        result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
+
+        self.assertFalse(result)
+
     def test_common_update_pending_state__no_update_pending_state_method(self):
         # Create a sync record for a model without update_pending_state method
         model_id = self.openerp.pool.get('ir.model').search(
@@ -853,6 +893,29 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
 
         self.assertFalse(result)
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_update_pending_state")
+    def test__cron_update_pending_state__skips_pending_manual_action(
+            self, mock_common_update_pending_state):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'payment.order')], limit=1
+        )[0]
+        pending_sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 123,
+            'sync_state': 'pending',
+        })
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 456,
+            'sync_state': 'pending_manual_action',
+        })
+
+        self.sync_obj._cron_update_pending_state(self.cursor, self.uid)
+
+        mock_common_update_pending_state.assert_called_once_with(
+            self.cursor, self.uid, pending_sync_id, context={}
+        )
 
 
 class TestOdooUrlRecord(testing.OOTestCaseWithCursor):
