@@ -40,3 +40,5 @@
 5087,348,"IGIC Exento Repercutido","Vendes"
 271,349,"Retencions IRPF 19%","Compres"
 257,362,"IVA 5% (béns)","Vendes"
+176, 109, "IVA 21% Intracomunitario. Bienes corrientes", "Compres"
+177, 112, "IVA 21% Intracomunitario. Bienes de inversión", "Compres"
