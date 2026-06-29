@@ -815,7 +815,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 987654,
-            'sync_state': 'pending_manual_action',
+            'sync_state': 'pending_manual_act',
         })
         mock_sync_model_enabled_amplified.return_value = (True, True, False)
 
@@ -872,7 +872,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         sync_id = self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 123,
-            'sync_state': 'pending_manual_action',
+            'sync_state': 'pending_manual_act',
         })
 
         result = self.sync_obj.common_update_pending_state(self.cursor, self.uid, sync_id)
@@ -908,7 +908,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 456,
-            'sync_state': 'pending_manual_action',
+            'sync_state': 'pending_manual_act',
         })
 
         self.sync_obj._cron_update_pending_state(self.cursor, self.uid)

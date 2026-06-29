@@ -324,7 +324,7 @@ class OdooSync(osv.osv):
                 logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
                 context['update_pending_state_sync'] = True
                 return self.common_update_pending_state(cursor, uid, sync_id[0], context=context)
-            if sync_state_before_retry == 'pending_manual_action':
+            if sync_state_before_retry == 'pending_manual_act':
                 logger.info(
                     "Skipping sync for record {} of model {}. Manual action required".format(
                         openerp_id, model)
@@ -915,7 +915,7 @@ class OdooSync(osv.osv):
             ('draft', 'Draft'),
             ('error', 'Error'),
             ('pending', 'Pending'),
-            ('pending_manual_action', 'Pending manual action'),
+            ('pending_manual_act', 'Pending manual action'),
             ('static', 'Static'),
             ('synced', 'Synced'),
             ('synced_with_warning', 'Synced with warning'),
