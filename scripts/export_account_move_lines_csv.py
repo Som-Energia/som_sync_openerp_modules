@@ -530,11 +530,16 @@ def lookup_invoice_id(client, invoice_value):
     invoice_value = to_text(invoice_value).strip()
     if not invoice_value:
         return u""
-    invoice_model = client.model("account.invoice")
-    for field_name in ["number", "reference", "move_name"]:
-        invoice_ids = invoice_model.search([(field_name, "=", invoice_value)])
-        if len(invoice_ids) == 1:
-            return to_text(invoice_ids[0])
+
+    try:
+        invoice_model = client.model("account.invoice")
+        for field_name in ["number", "reference", "move_name"]:
+            invoice_ids = invoice_model.search([(field_name, "=", invoice_value)])
+            if len(invoice_ids) == 1:
+                return to_text(invoice_ids[0])
+    except Exception:
+        return u""
+
     return u""
 
 
