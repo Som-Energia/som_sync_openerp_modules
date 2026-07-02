@@ -21,6 +21,7 @@ except ImportError:
 
 import dbconfig
 from erppeek import Client
+from tqdm import tqdm
 
 
 def to_text(value):
@@ -126,7 +127,9 @@ class MoveInvoiceHintResolver(object):
             for txt in (to_text(ln.get("ref")), to_text(ln.get("name"))):
                 m = INVOICE_HINT_RE.search(txt or "")
                 if m:
-                    candidates[to_text(m.group(1)).upper()] = None
+                    key = to_text(m.group(1)).upper()
+                    if key not in candidates:
+                        candidates[key] = None
 
         value = list(candidates.items())[0] if len(candidates) == 1 else (None, None)
         self.cache[move_id] = value
@@ -334,25 +337,29 @@ class PaymentOrderResolver(object):
             self.order_cache[remesa_code] = (u"", u"")
             return self.order_cache[remesa_code]
 
-        order_model = self.client.model("payment.order")
-        order_ids = order_model.search([("reference", "=", remesa_code)])
-        if not order_ids:
-            order_ids = order_model.search([("name", "=", remesa_code)])
-
         order_name = u""
         order_id = u""
-        if len(order_ids) == 1:
-            order = order_model.read(order_ids[0], ["id", "name", "reference"])
-            order_name = to_text(order.get("name") or order.get("reference")).strip()
-            order_id = to_text(order.get("id"))
+        try:
+            order_model = self.client.model("payment.order")
+            order_ids = order_model.search([("reference", "=", remesa_code)])
+            if not order_ids:
+                order_ids = order_model.search([("name", "=", remesa_code)])
 
-        if not order_id:
-            remesa_model = self.client.model("giscedata.remesa.f1")
-            remesa_ids = remesa_model.search([("name", "=", remesa_code)])
-            if len(remesa_ids) == 1:
-                remesa = remesa_model.read(remesa_ids[0], ["id", "name"])
-                order_name = to_text(remesa.get("name") or remesa_code).strip()
-                order_id = to_text(remesa.get("id"))
+            if len(order_ids) == 1:
+                order = order_model.read(order_ids[0], ["id", "name", "reference"])
+                order_name = to_text(order.get("name") or order.get("reference")).strip()
+                order_id = to_text(order.get("id"))
+
+            if not order_id:
+                remesa_model = self.client.model("giscedata.remesa.f1")
+                remesa_ids = remesa_model.search([("name", "=", remesa_code)])
+                if len(remesa_ids) == 1:
+                    remesa = remesa_model.read(remesa_ids[0], ["id", "name"])
+                    order_name = to_text(remesa.get("name") or remesa_code).strip()
+                    order_id = to_text(remesa.get("id"))
+        except Exception:
+            order_name = u""
+            order_id = u""
 
         self.order_cache[remesa_code] = (order_name, order_id)
         return self.order_cache[remesa_code]
@@ -403,15 +410,18 @@ class DevolucioResolver(object):
             return self.cache[cache_key]
 
         amount = round(abs(float(signed_amount or 0.0)), 2)
-        devolucio_model = self.client.model("giscedata.facturacio.devolucio")
-        devolucio_ids = devolucio_model.search([("date", "=", line_date)])
-
         matches = []
-        for devolucio_id in devolucio_ids:
-            devolucio = devolucio_model.read(devolucio_id, ["id", "name", "linies_ids"])
-            total = self._get_devolucio_total(devolucio_id, devolucio.get("linies_ids") or [])
-            if total == amount:
-                matches.append((to_text(devolucio.get("name")).strip(), to_text(devolucio_id)))
+        try:
+            devolucio_model = self.client.model("giscedata.facturacio.devolucio")
+            devolucio_ids = devolucio_model.search([("date", "=", line_date)])
+
+            for devolucio_id in devolucio_ids:
+                devolucio = devolucio_model.read(devolucio_id, ["id", "name", "linies_ids"])
+                total = self._get_devolucio_total(devolucio_id, devolucio.get("linies_ids") or [])
+                if total == amount:
+                    matches.append((to_text(devolucio.get("name")).strip(), to_text(devolucio_id)))
+        except Exception:
+            matches = []
 
         value = matches[0] if len(matches) == 1 else (u"", u"")
         self.cache[cache_key] = value
@@ -541,11 +551,16 @@ def resolve_invoice_for_export(client, row, move_hint_resolver, remesa_resolver)
             if number:
                 return number, to_text(invoice_id or u"")
 
+    hinted_number = u""
     for candidate in (row.get("ref"), row.get("name")):
         m = INVOICE_HINT_RE.search(to_text(candidate) or u"")
         if m:
             number = to_text(m.group(1)).upper()
-            return number, lookup_invoice_id(client, number)
+            invoice_id = lookup_invoice_id(client, number)
+            if invoice_id:
+                return number, invoice_id
+            if not hinted_number:
+                hinted_number = number
 
     ref = to_text(row.get("ref")).strip()
     if ref:
@@ -556,6 +571,9 @@ def resolve_invoice_for_export(client, row, move_hint_resolver, remesa_resolver)
     number, invoice_id = move_hint_resolver.invoice_info_for_move(row.get("move_id"))
     if number:
         return number, to_text(invoice_id or lookup_invoice_id(client, number))
+
+    if hinted_number:
+        return hinted_number, u""
 
     if ref and re.search(r"\d", ref):
         return ref, lookup_invoice_id(client, ref)
@@ -612,7 +630,7 @@ def export_csv(account_code, date_from, date_to, output_path):
 
     with io.open(output_path, "w", encoding="utf-8", newline="") as fh:
         fh.write(u"id;data;compte_comptable;descripcio;nom_remesa;num_factura;res_id;import\n")
-        for row in rows:
+        for row in tqdm(rows, total=len(rows), desc="Exportant assentaments"):
             raw_name = to_text(row.get("name")).strip()
             signed = amount_signed(row.get("debit"), row.get("credit"))
             desc = classify_description(
