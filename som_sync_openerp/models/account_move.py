@@ -9,7 +9,7 @@ class AccountMove(osv.osv):
 
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
-        'name': 'name',
+        'name': 'number',
         'journal_id': 'journal_id',
         'ref': 'ref',
         'date': 'date',
