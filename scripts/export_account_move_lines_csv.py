@@ -502,7 +502,7 @@ def classify_description(
         return u"[COMISSIÓ] Comissió"
 
     if u"devoluc" in lower_name:
-        return u"[DEVOLUCIONS] Devolucions"
+        return u"[REMESA] Devolucions"
 
     # Prioritat 4: pista de factura en altres línies del mateix assentament
     if move_hint_resolver:
@@ -586,18 +586,28 @@ def resolve_invoice_for_export(client, row, move_hint_resolver, remesa_resolver)
     return u"", u""
 
 
-def enrich_description(
-        desc, remesa_name=u"", devolucio_name=u"", invoice_number=u"", counterpart_label=u""):
+def normalize_description(desc, remesa_name=u"", devolucio_name=u"", invoice_number=u""):
     desc = to_text(desc).strip()
+    if desc.startswith(u"[FACTURA]") and invoice_number:
+        return u"[FACTURA] %s" % invoice_number
     if desc.startswith(u"[REMESA]") and remesa_name:
-        desc = u"[REMESA] %s" % remesa_name
-    elif desc.startswith(u"[DEVOLUCIONS]") and devolucio_name:
-        desc = u"[DEVOLUCIONS] %s" % devolucio_name
-    if invoice_number and invoice_number not in desc:
-        desc = u"%s %s" % (desc, invoice_number)
-    if counterpart_label and counterpart_label not in desc:
-        desc = u"%s [%s]" % (desc, counterpart_label)
+        return u"[REMESA] %s" % remesa_name
+    if desc.startswith(u"[REMESA]") and devolucio_name:
+        return u"[REMESA] %s" % devolucio_name
     return desc
+
+
+def build_description_extra(desc, invoice_number=u"", counterpart_label=u""):
+    parts = []
+    desc = to_text(desc).strip()
+    invoice_number = to_text(invoice_number).strip()
+    counterpart_label = to_text(counterpart_label).strip()
+
+    if invoice_number and not desc.startswith(u"[FACTURA] %s" % invoice_number):
+        parts.append(invoice_number)
+    if counterpart_label:
+        parts.append(counterpart_label)
+    return u" | ".join(parts)
 
 
 def export_csv(account_code, date_from, date_to, output_path):
@@ -634,7 +644,7 @@ def export_csv(account_code, date_from, date_to, output_path):
     unresolved_fake_remeses = set()
 
     with io.open(output_path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(u"id;data;compte_comptable;descripcio;nom_remesa;num_factura;res_id;import\n")
+        fh.write(u"id;data;compte_comptable;descripcio;descripcio_extra;nom_remesa;num_factura;res_id;import\n")  # noqa:E501
         for row in tqdm(rows, total=len(rows), desc="Exportant assentaments"):
             raw_name = to_text(row.get("name")).strip()
             signed = amount_signed(row.get("debit"), row.get("credit"))
@@ -656,10 +666,14 @@ def export_csv(account_code, date_from, date_to, output_path):
                 client, row, move_hint_resolver, remesa_resolver
             )
             counterpart_label = counterpart_resolver.resolve_for_move(row.get("move_id"))
-            desc = enrich_description(
+            desc = normalize_description(
                 desc,
                 remesa_name=remesa_name,
                 devolucio_name=devolucio_name,
+                invoice_number=invoice_number,
+            )
+            description_extra = build_description_extra(
+                desc,
                 invoice_number=invoice_number,
                 counterpart_label=counterpart_label,
             )
@@ -672,11 +686,12 @@ def export_csv(account_code, date_from, date_to, output_path):
                 if REMESA_FAKE_RE.match(remesa_code) and desc.startswith(u"[REMESA]"):
                     unresolved_fake_remeses.add(remesa_code)
 
-            line = u"%s;%s;%s;%s;%s;%s;%s;%s\n" % (
+            line = u"%s;%s;%s;%s;%s;%s;%s;%s;%s\n" % (
                 to_text(row.get("id")),
                 to_text(row.get("date")),
                 account_code,
                 desc.replace(u";", u","),
+                description_extra.replace(u";", u","),
                 export_name.replace(u";", u","),
                 invoice_number.replace(u";", u","),
                 export_res_id.replace(u";", u","),
