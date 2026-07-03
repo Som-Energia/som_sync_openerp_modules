@@ -10,6 +10,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
     def setUp(self):
         self.am_obj = self.openerp.pool.get("account.move")
+        self.aml_obj = self.openerp.pool.get("account.move.line")
         self.imd_obj = self.openerp.pool.get("ir.model.data")
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
@@ -43,6 +44,24 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         }
         self.assertEqual(related_values, expected_values)
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_related_values_prioritizes_ref_over_name(self, mock_syncronize_sync):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_001"
+        )[1]
+        line_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_line_001"
+        )[1]
+        mock_syncronize_sync.return_value = (99, 1)
+
+        self.aml_obj.write(self.cursor, self.uid, [line_id], {'ref': 'REF-001'})
+
+        related_values = self.am_obj.get_related_values(
+            self.cursor, self.uid, move_id
+        )
+
+        self.assertIn('REF-001', [line['name'] for line in related_values['lines']])
 
     def test__journal_is_syncrozable_True(self):
         move_id = self.imd_obj.get_object_reference(
