@@ -9,7 +9,7 @@ class AccountMoveLine(osv.osv):
     MAPPING_FIELDS_TO_SYNC = {
         'account_id': 'account_id',
         'partner_id': 'partner_id',
-        'name': 'name',
+        'ref': 'name',
         'debit': 'debit',
         'credit': 'credit',
     }
