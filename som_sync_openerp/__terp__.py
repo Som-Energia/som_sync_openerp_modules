@@ -15,6 +15,7 @@
         'remeses_base',
         'devolucions_base',
         'account_invoice_fraccionaments',
+        'l10n_ES_cobros_ventanilla',
     ],
     "demo_xml": [
         "demo/odoo_sync_demo.xml",

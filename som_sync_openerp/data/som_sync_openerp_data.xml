@@ -96,6 +96,11 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
+        <record id="odoo_sync_model_config_norma57_file" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'norma57.file')]"/>
+            <field name="auto_sync">False</field>
+            <field name="async_enabled">True</field>
+        </record>
         <record id="odoo_sync_invoice_amount_tolerance" model="res.config">
             <field name="name">odoo_sync_invoice_amount_tolerance</field>
             <field name="value">0.02</field>
@@ -125,6 +130,20 @@
             <field name="value">411</field>
             <field name="description">
                 Odoo payment.method for fraccionaments.
+            </field>
+        </record>
+        <record id="odoo_norma57_payment_method" model="res.config">
+            <field name="name">odoo_norma57_payment_method</field>
+            <field name="value">0</field>
+            <field name="description">
+                Odoo payment.method for Norma57 remittances.
+            </field>
+        </record>
+        <record id="odoo_norma57_destination_journal" model="res.config">
+            <field name="name">odoo_norma57_destination_journal</field>
+            <field name="value">0</field>
+            <field name="description">
+                Odoo destination journal for Norma57 remittances.
             </field>
         </record>
         <record id="odoo_default_erp_payment_term" model="res.config">
