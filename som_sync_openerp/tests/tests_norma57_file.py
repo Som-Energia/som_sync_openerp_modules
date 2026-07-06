@@ -24,15 +24,12 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             'header_presentation_date': '2026-01-15',
         })
 
-    def _create_norma57_line(
-            self, file_id, invoice_id,
-            amount=100.0, state='confirmed', resource_model='account.invoice'):
-        return self.n57_line_obj.create(self.cursor, self.uid, {
-            'file_id': file_id,
-            'amount': amount,
-            'state': state,
-            'resource': '{},{}'.format(resource_model, invoice_id),
-        })
+    def _build_mock_line(self, invoice_id, amount=100.0, state='confirmed'):
+        line = mock.Mock()
+        line.state = state
+        line.amount = amount
+        line.resource = 'account.invoice,{}'.format(invoice_id)
+        return line
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_get_related_values_builds_simple_payment_order_payload(self, mock_sync):
@@ -40,13 +37,18 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
         )[1]
         norma57_id = self._create_norma57_file()
-        self._create_norma57_line(norma57_id, invoice_id, amount=125.5)
+        mock_line = self._build_mock_line(invoice_id, amount=125.5)
         self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
         self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
         mock_sync.return_value = (99, invoice_id)
 
         with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies') as mock_discrepancies:  # noqa: E501
-            related_values = self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
+            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
+                norma57_file = mock.Mock()
+                norma57_file.name = 'Norma57 test'
+                norma57_file.lines = [mock_line]
+                mock_browse.return_value = norma57_file
+                related_values = self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
 
         self.assertEqual(related_values, {
             'destination_journal_id': 17,
@@ -84,14 +86,19 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
         )[1]
         norma57_id = self._create_norma57_file()
-        self._create_norma57_line(norma57_id, invoice_id)
+        mock_line = self._build_mock_line(invoice_id)
         self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '0')
         self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
         mock_sync.return_value = (99, invoice_id)
 
         with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies'):
-            with self.assertRaises(Exception):
-                self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
+            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
+                norma57_file = mock.Mock()
+                norma57_file.name = 'Norma57 test'
+                norma57_file.lines = [mock_line]
+                mock_browse.return_value = norma57_file
+                with self.assertRaises(Exception):
+                    self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_confirm_triggers_norma57_sync(self, mock_sync):
