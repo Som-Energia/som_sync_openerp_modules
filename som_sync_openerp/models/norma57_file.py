@@ -104,6 +104,10 @@ class Norma57File(osv.osv):
 
         norma57_file = self.browse(cr, uid, id, context=context)
         inv_obj = self.pool.get('account.invoice')
+        destination_journal_id = self._get_destination_journal_odoo_id(
+            cr, uid, context=context)
+        payment_method_line_id = self._get_payment_method_line_odoo_id(
+            cr, uid, context=context)
         lines = []
         invoice_ids = []
 
@@ -118,10 +122,6 @@ class Norma57File(osv.osv):
             cr, uid, invoice_ids, lines, is_grouped=False, context=context)
 
         total_amount = round(sum([line['amount'] for line in lines]), 2)
-        destination_journal_id = self._get_destination_journal_odoo_id(
-            cr, uid, context=context)
-        payment_method_line_id = self._get_payment_method_line_odoo_id(
-            cr, uid, context=context)
 
         return {
             'destination_journal_id': destination_journal_id,
@@ -184,7 +184,7 @@ class Norma57File(osv.osv):
                     sync_vals.update({
                         'sync_state': 'error',
                         'update_last_sync': True,
-                        'odoo_last_update_result': response
+                        'odoo_last_update_result': response.text
                     })
 
             if sync_vals:

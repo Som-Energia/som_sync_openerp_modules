@@ -453,7 +453,7 @@ class PaymentOrder(osv.osv):
                     sync_vals.update({
                         'sync_state': 'error',
                         'update_last_sync': True,
-                        'odoo_last_update_result': response
+                        'odoo_last_update_result': response.text
                     })
 
             if sync_vals:

@@ -649,6 +649,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
         mock_response = mock.Mock()
         mock_response.status_code = 200
+        mock_response.text = '{"error":"payment order failed"}'
         payment_order_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
         )[1]
@@ -731,7 +732,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.assertEqual(kwargs['context'], {
             'sync_state': 'error',
             'update_last_sync': True,
-            'odoo_last_update_result': mock_response,
+            'odoo_last_update_result': mock_response.text,
         })
 
     def test_get_total_amount_difference(self):
