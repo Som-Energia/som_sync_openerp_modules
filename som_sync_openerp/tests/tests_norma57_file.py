@@ -47,6 +47,7 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
                 norma57_file = mock.Mock()
                 norma57_file.name = 'Norma57 test'
+                norma57_file.header_presentation_date = '2026-01-15'
                 norma57_file.lines = [mock_line]
                 mock_browse.return_value = norma57_file
                 related_values = self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
@@ -55,6 +56,7 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             'destination_journal_id': 17,
             'payment_method_line_id': 411,
             'name': 'Norma57 test',
+            'sdd_required_collection_date': '2026-01-15',
             'amount': 125.5,
             'lines': [{
                 'invoice_id': 99,
@@ -111,6 +113,7 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
                 norma57_file = mock.Mock()
                 norma57_file.name = 'Norma57 test'
+                norma57_file.header_presentation_date = '2026-01-15'
                 norma57_file.lines = [mock_line]
                 mock_browse.return_value = norma57_file
                 with self.assertRaises(Exception):

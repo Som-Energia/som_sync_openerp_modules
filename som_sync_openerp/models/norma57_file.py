@@ -130,6 +130,7 @@ class Norma57File(osv.osv):
             'destination_journal_id': destination_journal_id,
             'payment_method_line_id': payment_method_line_id,
             'name': norma57_file.name or '',
+            'sdd_required_collection_date': norma57_file.header_presentation_date,
             'amount': total_amount,
             'lines': lines,
         }
