@@ -27,7 +27,7 @@
             <field name="target">new</field>
         </record>
 
-        <record id="value_wizard_sync_odoo_from_account_account" model="ir.values">
+        <record id="value_wizard_open_related_model_record_from_odoo_sync" model="ir.values">
             <field name="object" eval="1"/>
             <field name="name">Open Related ERP Record</field>
             <field name="key2">client_action_multi</field>

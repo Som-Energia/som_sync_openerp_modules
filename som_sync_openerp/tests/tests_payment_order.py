@@ -638,7 +638,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.assertEqual(lines[0]['amount'], 100.0)
 
     @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
-    @mock.patch('som_sync_openerp.models.payment_order.requests.get')
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
     @mock.patch.object(odoo_sync.OdooSync, "_get_conn_params")
     def test_update_pending_state_marks_record_as_synced(
         self, mock_get_conn_params, mock_requests_get, mock_update_odoo_id
@@ -649,6 +649,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
         mock_response = mock.Mock()
         mock_response.status_code = 200
+        mock_response.text = '{"error":"payment order failed"}'
         payment_order_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
         )[1]
@@ -686,7 +687,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         })
 
     @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
-    @mock.patch('som_sync_openerp.models.payment_order.requests.get')
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
     @mock.patch.object(odoo_sync.OdooSync, "_get_conn_params")
     def test_update_pending_state_marks_record_as_error(
         self, mock_get_conn_params, mock_requests_get, mock_update_odoo_id
@@ -731,7 +732,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         self.assertEqual(kwargs['context'], {
             'sync_state': 'error',
             'update_last_sync': True,
-            'odoo_last_update_result': mock_response,
+            'odoo_last_update_result': mock_response.text,
         })
 
     def test_get_total_amount_difference(self):

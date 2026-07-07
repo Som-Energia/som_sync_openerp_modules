@@ -18,6 +18,7 @@ MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
     'account.invoice': 'invoice',
     'payment.order': 'payment_orders',
+    'norma57.file': 'payment_orders',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -53,6 +54,7 @@ MAPPING_MODELS_POST = {
     'account.invoice': 'invoices',
     'account.move': 'entries',
     'payment.order': 'payment_orders',
+    'norma57.file': 'payment_orders',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
@@ -889,6 +891,43 @@ class OdooSync(osv.osv):
                 cursor, uid, sync_record.res_id, context=context)
 
         return False
+
+    def poll_payment_order_status_sync(self, cursor, uid, model_name, erp_id, context=None):
+        if context is None:
+            context = {}
+
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        sync_vals = {}
+
+        url_base = '{}payment_orders/{}/status'.format(odoo_url_api, erp_id)
+        headers = {
+            'X-API-Key': odoo_api_key,
+            'Accept': 'application/json',
+        }
+        response = requests.get(url_base, headers=headers)
+        if response.status_code != 200:
+            return False
+
+        data = response.json()
+        if data and 'success' in data and data.get('success', False) and \
+                data.get('data', False) and data['data'].get('status', False):
+            if data['data']['status'] == 'done':
+                sync_vals.update({'sync_state': 'synced', 'update_last_sync': True})
+            elif data['data']['status'] == 'error':
+                sync_vals.update({
+                    'sync_state': 'error',
+                    'update_last_sync': True,
+                    'odoo_last_update_result': response.text
+                })
+
+        if not sync_vals:
+            return False
+
+        odoo_id = data['data']['odoo_id'] if data['data'].get('odoo_id', False) else False
+        final_context = context.copy()
+        final_context.update(sync_vals)
+        self.update_odoo_id(cursor, uid, model_name, erp_id, odoo_id, context=final_context)
+        return True
 
     def _cron_update_pending_state(self, cursor, uid, context=None):
         if context is None:
