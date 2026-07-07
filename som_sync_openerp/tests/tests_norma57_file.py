@@ -65,20 +65,20 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             is_grouped=False, context={}
         )
 
-    def test_get_line_invoice_erp_id_uses_invoice_id_from_related_model(self):
+    def test_get_line_invoice_erp_id_raises_when_resource_is_not_account_invoice(self):
         line = mock.Mock()
         line.resource = 'fake.model,7'
-        related_obj = mock.Mock()
-        related_obj.read.return_value = {'invoice_id': (42, 'INV/42')}
 
-        with mock.patch.object(self.n57_obj.pool, 'get', return_value=related_obj) as mock_get:
-            invoice_id = self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
+        with self.assertRaises(Exception):
+            self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
 
-        self.assertEqual(invoice_id, 42)
-        mock_get.assert_called_once_with('fake.model')
-        related_obj.read.assert_called_once_with(
-            self.cursor, self.uid, 7, ['invoice_id'], context={}
-        )
+    def test_get_line_invoice_erp_id_returns_false_when_resource_is_empty(self):
+        line = mock.Mock()
+        line.resource = False
+
+        invoice_id = self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
+
+        self.assertFalse(invoice_id)
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_get_related_values_raises_when_destination_journal_is_missing(self, mock_sync):
