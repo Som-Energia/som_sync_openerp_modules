@@ -65,11 +65,20 @@ class Norma57File(osv.osv):
             return False
 
         model, model_id = line.resource.split(',')
-        if model != 'account.invoice':
+        if model == 'account.invoice':
+            return int(model_id)
+
+        if model != 'giscedata.facturacio.factura':
             logger.warning('Unsupported Norma57 resource: %s', line.resource)
             raise Exception('Unsupported Norma57 resource: {}'.format(line.resource))
+
         model_id = int(model_id)
-        return model_id
+        factura_obj = self.pool.get('giscedata.facturacio.factura')
+        invoice_id = factura_obj.read(
+            cr, uid, model_id, ['invoice_id'], context=context).get('invoice_id')
+        if not invoice_id:
+            return False
+        return invoice_id[0]
 
     def _build_line_values(self, cr, uid, line, context=None):
         if context is None:

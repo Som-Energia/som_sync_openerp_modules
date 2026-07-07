@@ -24,11 +24,12 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             'header_presentation_date': '2026-01-15',
         })
 
-    def _build_mock_line(self, invoice_id, amount=100.0, state='confirmed'):
+    def _build_mock_line(
+            self, resource_id, amount=100.0, state='confirmed', resource_model='account.invoice'):
         line = mock.Mock()
         line.state = state
         line.amount = amount
-        line.resource = 'account.invoice,{}'.format(invoice_id)
+        line.resource = '{},{}'.format(resource_model, resource_id)
         return line
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
@@ -65,12 +66,27 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             is_grouped=False, context={}
         )
 
-    def test_get_line_invoice_erp_id_raises_when_resource_is_not_account_invoice(self):
+    def test_get_line_invoice_erp_id_raises_when_resource_is_not_supported(self):
         line = mock.Mock()
         line.resource = 'fake.model,7'
 
         with self.assertRaises(Exception):
             self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
+
+    def test_get_line_invoice_erp_id_returns_invoice_from_giscedata_factura(self):
+        line = mock.Mock()
+        line.resource = 'giscedata.facturacio.factura,7'
+        factura_obj = mock.Mock()
+        factura_obj.read.return_value = {'invoice_id': (42, 'INV/42')}
+
+        with mock.patch.object(self.n57_obj.pool, 'get', return_value=factura_obj) as mock_get:
+            invoice_id = self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
+
+        self.assertEqual(invoice_id, 42)
+        mock_get.assert_called_once_with('giscedata.facturacio.factura')
+        factura_obj.read.assert_called_once_with(
+            self.cursor, self.uid, 7, ['invoice_id'], context={}
+        )
 
     def test_get_line_invoice_erp_id_returns_false_when_resource_is_empty(self):
         line = mock.Mock()
