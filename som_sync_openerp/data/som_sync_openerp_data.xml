@@ -153,6 +153,14 @@
                 Default ERP account.payment.term id used when an invoice has no payment term.
             </field>
         </record>
+        <record id="odoo_sync_account_code_normalized_length" model="res.config">
+            <field name="name">odoo_sync_account_code_normalized_length</field>
+            <field name="value">9</field>
+            <field name="description">
+                Target length used to normalize account.account codes for Odoo sync.
+                If empty, normalization is disabled.
+            </field>
+        </record>
         <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">
             <field name="name">Actualitzar sincronitzacions pendents d'Odoo</field>
             <field name="active" eval="0"/>
