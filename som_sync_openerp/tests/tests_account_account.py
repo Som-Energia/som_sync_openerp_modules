@@ -116,6 +116,69 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertEqual(vals['code'], '700000103')
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    @mock.patch.object(account_account.logger, 'warning')
+    def test__normalize_account_code_for_odoo__keeps_original_when_normalized_code_exists(
+            self, mock_warning, mock_sync):
+        self.conf_obj.set(
+            self.cursor, self.uid,
+            'odoo_sync_account_code_normalized_length', '9'
+        )
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+        source_id = self.account_obj.create(self.cursor, self.uid, {
+            'name': 'Long ERP account',
+            'code': '700000000103',
+            'type': 'other',
+            'user_type': account_type_id,
+        })
+        self.account_obj.create(self.cursor, self.uid, {
+            'name': 'Existing normalized account',
+            'code': '700000103',
+            'type': 'other',
+            'user_type': account_type_id,
+        })
+
+        normalized = self.account_obj._normalize_account_code_for_odoo(
+            self.cursor, self.uid, '700000000103', account_id=source_id
+        )
+
+        self.assertEqual(normalized, '700000000103')
+        mock_warning.assert_called_once_with(
+            'Cannot normalize account code %s to %s because account %s already uses that code',
+            '700000000103', '700000103', mock.ANY,
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    def test__normalize_account_code_for_odoo__returns_normalized_when_no_existing_short_code(
+            self, mock_sync):
+        self.conf_obj.set(
+            self.cursor, self.uid,
+            'odoo_sync_account_code_normalized_length', '9'
+        )
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+        source_id = self.account_obj.create(self.cursor, self.uid, {
+            'name': 'Long ERP account',
+            'code': '700000000103',
+            'type': 'other',
+            'user_type': account_type_id,
+        })
+        self.account_obj.create(self.cursor, self.uid, {
+            'name': 'Different account',
+            'code': '701000103',
+            'type': 'other',
+            'user_type': account_type_id,
+        })
+
+        normalized = self.account_obj._normalize_account_code_for_odoo(
+            self.cursor, self.uid, '700000000103', account_id=source_id
+        )
+
+        self.assertEqual(normalized, '700000103')
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):
         before_count = len(self.account_obj.search(
             self.cursor, self.uid, [('code', '=', '475600'), ('company_id', '=', 1)]

@@ -32,7 +32,7 @@ class AccountAccount(osv.osv):
         account = self.browse(cr, uid, id, context=context)
         if account.code:
             res = '{}'.format(self._normalize_account_code_for_odoo(
-                cr, uid, account.code, context=context
+                cr, uid, account.code, account_id=id, context=context
             ))
             return res
         else:
@@ -63,7 +63,21 @@ class AccountAccount(osv.osv):
             return False
         return target_length
 
-    def _normalize_account_code_for_odoo(self, cr, uid, code, context=None):
+    def _find_account_with_code(self, cr, uid, account_id, code, context=None):
+        if context is None:
+            context = {}
+        if not code:
+            return False
+
+        domain = [('code', '=', code)]
+        if account_id:
+            domain.append(('id', '!=', account_id))
+        account_ids = self.search(cr, uid, domain, limit=1, context=context)
+        if not account_ids:
+            return False
+        return self.browse(cr, uid, account_ids[0], context=context)
+
+    def _normalize_account_code_for_odoo(self, cr, uid, code, account_id=None, context=None):
         if context is None:
             context = {}
         if not code:
@@ -113,7 +127,17 @@ class AccountAccount(osv.osv):
             char for index, char in enumerate(middle)
             if index not in indexes_to_remove
         ])
-        return '{}{}{}'.format(prefix, normalized_middle, suffix)
+        normalized_code = '{}{}{}'.format(prefix, normalized_middle, suffix)
+        collision_account = self._find_account_with_code(
+            cr, uid, account_id, normalized_code, context=context
+        )
+        if collision_account:
+            logger.warning(
+                'Cannot normalize account code %s to %s because account %s already uses that code',
+                code, normalized_code, collision_account.id,
+            )
+            return code
+        return normalized_code
 
     def hook_last_modifications(self, cr, uid, data, context=None):
         if context is None:
@@ -121,7 +145,7 @@ class AccountAccount(osv.osv):
         if 'code' not in data:
             return data
         data['code'] = self._normalize_account_code_for_odoo(
-            cr, uid, data.get('code'), context=context
+            cr, uid, data.get('code'), account_id=data.get('pnt_erp_id'), context=context
         )
         return data
 
