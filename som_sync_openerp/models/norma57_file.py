@@ -121,6 +121,9 @@ class Norma57File(osv.osv):
             lines.append(line_vals)
             invoice_ids.append(invoice_id)
 
+        if not lines:
+            raise Exception('Norma57 file has no syncable confirmed invoice lines')
+
         inv_obj.process_lines_with_discrepancies(
             cr, uid, invoice_ids, lines, is_grouped=False, context=context)
 

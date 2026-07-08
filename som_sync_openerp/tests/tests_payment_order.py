@@ -698,6 +698,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         )
         mock_response = mock.Mock()
         mock_response.status_code = 200
+        mock_response.text = '{"error":"payment order failed"}'
         payment_order_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'remesa_0001'
         )[1]

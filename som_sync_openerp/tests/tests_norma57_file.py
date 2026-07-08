@@ -119,6 +119,20 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
                 with self.assertRaises(Exception):
                     self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
 
+    def test_get_related_values_raises_when_no_confirmed_lines_are_syncable(self):
+        norma57_id = self._create_norma57_file()
+        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
+        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
+
+        with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
+            norma57_file = mock.Mock()
+            norma57_file.name = 'Norma57 test'
+            norma57_file.header_presentation_date = '2026-01-15'
+            norma57_file.lines = []
+            mock_browse.return_value = norma57_file
+            with self.assertRaises(Exception):
+                self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
+
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_confirm_triggers_norma57_sync(self, mock_sync):
         norma57_id = self._create_norma57_file()
