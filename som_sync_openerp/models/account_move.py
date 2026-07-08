@@ -7,6 +7,8 @@ class AccountMove(osv.osv):
     _name = 'account.move'
     _inherit = 'account.move'
 
+    SYNC_BLOCKED_ACCOUNT_PREFIXES = ('572',)
+
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'number',
@@ -41,11 +43,23 @@ class AccountMove(osv.osv):
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
             context = {}
-        return self._journal_is_syncrozable(cr, uid, id, context=context)
+        return self._journal_is_syncrozable(cr, uid, id, context=context) and not \
+            self._has_blocked_account_prefix(cr, uid, id, context=context)
 
     def _journal_is_syncrozable(self, cr, uid, _id, context=None):
         move = self.browse(cr, uid, _id, context=context)
         return move.journal_id and move.journal_id.som_sync_odoo_account_moves
+
+    def _has_blocked_account_prefix(self, cr, uid, _id, context=None):
+        if context is None:
+            context = {}
+        move = self.browse(cr, uid, _id, context=context)
+        for line in move.line_id:
+            account_code = line.account_id and line.account_id.code or ''
+            if any(account_code.startswith(prefix)
+                   for prefix in self.SYNC_BLOCKED_ACCOUNT_PREFIXES):
+                return True
+        return False
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
