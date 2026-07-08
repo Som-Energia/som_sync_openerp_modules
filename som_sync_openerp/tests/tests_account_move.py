@@ -11,6 +11,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
     def setUp(self):
         self.am_obj = self.openerp.pool.get("account.move")
         self.aml_obj = self.openerp.pool.get("account.move.line")
+        self.account_obj = self.openerp.pool.get("account.account")
         self.imd_obj = self.openerp.pool.get("ir.model.data")
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
@@ -84,6 +85,34 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )
 
         self.assertFalse(is_syncrozable)
+
+    def test__check_special_restrictions_returns_false_when_move_has_blocked_account_prefix(self):
+        blocked_line = mock.Mock()
+        blocked_line.account_id = mock.Mock(code='572000TEST')
+        move = mock.Mock()
+        move.journal_id = mock.Mock(som_sync_odoo_account_moves=True)
+        move.line_id = [blocked_line]
+
+        with mock.patch.object(self.am_obj, 'browse', return_value=move):
+            is_syncrozable = self.am_obj.check_special_restrictions(
+                self.cursor, self.uid, 1
+            )
+
+        self.assertFalse(is_syncrozable)
+
+    def test__check_special_restrictions_true_when_journal_syncable_and_no_blocked_prefix(self):
+        allowed_line = mock.Mock()
+        allowed_line.account_id = mock.Mock(code='430000TEST')
+        move = mock.Mock()
+        move.journal_id = mock.Mock(som_sync_odoo_account_moves=True)
+        move.line_id = [allowed_line]
+
+        with mock.patch.object(self.am_obj, 'browse', return_value=move):
+            is_syncrozable = self.am_obj.check_special_restrictions(
+                self.cursor, self.uid, 1
+            )
+
+        self.assertTrue(is_syncrozable)
 
     @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
