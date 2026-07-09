@@ -401,17 +401,18 @@ class OdooSync(osv.osv):
                     odoo_metadata.pop('company_name', False)
                     dict_to_patch = self.get_dict_to_patch(cursor, uid, erp_data, odoo_metadata)
                     if dict_to_patch:
-                        success, msg = self.update_odoo_record(
+                        success, msg, endpoint = self.update_odoo_record(
                             cursor, uid, model, odoo_id, erp_id, dict_to_patch, context)
                         sync_vals.update({
                             'sync_state': 'synced' if success else 'error',
                             'odoo_last_update_result': self.format_response(msg),
                             'update_last_sync': True,
                             'odoo_last_sync_request': self.format_response(dict_to_patch),
+                            'odoo_last_sync_endpoint': endpoint,
                         })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
-                odoo_id, msg = self.create_odoo_record(
+                odoo_id, msg, endpoint = self.create_odoo_record(
                     cursor, uid, model, erp_data, context=context)
                 if odoo_id:
                     erp_id = openerp_id
@@ -430,6 +431,7 @@ class OdooSync(osv.osv):
 
                 sync_vals.update({
                     'odoo_last_sync_request': self.format_response(erp_data),
+                    'odoo_last_sync_endpoint': endpoint,
                     'sync_state': sync_state,
                 })
 
@@ -521,9 +523,8 @@ class OdooSync(osv.osv):
                 if data_response and 'success' in data_response and \
                         data_response.get('success', False):
                     odoo_id = data_response['data']['odoo_id']
-                    return odoo_id, response.text
+                    return odoo_id, response.text, url_base
             elif response.status_code == 409 and model == 'account.invoice':
-                # 409 Conflicto - ERP ID o número de factura duplicado: Actualitzem odoo_id.
                 data_response = response.json()
                 if data_response and 'success' in data_response and \
                         not data_response.get('success', False) and \
@@ -531,14 +532,14 @@ class OdooSync(osv.osv):
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
                     if odoo_id:
-                        return odoo_id, False
+                        return odoo_id, False, False
                     else:
-                        return False, response.text
+                        return False, response.text, url_base
             else:
-                return False, response.text
+                return False, response.text, url_base
         else:
             raise CreationNotSupportedException(model)
-        return False, False
+        return False, False, False
 
     def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
         if context is None:
@@ -556,8 +557,8 @@ class OdooSync(osv.osv):
         if response.status_code == 200:
             data = response.json()
             if data and 'success' in data and data.get('success', False):
-                return True, response.text
-        return False, response.text
+                return True, response.text, url_base
+        return False, response.text, url_base
 
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
@@ -650,6 +651,11 @@ class OdooSync(osv.osv):
                 'odoo_last_update_result': context['odoo_last_update_result'],
             })
 
+        if context.get('odoo_last_sync_endpoint'):
+            vals.update({
+                'odoo_last_sync_endpoint': context['odoo_last_sync_endpoint'],
+            })
+
         with Sudo(uid=1, gid=0):
             return self.create(cursor, uid, vals)
 
@@ -686,6 +692,12 @@ class OdooSync(osv.osv):
         if context.get('odoo_last_sync_request'):
             vals.update({
                 'odoo_last_sync_request': context['odoo_last_sync_request'],
+            })
+            update = True
+
+        if context.get('odoo_last_sync_endpoint'):
+            vals.update({
+                'odoo_last_sync_endpoint': context['odoo_last_sync_endpoint'],
             })
             update = True
 
@@ -950,6 +962,7 @@ class OdooSync(osv.osv):
         # Resultat de l'error de la última actualització
         'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
+        'odoo_last_sync_endpoint': fields.char('Odoo last sync endpoint', size=512),
         'sync_state': fields.selection([
             ('draft', 'Draft'),
             ('error', 'Error'),

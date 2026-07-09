@@ -16,6 +16,7 @@
                     <field name="odoo_created_at" />
                     <field name="odoo_updated_at" />
                     <field name="odoo_last_sync_request" />
+                    <field name="odoo_last_sync_endpoint" widget="url"/>
                     <field name="odoo_last_update_result" />
                     <field name="sync_state" />
                 </form>
