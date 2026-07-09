@@ -548,7 +548,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'name': u'ASUStek',
         }
         mock_exists_in_odoo.return_value = (False, False, False)
-        mock_create_odoo_record.return_value = (4321, '')
+        mock_create_odoo_record.return_value = (4321, '', 'http://example.com/api/res.partner')
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
             self.cursor, self.uid, 'res.partner', 'sync', partner_id, context={}
@@ -584,7 +584,8 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         mock_exists_in_odoo.return_value = (9999, partner_id, {'name': u'Old'})
         mock_get_dict_to_patch.return_value = {'name': u'ASUStek'}
-        mock_update_odoo_record.return_value = (True, '')
+        mock_update_odoo_record.return_value = (
+            True, '', 'http://example.com/api/res.partner/9999/partner_id')
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
             self.cursor, self.uid, 'res.partner', 'write', partner_id, context={}
@@ -664,7 +665,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'code': u'4300TEST',
             'name': u'Account Test'
         }
-        mock_create_odoo_record.return_value = (321, '')
+        mock_create_odoo_record.return_value = (321, '', 'http://example.com/api/res.partner')
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
             self.cursor, self.uid, 'account.account', 'sync', account_id, context={}
@@ -701,7 +702,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_get_model_vals_to_sync.return_value = {
             'pnt_erp_id': payment_order_id,
         }
-        mock_create_odoo_record.return_value = (4321, '')
+        mock_create_odoo_record.return_value = (4321, '', 'http://example.com/api/res.partner')
         mock_get_sync_state.return_value = 'pending'
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
@@ -737,7 +738,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_get_model_vals_to_sync.return_value = {
             'pnt_erp_id': payment_order_id,
         }
-        mock_create_odoo_record.return_value = (4321, '')
+        mock_create_odoo_record.return_value = (4321, '', 'http://example.com/api/res.partner')
         mock_get_sync_state.return_value = 'pending'
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
@@ -765,7 +766,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_get_model_vals_to_sync.return_value = {
             'pnt_erp_id': payment_order_id,
         }
-        mock_create_odoo_record.return_value = (4321, '')
+        mock_create_odoo_record.return_value = (4321, '', 'http://example.com/api/res.partner')
         mock_get_sync_state.return_value = 'synced'
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
