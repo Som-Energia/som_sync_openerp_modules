@@ -533,7 +533,7 @@ class OdooSync(osv.osv):
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
                         cursor, uid, model, data.get('pnt_erp_id', False))
                     if odoo_id:
-                        return odoo_id, False, False
+                        return odoo_id, False, url_base
                     else:
                         return False, response.text, url_base
             else:
