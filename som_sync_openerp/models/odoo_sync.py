@@ -525,6 +525,7 @@ class OdooSync(osv.osv):
                     odoo_id = data_response['data']['odoo_id']
                     return odoo_id, response.text, url_base
             elif response.status_code == 409 and model == 'account.invoice':
+                # 409 Conflicto - ERP ID o número de factura duplicado: Actualitzem odoo_id.
                 data_response = response.json()
                 if data_response and 'success' in data_response and \
                         not data_response.get('success', False) and \
