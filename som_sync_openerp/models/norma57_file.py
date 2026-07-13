@@ -1,7 +1,6 @@
 #  -*- coding: utf-8 -*-
 from oorq.decorators import job
 from osv import osv
-import json
 from service.security import Sudo
 
 from .odoo_exceptions import ForeingKeyNotAvailable
@@ -227,15 +226,8 @@ class Norma57File(osv.osv):
             return result['odoo_id']
 
         response_text = result.get('response_text') or ''
-        existing_odoo_id = False
-        if response_text:
-            try:
-                response_json = json.loads(response_text)
-            except Exception:
-                response_json = {}
-            if response_json.get('error_code') == 'DUPLICATE_KEY_VALUE':
-                existing_odoo_id = self._get_existing_payment_entry_odoo_id(
-                    cr, uid, payload['pnt_erp_id'], context=context)
+        existing_odoo_id = self._get_existing_payment_entry_odoo_id(
+            cr, uid, payload['pnt_erp_id'], context=context)
 
         if existing_odoo_id:
             self._update_payment_entry_sync_fields(

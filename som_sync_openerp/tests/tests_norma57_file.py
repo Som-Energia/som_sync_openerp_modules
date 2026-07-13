@@ -234,6 +234,35 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             '{"error_code": "DUPLICATE_KEY_VALUE"}'
         )
 
+    def test_sync_norma57_payment_entry_if_needed_recovers_existing_entry_without_json_body(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
+            with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
+                with mock.patch.object(
+                        self.n57_obj,
+                        '_get_existing_payment_entry_odoo_id') as mock_get:
+                    mock_payload.return_value = {'pnt_erp_id': 900000001}
+                    mock_create.return_value = {
+                        'success': False,
+                        'odoo_id': False,
+                        'response_text': '',
+                        'url': 'http://odoo/api/v1/entries',
+                    }
+                    mock_get.return_value = 9876
+
+                    result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                        self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(result, 9876)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_odoo_id, 9876)
+        self.assertEqual(
+            sync_record.pnt_norma57_payment_entry_last_result,
+            'duplicate entry recovered'
+        )
+
     def test_sync_norma57_payment_entry_if_needed_stores_last_result_on_error(self):
         norma57_id = self._create_norma57_file()
         sync_id = self._create_norma57_sync(norma57_id)
