@@ -261,13 +261,43 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             self, mock_poll):
         norma57_id = self._create_norma57_file()
         mock_poll.return_value = True
+        self._create_norma57_sync(norma57_id)
 
         with mock.patch.object(
                 type(self.n57_obj),
                 '_sync_norma57_payment_entry_if_needed') as mock_payment_entry_sync:
+            mock_payment_entry_sync.return_value = 4321
             result = self.n57_obj.update_pending_state_sync(self.cursor, self.uid, norma57_id)
 
         self.assertTrue(result)
         mock_payment_entry_sync.assert_called_once_with(
             self.cursor, self.uid, norma57_id, context={}
         )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_update_pending_state_sync_sets_pending_when_entry_creation_fails(
+            self, mock_poll):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id, sync_state='pending')
+        mock_poll.side_effect = self._mock_poll_to_synced
+
+        with mock.patch.object(
+                type(self.n57_obj),
+                '_sync_norma57_payment_entry_if_needed') as mock_payment_entry_sync:
+            mock_payment_entry_sync.return_value = False
+            result = self.n57_obj.update_pending_state_sync(self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertTrue(result)
+        self.assertEqual(sync_record.sync_state, 'pending')
+
+    def _mock_poll_to_synced(self, cr, uid, model_name, erp_id, context=None):
+        self.sync_obj.update_odoo_id(
+            cr,
+            uid,
+            model_name,
+            erp_id,
+            321,
+            context={'sync_state': 'synced', 'update_last_sync': True},
+        )
+        return True

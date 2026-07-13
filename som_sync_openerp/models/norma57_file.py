@@ -129,6 +129,18 @@ class Norma57File(osv.osv):
         with Sudo(uid=1, gid=0):
             return self.pool.get('odoo.sync').write(cr, uid, [sync_id], vals, context=context)
 
+    def _set_payment_entry_retry_pending(self, cr, uid, sync_id, context=None):
+        if context is None:
+            context = {}
+        with Sudo(uid=1, gid=0):
+            return self.pool.get('odoo.sync').write(
+                cr,
+                uid,
+                [sync_id],
+                {'sync_state': 'pending'},
+                context=context,
+            )
+
     def _build_payment_entry_payload(self, cr, uid, norma57_file, context=None):
         if context is None:
             context = {}
@@ -362,7 +374,14 @@ class Norma57File(osv.osv):
         result = sync_obj.poll_payment_order_status_sync(
             cr, uid, self._name, erp_id, context=context)
         if result:
-            self._sync_norma57_payment_entry_if_needed(cr, uid, erp_id, context=context)
+            payment_entry_odoo_id = self._sync_norma57_payment_entry_if_needed(
+                cr, uid, erp_id, context=context)
+            sync_id = self._get_sync_record_id(cr, uid, erp_id, context=context)
+            if sync_id and not payment_entry_odoo_id:
+                sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
+                if sync_record.sync_state == 'synced':
+                    self._set_payment_entry_retry_pending(
+                        cr, uid, sync_id, context=context)
         return result
 
 
