@@ -16,6 +16,7 @@ FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 # Mapping of models entities to update erp_id in Odoo: key -> erp model, value -> odoo entity name
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
+    'account.move': 'entry',
     'account.invoice': 'invoice',
     'payment.order': 'payment_orders',
     'norma57.file': 'payment_orders',
@@ -955,6 +956,12 @@ class OdooSync(osv.osv):
         'model': fields.many2one('ir.model', 'Model'),
         'res_id': fields.integer('ERP id'),
         'odoo_id': fields.integer('Odoo id'),
+        'pnt_norma57_payment_entry_odoo_id': fields.integer(
+            'Norma57 payment entry Odoo id'
+        ),
+        'pnt_norma57_payment_entry_last_result': fields.text(
+            'Norma57 payment entry last result'
+        ),
         # Aquest camp indica la última vegada que hem fet sync amb Odoo (s'hagin modificat o no les dades)  # noqa: E501
         'odoo_last_sync_at': fields.datetime('Odoo last sync at'),
         # Aquests camps indiquen la data de creacio i ultima modificacio al Odoo, no la data d'actualitzció de l'odoo_id a OpenERP  # noqa: E501
