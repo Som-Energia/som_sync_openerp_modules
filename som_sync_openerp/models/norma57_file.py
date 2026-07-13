@@ -70,18 +70,13 @@ class Norma57File(osv.osv):
             raise Exception('odoo_norma57_payment_entry_journal is not configured')
         return journal_odoo_id
 
-    def _get_payment_entry_account_code_candidates(self, code):
+    def _get_payment_entry_account_code_pattern(self, code):
         raw_code = (code or '').strip()
-        normalized = raw_code.replace('.', '')
-        candidates = [raw_code]
-        if normalized and normalized not in candidates:
-            candidates.append(normalized)
-        for target_len in (6, 9):
-            if normalized and len(normalized) < target_len:
-                padded = normalized.ljust(target_len, '0')
-                if padded not in candidates:
-                    candidates.append(padded)
-        return candidates
+        if '.' not in raw_code:
+            return raw_code
+        prefix, suffix = raw_code.split('.', 1)
+        suffix = suffix[-1:] if suffix else ''
+        return '{}%{}'.format(prefix, suffix)
 
     def _get_payment_entry_account_odoo_id_by_code(self, cr, uid, code, context=None):
         if context is None:
@@ -89,17 +84,20 @@ class Norma57File(osv.osv):
         account_obj = self.pool.get('account.account')
         sync_obj = self.pool.get('odoo.sync')
 
-        for candidate in self._get_payment_entry_account_code_candidates(code):
-            account_ids = account_obj.search(cr, uid, [('code', '=', candidate)], context=context)
-            if not account_ids:
-                continue
-            odoo_id = sync_obj.get_odoo_id_by_erp_id(
-                cr, uid, 'account.account', account_ids[0])
-            if odoo_id:
-                return odoo_id
-            raise ForeingKeyNotAvailable('account.account,{}'.format(account_ids[0]))
+        account_code_pattern = self._get_payment_entry_account_code_pattern(code)
+        account_ids = account_obj.search(
+            cr, uid, [('code', 'like', account_code_pattern)], context=context)
+        if not account_ids:
+            raise Exception(
+                'Account code pattern {} not found for Norma57 payment entry'.format(
+                    account_code_pattern)
+            )
 
-        raise Exception('Account code {} not found for Norma57 payment entry'.format(code))
+        odoo_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.account', account_ids[0])
+        if odoo_id:
+            return odoo_id
+        raise ForeingKeyNotAvailable('account.account,{}'.format(account_ids[0]))
 
     def _get_payment_entry_erp_id(self, norma57_id):
         return self.PAYMENT_ENTRY_ERP_ID_OFFSET + int(norma57_id)

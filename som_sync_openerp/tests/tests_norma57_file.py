@@ -161,6 +161,16 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
     def test_get_payment_entry_erp_id_uses_offset(self):
         self.assertEqual(self.n57_obj._get_payment_entry_erp_id(17), 900000017)
 
+    def test_get_payment_entry_account_code_pattern_uses_like_format(self):
+        self.assertEqual(
+            self.n57_obj._get_payment_entry_account_code_pattern('572.9'),
+            '572%9'
+        )
+        self.assertEqual(
+            self.n57_obj._get_payment_entry_account_code_pattern('570.0'),
+            '570%0'
+        )
+
     def test_sync_norma57_payment_entry_if_needed_skips_when_entry_already_exists(self):
         norma57_id = self._create_norma57_file()
         sync_id = self._create_norma57_sync(norma57_id)
