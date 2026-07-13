@@ -140,6 +140,14 @@ class Norma57File(osv.osv):
                 context=context,
             )
 
+    def _queue_payment_entry_retry(self, cr, uid, sync_id, last_result, context=None):
+        if context is None:
+            context = {}
+        self._update_payment_entry_sync_fields(
+            cr, uid, sync_id, last_result=last_result, context=context)
+        return self._set_payment_entry_retry_pending(
+            cr, uid, sync_id, context=context)
+
     def _build_payment_entry_payload(self, cr, uid, norma57_file, context=None):
         if context is None:
             context = {}
@@ -366,14 +374,36 @@ class Norma57File(osv.osv):
         result = sync_obj.poll_payment_order_status_sync(
             cr, uid, self._name, erp_id, context=context)
         if result:
-            payment_entry_odoo_id = self._sync_norma57_payment_entry_if_needed(
-                cr, uid, erp_id, context=context)
             sync_id = self._get_sync_record_id(cr, uid, erp_id, context=context)
+            try:
+                payment_entry_odoo_id = self._sync_norma57_payment_entry_if_needed(
+                    cr, uid, erp_id, context=context)
+            except Exception as exc:
+                if sync_id:
+                    sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
+                    if sync_record.sync_state == 'synced':
+                        self._queue_payment_entry_retry(
+                            cr,
+                            uid,
+                            sync_id,
+                            last_result=str(exc),
+                            context=context,
+                        )
+                logger.exception(
+                    'Error creating Norma57 payment entry for sync %s',
+                    erp_id,
+                )
+                return result
             if sync_id and not payment_entry_odoo_id:
                 sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
                 if sync_record.sync_state == 'synced':
-                    self._set_payment_entry_retry_pending(
-                        cr, uid, sync_id, context=context)
+                    self._queue_payment_entry_retry(
+                        cr,
+                        uid,
+                        sync_id,
+                        last_result='Retrying Norma57 payment entry creation',
+                        context=context,
+                    )
         return result
 
 
