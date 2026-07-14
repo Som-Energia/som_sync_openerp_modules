@@ -269,16 +269,20 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
 
         with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
             with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
-                mock_payload.return_value = {'pnt_erp_id': 900000001}
-                mock_create.return_value = {
-                    'success': False,
-                    'odoo_id': False,
-                    'response_text': 'boom',
-                    'url': 'http://odoo/api/v1/entries',
-                }
+                with mock.patch.object(
+                        self.n57_obj,
+                        '_get_existing_payment_entry_odoo_id') as mock_get:
+                    mock_payload.return_value = {'pnt_erp_id': 900000001}
+                    mock_create.return_value = {
+                        'success': False,
+                        'odoo_id': False,
+                        'response_text': 'boom',
+                        'url': 'http://odoo/api/v1/entries',
+                    }
+                    mock_get.return_value = False
 
-                result = self.n57_obj._sync_norma57_payment_entry_if_needed(
-                    self.cursor, self.uid, norma57_id)
+                    result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                        self.cursor, self.uid, norma57_id)
 
         sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
         self.assertFalse(result)
