@@ -58,6 +58,7 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             'name': 'Norma57 test',
             'sdd_required_collection_date': '2026-01-15',
             'amount': 125.5,
+            'pnt_source_model': 'norma57.file',
             'lines': [{
                 'invoice_id': 99,
                 'amount': 125.5,

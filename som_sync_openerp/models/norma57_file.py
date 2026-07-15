@@ -22,6 +22,7 @@ class Norma57File(osv.osv):
     MAPPING_FK = {}
     MAPPING_CONSTANTS = {
         'batch_type': 'inbound',
+        'pnt_source_model': 'norma57.file',
     }
 
     def get_mapping_model_post(self, cr, uid, id, context=None):
