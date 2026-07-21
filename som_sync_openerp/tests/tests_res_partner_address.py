@@ -25,7 +25,7 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
         suffix = self.rpa_obj.get_endpoint_suffix(self.cursor, self.uid, partner_address_id)
         self.assertEqual(suffix, "contact/4001/invoice")
 
-    def test__create_triggers_sync(self):
+    def test__create_without_partner_does_not_trigger_sync(self):
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
         _orig_sync_model_enabled_amplified = getattr(
             self.sync_obj, 'sync_model_enabled_amplified', None)
@@ -45,7 +45,7 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
             },
         )
 
-        self.sync_obj.syncronize.assert_called_once()
+        self.sync_obj.syncronize.assert_not_called()
 
     def test__create__autosync_not_enabled_no_trigger(self):
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
