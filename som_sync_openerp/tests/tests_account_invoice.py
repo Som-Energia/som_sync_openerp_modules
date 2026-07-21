@@ -6,6 +6,8 @@ import netsvc
 
 from destral import testing
 from ..models import odoo_sync
+from oorq import decorators as oorq_decorators
+from oorq.oorq import AsyncMode
 
 
 class TestAccountInvoice(testing.OOTestCaseWithCursor):
@@ -309,6 +311,26 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         )
 
         mock_syncronize_sync.assert_called_once()
+
+    @mock.patch.object(oorq_decorators, 'set_hash_job')
+    @mock.patch.object(oorq_decorators.ProcessJobs, 'add_job')
+    @mock.patch.object(oorq_decorators.Job, 'create')
+    @mock.patch.object(oorq_decorators, 'Queue')
+    @mock.patch.object(oorq_decorators, 'setup_redis_connection')
+    def test__syncronize_waits_for_commit(
+            self, mock_redis_connection, mock_queue, mock_job_create,
+            mock_add_job, mock_set_hash_job):
+        job = mock.MagicMock()
+        mock_job_create.return_value = job
+
+        with AsyncMode(mode='async'):
+            self.sync_obj.syncronize(
+                self.cursor, self.uid, 'account.invoice', 'create', 1
+            )
+
+        mock_add_job.assert_called_once_with(
+            id(self.cursor), job, mock_queue.return_value, False
+        )
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")

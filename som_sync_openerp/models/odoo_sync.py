@@ -276,7 +276,7 @@ class OdooSync(osv.osv):
                     modified_fields[key] = erp_data[key]
         return modified_fields
 
-    @job(queue='sync_odoo', timeout=3600)
+    @job(queue='sync_odoo', timeout=3600, on_commit=True)
     def syncronize(self, cursor, uid,
                    model, action, openerp_id, context=None):
         if context is None:
