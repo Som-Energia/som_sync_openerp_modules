@@ -114,7 +114,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertTrue(is_syncrozable)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     def test__write_triggers_async(self, mock_sync_model_enabled_amplified, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(
