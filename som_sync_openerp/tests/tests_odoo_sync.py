@@ -468,9 +468,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(mock_syncronize_sync.call_count, 2)
         mock_syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
+                      invoice_id, context={'history_pending_state': 1}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
-                      invoice_id, context={'update_last_sync': True}),
+                      invoice_id, context={}),
         ])
 
     def helper_open_and_pay_invoice(self):
@@ -509,9 +509,9 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(mock_syncronize_sync.call_count, 2)
         mock_syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
-                      invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
+                      invoice_id, context={'history_pending_state': 1}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
-                      invoice_id, context={'update_last_sync': True}),
+                      invoice_id, context={}),
         ])
         self.assertEqual(self.ai_obj.browse(self.cursor, self.uid, invoice_id).state, 'paid')
 
