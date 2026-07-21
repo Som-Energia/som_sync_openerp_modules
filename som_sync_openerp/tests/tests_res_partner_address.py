@@ -47,6 +47,26 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
 
         self.sync_obj.syncronize.assert_not_called()
 
+    def test__create_with_partner_triggers_sync(self):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        _orig_sync_model_enabled_amplified = getattr(
+            self.sync_obj, 'sync_model_enabled_amplified', None)
+        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
+        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
+            self.sync_obj, 'sync_model_enabled_amplified', orig))
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
+        self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+
+        self.rpa_obj.create(self.cursor, self.uid, {
+            'partner_id': partner_id,
+            'nv': 'New Street Name',
+        })
+
+        self.sync_obj.syncronize.assert_called_once()
+
     def test__create__autosync_not_enabled_no_trigger(self):
         # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
         _orig_sync_model_enabled_amplified = getattr(
