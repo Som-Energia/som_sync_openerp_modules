@@ -11,11 +11,11 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         super(TestWizardSyncObjectOdoo, self).setUp()
 
     def test_action_sync__res_partner(self):
-        # Mock syncronize_sync method
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+        # Mock the deferred synchronization job.
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
+        self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(
+            self.sync_obj, 'syncronize', orig))
 
         context = {
             'from_model': 'res.partner',
@@ -24,11 +24,11 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         wiz_id = self.wizard_obj.create(self.cursor, self.uid, {}, context=context)
         self.wizard_obj.action_sync(self.cursor, self.uid, [wiz_id], context=context)
 
-        # Verify syncronize_sync was called for each id
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
+        # Verify synchronization was scheduled for each id.
+        self.assertEqual(self.sync_obj.syncronize.call_count, 3)
 
         # Verify arguments of the last call
-        self.sync_obj.syncronize_sync.assert_called_with(
+        self.sync_obj.syncronize.assert_called_with(
             ANY, self.uid, 'res.partner', 'sync', 3, context=context
         )
 
@@ -43,11 +43,11 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "odoo_country_state_error"
         )[1]
 
-        # Mock syncronize_sync method
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+        # Mock the deferred synchronization job.
+        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
+        self.sync_obj.syncronize = MagicMock()
+        self.addCleanup(lambda orig=_orig_syncronize: setattr(
+            self.sync_obj, 'syncronize', orig))
 
         context = {
             'from_model': 'odoo.sync',
@@ -56,14 +56,14 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         wiz_id = self.wizard_obj.create(self.cursor, self.uid, {}, context=context)
         self.wizard_obj.action_sync(self.cursor, self.uid, [wiz_id], context=context)
 
-        # Verify syncronize_sync was called for each id
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 3)
+        # Verify synchronization was scheduled for each id.
+        self.assertEqual(self.sync_obj.syncronize.call_count, 3)
 
         # Verify arguments of the calls
         partner_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_1).res_id
         country_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_2).res_id
         country_state_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_3).res_id
-        self.sync_obj.syncronize_sync.assert_has_calls([
+        self.sync_obj.syncronize.assert_has_calls([
             call(ANY, self.uid, u'res.partner', 'sync', partner_id, context=context),
             call(ANY, self.uid, u'res.country', 'sync', country_id, context=context),
             call(ANY, self.uid, u'res.country.state', 'sync', country_state_id, context=context),

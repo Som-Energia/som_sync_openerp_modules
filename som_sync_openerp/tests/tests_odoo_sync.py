@@ -437,7 +437,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(dict_to_patch, modified_fields)
 
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__common_sync_model_create_update_draft_invoice(self, mock_syncronize_sync):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'invoice_0001'
@@ -449,7 +449,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_syncronize_sync.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__common_sync_model_create_update_open_invoice(
             self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
         mock_sync_model_enabled_amplified.return_value = (True, True, True)
@@ -463,10 +463,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.common_sync_model_create_update(
             self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
-        # Check 2 calls to syncronize.
+        # Check 2 calls to the deferred synchronization job.
         # Open invoice (write) and sync (common_sync_model_create_update)
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
-        self.sync_obj.syncronize_sync.assert_has_calls([
+        self.assertEqual(mock_syncronize_sync.call_count, 2)
+        mock_syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
                       invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',
@@ -491,7 +491,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         return invoice_id, period_id, account_id, journal_id
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__common_sync_model_create_update_paid_invoice(
             self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
         mock_sync_model_enabled_amplified.return_value = (True, True, True)
@@ -504,10 +504,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.sync_obj.common_sync_model_create_update(
             self.cursor, self.uid, 'account.invoice', 'sync', invoice_id, {})
 
-        # Check 2 calls to because open invoice syncronize it.
+        # Check 2 calls because opening the invoice schedules synchronization.
         # Open invoice (write) and sync (common_sync_model_create_update)
-        self.assertEqual(self.sync_obj.syncronize_sync.call_count, 2)
-        self.sync_obj.syncronize_sync.assert_has_calls([
+        self.assertEqual(mock_syncronize_sync.call_count, 2)
+        mock_syncronize_sync.assert_has_calls([
             mock.call(mock.ANY, self.uid, u'account.invoice', 'create',
                       invoice_id, context={'history_pending_state': 1, 'update_last_sync': True}),
             mock.call(mock.ANY, self.uid, u'account.invoice', 'sync',

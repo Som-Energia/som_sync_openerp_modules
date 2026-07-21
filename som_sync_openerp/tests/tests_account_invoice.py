@@ -298,7 +298,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.assertFalse(is_syncrozable)
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__write_triggers_async(self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
@@ -322,6 +322,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             mock_add_job, mock_set_hash_job):
         job = mock.MagicMock()
         mock_job_create.return_value = job
+        at_front = False  # Keep the default FIFO queue priority.
 
         with AsyncMode(mode='async'):
             self.sync_obj.syncronize(
@@ -329,7 +330,7 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             )
 
         mock_add_job.assert_called_once_with(
-            id(self.cursor), job, mock_queue.return_value, False
+            id(self.cursor), job, mock_queue.return_value, at_front
         )
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
