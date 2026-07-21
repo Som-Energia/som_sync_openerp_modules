@@ -40,6 +40,10 @@ class ResPartnerAddress(osv.osv):
         'is_company': False,
     }
 
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        address = self.browse(cr, uid, id, context=context)
+        return bool(address.partner_id)
+
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
