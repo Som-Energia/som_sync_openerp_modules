@@ -15,6 +15,10 @@ class Norma57File(osv.osv):
     _name = 'norma57.file'
     _inherit = 'norma57.file'
 
+    PAYMENT_ENTRY_ACCOUNT_DEBIT_CODE = '572.9'
+    PAYMENT_ENTRY_ACCOUNT_CREDIT_CODE = '570.0'
+    PAYMENT_ENTRY_ERP_ID_OFFSET = 900000000
+
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'header_presentation_date': 'date',
@@ -57,6 +61,201 @@ class Norma57File(osv.osv):
         if not payment_method_line_id:
             raise Exception('odoo_norma57_payment_method is not configured')
         return payment_method_line_id
+
+    def _get_payment_entry_journal_odoo_id(self, cr, uid, context=None):
+        journal_odoo_id = self._get_config_odoo_id(
+            cr, uid, 'odoo_norma57_payment_entry_journal', context=context)
+        if not journal_odoo_id:
+            raise Exception('odoo_norma57_payment_entry_journal is not configured')
+        return journal_odoo_id
+
+    def _get_payment_entry_account_code_pattern(self, code):
+        raw_code = (code or '').strip()
+        if '.' not in raw_code:
+            return raw_code
+        prefix, suffix = raw_code.split('.', 1)
+        suffix = suffix[-1:] if suffix else ''
+        return '{}%{}'.format(prefix, suffix)
+
+    def _get_payment_entry_account_odoo_id_by_code(self, cr, uid, code, context=None):
+        if context is None:
+            context = {}
+        account_obj = self.pool.get('account.account')
+        sync_obj = self.pool.get('odoo.sync')
+
+        account_code_pattern = self._get_payment_entry_account_code_pattern(code)
+        account_ids = account_obj.search(
+            cr, uid, [('code', 'like', account_code_pattern)], context=context)
+        if not account_ids:
+            raise Exception(
+                'Account code pattern {} not found for Norma57 payment entry'.format(
+                    account_code_pattern)
+            )
+
+        odoo_id = sync_obj.get_odoo_id_by_erp_id(
+            cr, uid, 'account.account', account_ids[0])
+        if odoo_id:
+            return odoo_id
+        raise ForeingKeyNotAvailable('account.account,{}'.format(account_ids[0]))
+
+    def _get_payment_entry_erp_id(self, norma57_id):
+        return self.PAYMENT_ENTRY_ERP_ID_OFFSET + int(norma57_id)
+
+    def _get_payment_entry_label(self, norma57_file):
+        return '[REMESA] {}'.format(norma57_file.name or '')
+
+    def _get_sync_record_id(self, cr, uid, erp_id, context=None):
+        if context is None:
+            context = {}
+        sync_obj = self.pool.get('odoo.sync')
+        sync_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', self._name),
+            ('res_id', '=', erp_id),
+        ], limit=1, context=context)
+        return sync_ids[0] if sync_ids else False
+
+    def _update_payment_entry_sync_fields(
+            self, cr, uid, sync_id, entry_odoo_id=False, last_result=False, context=None):
+        if context is None:
+            context = {}
+        vals = {}
+        if entry_odoo_id is not False:
+            vals['pnt_norma57_payment_entry_odoo_id'] = entry_odoo_id
+        if last_result is not False:
+            vals['pnt_norma57_payment_entry_last_result'] = last_result
+        if not vals:
+            return False
+        with Sudo(uid=1, gid=0):
+            return self.pool.get('odoo.sync').write(cr, uid, [sync_id], vals, context=context)
+
+    def _set_payment_entry_retry_pending(self, cr, uid, sync_id, context=None):
+        if context is None:
+            context = {}
+        with Sudo(uid=1, gid=0):
+            return self.pool.get('odoo.sync').write(
+                cr,
+                uid,
+                [sync_id],
+                {'sync_state': 'pending'},
+                context=context,
+            )
+
+    def _queue_payment_entry_retry(self, cr, uid, sync_id, last_result, context=None):
+        if context is None:
+            context = {}
+        self._update_payment_entry_sync_fields(
+            cr, uid, sync_id, last_result=last_result, context=context)
+        return self._set_payment_entry_retry_pending(
+            cr, uid, sync_id, context=context)
+
+    def _build_payment_entry_payload(self, cr, uid, norma57_file, context=None):
+        if context is None:
+            context = {}
+
+        label = self._get_payment_entry_label(norma57_file)
+        amount = round(sum([
+            abs(line.amount) for line in norma57_file.lines if line.state == 'confirmed'
+        ]), 2)
+        if amount <= 0:
+            raise Exception('Norma57 file has no positive confirmed amount for payment entry')
+
+        debit_account_odoo_id = self._get_payment_entry_account_odoo_id_by_code(
+            cr, uid, self.PAYMENT_ENTRY_ACCOUNT_DEBIT_CODE, context=context)
+        credit_account_odoo_id = self._get_payment_entry_account_odoo_id_by_code(
+            cr, uid, self.PAYMENT_ENTRY_ACCOUNT_CREDIT_CODE, context=context)
+
+        return {
+            'pnt_erp_id': self._get_payment_entry_erp_id(norma57_file.id),
+            'number': label,
+            'date': norma57_file.header_presentation_date,
+            'journal_id': self._get_payment_entry_journal_odoo_id(cr, uid, context=context),
+            'ref': label,
+            'lines': [
+                {
+                    'account_id': debit_account_odoo_id,
+                    'name': label,
+                    'debit': amount,
+                },
+                {
+                    'account_id': credit_account_odoo_id,
+                    'name': label,
+                    'credit': amount,
+                },
+            ],
+        }
+
+    def _create_payment_entry_in_odoo(self, cr, uid, payload, context=None):
+        if context is None:
+            context = {}
+        sync_obj = self.pool.get('odoo.sync')
+        odoo_id, response_text, url_base = sync_obj.create_odoo_record(
+            cr, uid, 'account.move', payload, context=context)
+        return {
+            'success': bool(odoo_id),
+            'odoo_id': odoo_id,
+            'response_text': response_text,
+            'url': url_base,
+        }
+
+    def _get_existing_payment_entry_odoo_id(self, cr, uid, payment_entry_erp_id, context=None):
+        if context is None:
+            context = {}
+        sync_obj = self.pool.get('odoo.sync')
+        return sync_obj.get_odoo_id_by_erp_id_from_odoo(
+            cr, uid, 'account.move', payment_entry_erp_id)
+
+    def _sync_norma57_payment_entry_if_needed(self, cr, uid, erp_id, context=None):
+        if context is None:
+            context = {}
+
+        sync_obj = self.pool.get('odoo.sync')
+        sync_id = self._get_sync_record_id(cr, uid, erp_id, context=context)
+        if not sync_id:
+            return False
+
+        sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
+        if sync_record.sync_state != 'synced':
+            return False
+        if sync_record.pnt_norma57_payment_entry_odoo_id:
+            return sync_record.pnt_norma57_payment_entry_odoo_id
+
+        norma57_file = self.browse(cr, uid, erp_id, context=context)
+        payload = self._build_payment_entry_payload(cr, uid, norma57_file, context=context)
+        result = self._create_payment_entry_in_odoo(cr, uid, payload, context=context)
+        if result['success'] and result['odoo_id']:
+            self._update_payment_entry_sync_fields(
+                cr,
+                uid,
+                sync_id,
+                entry_odoo_id=result['odoo_id'],
+                last_result=result['response_text'] or 'created',
+                context=context,
+            )
+            return result['odoo_id']
+
+        response_text = result.get('response_text') or ''
+        existing_odoo_id = self._get_existing_payment_entry_odoo_id(
+            cr, uid, payload['pnt_erp_id'], context=context)
+
+        if existing_odoo_id:
+            self._update_payment_entry_sync_fields(
+                cr,
+                uid,
+                sync_id,
+                entry_odoo_id=existing_odoo_id,
+                last_result=response_text or 'duplicate entry recovered',
+                context=context,
+            )
+            return existing_odoo_id
+
+        self._update_payment_entry_sync_fields(
+            cr,
+            uid,
+            sync_id,
+            last_result=response_text or 'Error creating Norma57 payment entry in Odoo',
+            context=context,
+        )
+        return False
 
     def _get_line_invoice_erp_id(self, cr, uid, line, context=None):
         if context is None:
@@ -172,8 +371,40 @@ class Norma57File(osv.osv):
             context = {}
 
         sync_obj = self.pool.get('odoo.sync')
-        return sync_obj.poll_payment_order_status_sync(
+        result = sync_obj.poll_payment_order_status_sync(
             cr, uid, self._name, erp_id, context=context)
+        if result:
+            sync_id = self._get_sync_record_id(cr, uid, erp_id, context=context)
+            try:
+                payment_entry_odoo_id = self._sync_norma57_payment_entry_if_needed(
+                    cr, uid, erp_id, context=context)
+            except Exception as exc:
+                if sync_id:
+                    sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
+                    if sync_record.sync_state == 'synced':
+                        self._queue_payment_entry_retry(
+                            cr,
+                            uid,
+                            sync_id,
+                            last_result=str(exc),
+                            context=context,
+                        )
+                logger.exception(
+                    'Error creating Norma57 payment entry for sync %s',
+                    erp_id,
+                )
+                return result
+            if sync_id and not payment_entry_odoo_id:
+                sync_record = sync_obj.browse(cr, uid, sync_id, context=context)
+                if sync_record.sync_state == 'synced':
+                    self._queue_payment_entry_retry(
+                        cr,
+                        uid,
+                        sync_id,
+                        last_result='Retrying Norma57 payment entry creation',
+                        context=context,
+                    )
+        return result
 
 
 Norma57File()

@@ -640,8 +640,16 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
     @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
     @mock.patch.object(odoo_sync.OdooSync, "_get_conn_params")
+    @mock.patch(
+        'som_sync_openerp.models.norma57_file.Norma57File.'
+        '_sync_norma57_payment_entry_if_needed'
+    )
     def test_update_pending_state_marks_record_as_synced(
-        self, mock_get_conn_params, mock_requests_get, mock_update_odoo_id
+        self,
+        mock_payment_entry_sync,
+        mock_get_conn_params,
+        mock_requests_get,
+        mock_update_odoo_id,
     ):
         mock_get_conn_params.return_value = (
             'http://example.com/api/',
@@ -685,6 +693,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             'sync_state': 'synced',
             'update_last_sync': True,
         })
+        self.assertFalse(mock_payment_entry_sync.called)
 
     @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.update_odoo_id')
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')

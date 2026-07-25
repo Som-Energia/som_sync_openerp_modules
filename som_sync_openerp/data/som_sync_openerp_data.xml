@@ -146,6 +146,13 @@
                 Odoo destination journal for Norma57 remittances.
             </field>
         </record>
+        <record id="odoo_norma57_payment_entry_journal" model="res.config">
+            <field name="name">odoo_norma57_payment_entry_journal</field>
+            <field name="value">0</field>
+            <field name="description">
+                Odoo general journal used to create Norma57 payment entries.
+            </field>
+        </record>
         <record id="odoo_default_erp_payment_term" model="res.config">
             <field name="name">odoo_default_erp_payment_term</field>
             <field name="value">0</field>

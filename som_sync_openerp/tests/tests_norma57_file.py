@@ -16,6 +16,7 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         self.n57_obj = self.openerp.pool.get('norma57.file')
         self.n57_line_obj = self.openerp.pool.get('norma57.file.line')
         self.ai_obj = self.openerp.pool.get('account.invoice')
+        self.sync_obj = self.openerp.pool.get('odoo.sync')
         super(TestNorma57File, self).setUp()
 
     def _create_norma57_file(self, name='Norma57 test'):
@@ -32,6 +33,17 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         line.resource = '{},{}'.format(resource_model, resource_id)
         return line
 
+    def _create_norma57_sync(self, norma57_id, sync_state='synced'):
+        return self.sync_obj._create_sync_record(
+            self.cursor,
+            self.uid,
+            'norma57.file',
+            norma57_id,
+            321,
+            '2026-01-15 10:00:00',
+            {'sync_state': sync_state},
+        )
+
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_get_related_values_builds_simple_payment_order_payload(self, mock_sync):
         invoice_id = self.imd_obj.get_object_reference(
@@ -43,7 +55,9 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
         mock_sync.return_value = (99, invoice_id)
 
-        with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies') as mock_discrepancies:  # noqa: E501
+        with mock.patch.object(
+                type(self.ai_obj),
+                'process_lines_with_discrepancies') as mock_discrepancies:
             with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
                 norma57_file = mock.Mock()
                 norma57_file.name = 'Norma57 test'
@@ -143,3 +157,202 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         mock_sync.assert_called_once_with(
             self.cursor, self.uid, 'norma57.file', 'write', norma57_id, context={}
         )
+
+    def test_get_payment_entry_erp_id_uses_offset(self):
+        self.assertEqual(self.n57_obj._get_payment_entry_erp_id(17), 900000017)
+
+    def test_get_payment_entry_account_code_pattern_uses_like_format(self):
+        self.assertEqual(
+            self.n57_obj._get_payment_entry_account_code_pattern('572.9'),
+            '572%9'
+        )
+        self.assertEqual(
+            self.n57_obj._get_payment_entry_account_code_pattern('570.0'),
+            '570%0'
+        )
+
+    def test_sync_norma57_payment_entry_if_needed_skips_when_entry_already_exists(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+        self.sync_obj.write(self.cursor, self.uid, [sync_id], {
+            'pnt_norma57_payment_entry_odoo_id': 888,
+        })
+
+        result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+            self.cursor, self.uid, norma57_id)
+
+        self.assertEqual(result, 888)
+
+    def test_sync_norma57_payment_entry_if_needed_stores_created_odoo_id(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
+            with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
+                mock_payload.return_value = {'pnt_erp_id': 900000001}
+                mock_create.return_value = {
+                    'success': True,
+                    'odoo_id': 4321,
+                    'response_text': '{"ok": true}',
+                    'url': 'http://odoo/api/v1/entries',
+                }
+
+                result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                    self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(result, 4321)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_odoo_id, 4321)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_last_result, '{"ok": true}')
+
+    def test_sync_norma57_payment_entry_if_needed_recovers_duplicate_entry_odoo_id(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
+            with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
+                with mock.patch.object(
+                        self.n57_obj,
+                        '_get_existing_payment_entry_odoo_id') as mock_get:
+                    mock_payload.return_value = {'pnt_erp_id': 900000001}
+                    mock_create.return_value = {
+                        'success': False,
+                        'odoo_id': False,
+                        'response_text': '{"error_code": "DUPLICATE_KEY_VALUE"}',
+                        'url': 'http://odoo/api/v1/entries',
+                    }
+                    mock_get.return_value = 7654
+
+                    result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                        self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(result, 7654)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_odoo_id, 7654)
+        self.assertEqual(
+            sync_record.pnt_norma57_payment_entry_last_result,
+            '{"error_code": "DUPLICATE_KEY_VALUE"}'
+        )
+
+    def test_sync_norma57_payment_entry_if_needed_recovers_existing_entry_without_json_body(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
+            with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
+                with mock.patch.object(
+                        self.n57_obj,
+                        '_get_existing_payment_entry_odoo_id') as mock_get:
+                    mock_payload.return_value = {'pnt_erp_id': 900000001}
+                    mock_create.return_value = {
+                        'success': False,
+                        'odoo_id': False,
+                        'response_text': '',
+                        'url': 'http://odoo/api/v1/entries',
+                    }
+                    mock_get.return_value = 9876
+
+                    result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                        self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(result, 9876)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_odoo_id, 9876)
+        self.assertEqual(
+            sync_record.pnt_norma57_payment_entry_last_result,
+            'duplicate entry recovered'
+        )
+
+    def test_sync_norma57_payment_entry_if_needed_stores_last_result_on_error(self):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(self.n57_obj, '_build_payment_entry_payload') as mock_payload:
+            with mock.patch.object(self.n57_obj, '_create_payment_entry_in_odoo') as mock_create:
+                with mock.patch.object(
+                        self.n57_obj,
+                        '_get_existing_payment_entry_odoo_id') as mock_get:
+                    mock_payload.return_value = {'pnt_erp_id': 900000001}
+                    mock_create.return_value = {
+                        'success': False,
+                        'odoo_id': False,
+                        'response_text': 'boom',
+                        'url': 'http://odoo/api/v1/entries',
+                    }
+                    mock_get.return_value = False
+
+                    result = self.n57_obj._sync_norma57_payment_entry_if_needed(
+                        self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertFalse(result)
+        self.assertFalse(sync_record.pnt_norma57_payment_entry_odoo_id)
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_last_result, 'boom')
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_update_pending_state_sync_triggers_payment_entry_sync_after_poll(
+            self, mock_poll):
+        norma57_id = self._create_norma57_file()
+        mock_poll.return_value = True
+        self._create_norma57_sync(norma57_id)
+
+        with mock.patch.object(
+                type(self.n57_obj),
+                '_sync_norma57_payment_entry_if_needed') as mock_payment_entry_sync:
+            mock_payment_entry_sync.return_value = 4321
+            result = self.n57_obj.update_pending_state_sync(self.cursor, self.uid, norma57_id)
+
+        self.assertTrue(result)
+        mock_payment_entry_sync.assert_called_once_with(
+            self.cursor, self.uid, norma57_id, context={}
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_update_pending_state_sync_sets_pending_when_entry_creation_fails(
+            self, mock_poll):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id, sync_state='pending')
+        mock_poll.side_effect = self._mock_poll_to_synced
+
+        with mock.patch.object(
+                type(self.n57_obj),
+                '_sync_norma57_payment_entry_if_needed') as mock_payment_entry_sync:
+            mock_payment_entry_sync.return_value = False
+            result = self.n57_obj.update_pending_state_sync(self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertTrue(result)
+        self.assertEqual(sync_record.sync_state, 'pending')
+        self.assertEqual(
+            sync_record.pnt_norma57_payment_entry_last_result,
+            'Retrying Norma57 payment entry creation'
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_update_pending_state_sync_sets_pending_when_entry_creation_raises(
+            self, mock_poll):
+        norma57_id = self._create_norma57_file()
+        sync_id = self._create_norma57_sync(norma57_id, sync_state='pending')
+        mock_poll.side_effect = self._mock_poll_to_synced
+
+        with mock.patch.object(
+                type(self.n57_obj),
+                '_sync_norma57_payment_entry_if_needed') as mock_payment_entry_sync:
+            mock_payment_entry_sync.side_effect = Exception('boom')
+            result = self.n57_obj.update_pending_state_sync(self.cursor, self.uid, norma57_id)
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertTrue(result)
+        self.assertEqual(sync_record.sync_state, 'pending')
+        self.assertEqual(sync_record.pnt_norma57_payment_entry_last_result, 'boom')
+
+    def _mock_poll_to_synced(self, cr, uid, model_name, erp_id, context=None):
+        self.sync_obj.update_odoo_id(
+            cr,
+            uid,
+            model_name,
+            erp_id,
+            321,
+            context={'sync_state': 'synced', 'update_last_sync': True},
+        )
+        return True
