@@ -68,6 +68,30 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             is_grouped=False, context={}
         )
 
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    def test_get_model_vals_to_sync_includes_norma57_source_model(self, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
+        )[1]
+        norma57_id = self._create_norma57_file()
+        mock_line = self._build_mock_line(invoice_id, amount=125.5)
+        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
+        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
+        mock_sync.return_value = (99, invoice_id)
+
+        with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies'):
+            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
+                norma57_file = mock.Mock()
+                norma57_file.name = 'Norma57 test'
+                norma57_file.header_presentation_date = '2026-01-15'
+                norma57_file.lines = [mock_line]
+                mock_browse.return_value = norma57_file
+                payload = self.openerp.pool.get('odoo.sync').get_model_vals_to_sync(
+                    self.cursor, self.uid, 'norma57.file', norma57_id)
+
+        self.assertEqual(payload['pnt_source_model'], 'norma57.file')
+        self.assertEqual(payload['batch_type'], 'inbound')
+
     def test_get_line_invoice_erp_id_raises_when_resource_is_not_supported(self):
         line = mock.Mock()
         line.resource = 'fake.model,7'
