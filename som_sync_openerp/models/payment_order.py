@@ -242,13 +242,19 @@ class PaymentOrder(osv.osv):
                 'sync', fracc_id, context_copy)
 
         # now we can get the odoo_ids of the fraccionaments lines
+        fraccl_data_by_id = {
+            row['id']: row for row in aiff_obj.read(
+                cr, uid, fraccl_ids, ['import'], context=context)
+        }
         for fraccl_id in fraccl_ids:
-            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
+            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id(
                 cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id)
+            if not payment_odoo_id:
+                payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
+                    cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id)
             if payment_odoo_id:
                 payment_ids.append(payment_odoo_id)
-                fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
-                amount_total += fraccl_data['import']
+                amount_total += fraccl_data_by_id[fraccl_id]['import']
             else:
                 # if we don't find the odoo_id for a fraccionament line it means that the sync of
                 # the parent fraccionament has failed. This way we force error in the payment order

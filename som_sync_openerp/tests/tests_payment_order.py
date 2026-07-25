@@ -915,6 +915,44 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_order_payment_lines_from_splitted_invoices_prefers_local_sync_ids(
+            self, mock_sync_create_update, mock_get_odoo_id_from_odoo):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid,
+            [('model', '=', 'account.invoice.fraccionament.fraccionaments')], limit=1
+        )[0]
+        mock_sync_create_update.return_value = (999, 1)
+
+        fraccl_id_1 = self.utils_create_fraccionament_in_order(remesa_id, import_amount=400.0)
+        fraccl_id_2 = self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.0)
+
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': fraccl_id_1,
+            'odoo_id': 201,
+            'sync_state': 'synced',
+        })
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': fraccl_id_2,
+            'odoo_id': 202,
+            'sync_state': 'synced',
+        })
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        payment_ids, amount = self.po_obj._get_order_payment_lines_from_splitted_invoices(
+            self.cursor, self.uid, payment_order
+        )
+
+        self.assertEqual(payment_ids, [201, 202])
+        self.assertEqual(amount, 500.0)
+        mock_get_odoo_id_from_odoo.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_order_payment_lines_from_splitted_invoices_syncs_fraccionament_parent(
             self, mock_sync_create_update, mock_get_odoo_id):
         """
