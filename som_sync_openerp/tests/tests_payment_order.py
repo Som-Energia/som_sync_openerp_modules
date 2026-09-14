@@ -553,6 +553,61 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         mock_syncronize_sync.assert_called_once()
 
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__write_does_not_sync_when_already_done(
+            self, mock_sync_create_update):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+
+        self.cursor.execute(
+            "UPDATE payment_order SET state = 'done' WHERE id = %s", (remesa_id,)
+        )
+        self.po_obj.write(
+            self.cursor, self.uid, [remesa_id], {'state': 'done'}
+        )
+
+        mock_sync_create_update.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__write_syncs_each_order_transitioning_to_done(
+            self, mock_sync_create_update):
+        order_ids = [
+            self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+            )[1],
+            self.imd_obj.get_object_reference(
+                self.cursor, self.uid, "som_sync_openerp", "remesa_0002"
+            )[1],
+        ]
+
+        self.po_obj.write(
+            self.cursor, self.uid, order_ids, {'state': 'done'}
+        )
+
+        self.assertEqual(mock_sync_create_update.call_count, 2)
+        mock_sync_create_update.assert_has_calls([
+            mock.call(
+                self.cursor, self.uid, 'payment.order', 'create', order_ids[0], context={}
+            ),
+            mock.call(
+                self.cursor, self.uid, 'payment.order', 'create', order_ids[1], context={}
+            ),
+        ])
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__write_does_not_sync_without_done_state(
+            self, mock_sync_create_update):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+
+        self.po_obj.write(
+            self.cursor, self.uid, [remesa_id], {'date_planned': '2026-09-14'}
+        )
+
+        mock_sync_create_update.assert_not_called()
+
     @mock.patch.object(odoo_sync.OdooSync, "search")
     @mock.patch.object(odoo_sync.OdooSync, "read")
     def test_process_payment_lines_with_discrepancies(self, mock_read, mock_search):
