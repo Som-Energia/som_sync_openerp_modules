@@ -1,5 +1,6 @@
 #  -*- coding: utf-8 -*-
 from osv import osv
+from service.security import Sudo
 
 
 class GiscedataFacturacioDevolucio(osv.osv):
@@ -115,6 +116,40 @@ class GiscedataFacturacioDevolucio(osv.osv):
                 valid_devolucio_ids.append(devolucio_id)
 
         return valid_devolucio_ids
+
+    def write(self, cr, uid, ids, vals, context=None):
+        if context is None:
+            context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
+
+        states = {}
+        if vals.get('state') == 'confirmat':
+            for devolucio_id in ids:
+                states[devolucio_id] = self.read(
+                    cr, uid, devolucio_id, ['state'], context=context)['state']
+
+        res = super(GiscedataFacturacioDevolucio, self).write(
+            cr, uid, ids, vals, context=context)
+
+        if vals.get('state') == 'confirmat':
+            line_obj = self.pool.get('giscedata.facturacio.devolucio.linia')
+            sync_obj = self.pool.get('odoo.sync')
+            for devolucio_id in ids:
+                line_ids = line_obj.search(cr, uid, [
+                    ('devolucio_id', '=', devolucio_id),
+                ], context=context)
+                pending_line_ids = line_obj.search(cr, uid, [
+                    ('devolucio_id', '=', devolucio_id),
+                    ('linia_processada', '!=', True),
+                ], context=context)
+                if states[devolucio_id] != 'confirmat' and line_ids and not pending_line_ids:
+                    with Sudo(uid=1, gid=0):
+                        sync_obj.common_sync_model_create_update(
+                            cr, uid, self._name, 'create', devolucio_id,
+                            context=context)
+
+        return res
 
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
