@@ -136,8 +136,11 @@ class ResPartner(osv.osv):
             context = {}
         if data.get('vat'):
             data['vat'] = data['vat'].upper()
-        if data.get('lang', False) and data['lang'] == 'en_US':
-            data['lang'] = 'en_GB'
+        if 'lang' in data:
+            if not data['lang']:
+                data['lang'] = 'es_ES'
+            elif data['lang'] == 'en_US':
+                data['lang'] = 'en_GB'
         return data
 
 
