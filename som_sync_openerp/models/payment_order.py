@@ -220,6 +220,7 @@ class PaymentOrder(osv.osv):
         aiff_obj = self.pool.get('account.invoice.fraccionament.fraccionaments')
 
         payment_ids = []
+        missing_fraccl_ids = []
         amount_total = 0.0
 
         # we get fraccionament lines linked to the payment order through remesa_desti_id
@@ -250,10 +251,13 @@ class PaymentOrder(osv.osv):
                 fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
                 amount_total += fraccl_data['import']
             else:
-                # if we don't find the odoo_id for a fraccionament line it means that the sync of
-                # the parent fraccionament has failed. This way we force error in the payment order
-                # sync and avoid having unsynced fraccionament lines linked to synced payment orders
-                payment_ids.append(False)
+                missing_fraccl_ids.append(fraccl_id)
+
+        if missing_fraccl_ids:
+            raise ForeingKeyNotAvailable(
+                'account.invoice.fraccionament.fraccionaments: {}'.format(
+                    ', '.join(str(fraccl_id) for fraccl_id in missing_fraccl_ids))
+            )
 
         return payment_ids, round(amount_total, 2)
 

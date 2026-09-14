@@ -929,16 +929,19 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_get_odoo_id.return_value = None
 
         # línia sense invoice_fraccionament_id: no ha de syncronitzar cap pare
-        self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
+        fraccl_id = self.utils_create_fraccionament_in_order(remesa_id, import_amount=300.0)
+        other_fraccl_id = self.utils_create_fraccionament_in_order(
+            remesa_id, import_amount=200.0)
 
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
-        payment_ids, amount = self.po_obj._get_order_payment_lines_from_splitted_invoices(
-            self.cursor, self.uid, payment_order
-        )
+        with self.assertRaises(ForeingKeyNotAvailable) as error:
+            self.po_obj._get_order_payment_lines_from_splitted_invoices(
+                self.cursor, self.uid, payment_order
+            )
 
         mock_sync_create_update.assert_not_called()
-        self.assertEqual(payment_ids, [False])
-        self.assertEqual(amount, 0.0)
+        self.assertIn(str(fraccl_id), str(error.exception))
+        self.assertIn(str(other_fraccl_id), str(error.exception))
 
     def test__get_mapping_model_post_returns_payment_order_payments_when_splitted(self):
         remesa_id = self.imd_obj.get_object_reference(
