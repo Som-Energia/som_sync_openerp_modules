@@ -103,6 +103,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         sync_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'odoo_partner_already_syncred'
         )[1]
+        self.sync_obj.write(self.cursor, self.uid, sync_id, {'odoo_id': 1001})
         context = {
             'from_fk_sync': True,
         }
@@ -339,6 +340,71 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'vat': u'S2903826B'
         }
         self.assertEqual(vals, expected_vals)
+
+    def test__get_model_vals_to_patch__partner_uses_write_delta(self):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+
+        vals = self.sync_obj.get_model_vals_to_patch(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'name': u'Updated ASUStek'}
+        )
+
+        self.assertEqual(vals, {'name': u'Updated ASUStek'})
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_model_vals_to_patch__resolves_foreign_keys(
+            self, mock_common_sync_model_create_update):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        account_id = self.aa_obj.search(
+            self.cursor, self.uid, [('code', 'like', '4300%0')])[0]
+        mock_common_sync_model_create_update.return_value = (123, account_id)
+
+        vals = self.sync_obj.get_model_vals_to_patch(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'property_account_receivable': account_id}
+        )
+
+        self.assertEqual(vals, {'property_account_receivable_id': 123})
+        mock_common_sync_model_create_update.assert_called_once_with(
+            self.cursor, self.uid, 'account.account', 'sync', account_id,
+            {'from_fk_sync': True})
+
+    def test__get_model_vals_to_patch__includes_related_values(self):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        rp_obj = self.openerp.pool.get('res.partner')
+        original_get_related_values = rp_obj.get_related_values
+        rp_obj.get_related_values = mock.MagicMock(
+            return_value={'property_outbound_payment_method_line_id': 123})
+        self.addCleanup(
+            lambda: setattr(
+                rp_obj, 'get_related_values', original_get_related_values))
+
+        vals = self.sync_obj.get_model_vals_to_patch(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'payment_type_supplier': 1}
+        )
+
+        self.assertEqual(
+            vals, {'property_outbound_payment_method_line_id': 123})
+
+    def test__get_model_vals_to_patch__clears_outbound_payment_method(self):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+
+        vals = self.sync_obj.get_model_vals_to_patch(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'payment_type_supplier': False}
+        )
+
+        self.assertEqual(
+            vals, {'property_outbound_payment_method_line_id': None})
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
@@ -658,11 +724,13 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
     @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     def test__syncronize_sync__create_record_patched_api(
             self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
-            mock_exists_in_odoo, mock_create_odoo_record, mock_update_odoo_id):
+            mock_get_partner_odoo_id, mock_exists_in_odoo, mock_create_odoo_record,
+            mock_update_odoo_id):
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
         )[1]
@@ -671,6 +739,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'pnt_erp_id': partner_id,
             'name': u'ASUStek',
         }
+        mock_get_partner_odoo_id.return_value = False
         mock_exists_in_odoo.return_value = (False, False, False)
         mock_create_odoo_record.return_value = (4321, '', 'http://example.com/api/res.partner')
 
@@ -690,13 +759,89 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_record")
-    @mock.patch.object(odoo_sync.OdooSync, "get_dict_to_patch")
-    @mock.patch.object(odoo_sync.OdooSync, "exists_in_odoo")
+    @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_patch")
+    def test__patch_odoo_record_sync__updates_partner(
+            self, mock_get_model_vals_to_patch, mock_get_partner_odoo_id,
+            mock_update_odoo_record, mock_update_odoo_id):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        vals = {'name': u'ASUStek'}
+        mock_get_model_vals_to_patch.return_value = vals
+        mock_get_partner_odoo_id.return_value = 9999
+        mock_update_odoo_record.return_value = (
+            True, '', 'http://example.com/api/res.partner/9999/partner_id')
+
+        odoo_id, erp_id = self.sync_obj.patch_odoo_record_sync(
+            self.cursor, self.uid, 'res.partner', partner_id, vals, context={}
+        )
+
+        self.assertEqual(odoo_id, 9999)
+        self.assertEqual(erp_id, partner_id)
+        mock_update_odoo_record.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', 9999, partner_id,
+            vals, {}
+        )
+        mock_get_model_vals_to_patch.assert_called_once_with(
+            self.cursor, self.uid, 'res.partner', partner_id, vals, context={})
+        mock_update_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', partner_id, 9999, context=mock.ANY
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_patch")
+    def test__patch_odoo_record_sync__clears_outbound_payment_method(
+            self, mock_get_model_vals_to_patch, mock_get_partner_odoo_id,
+            mock_update_odoo_record, mock_update_odoo_id):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        clear_vals = {'property_outbound_payment_method_line_id': None}
+        mock_get_model_vals_to_patch.return_value = clear_vals
+        mock_get_partner_odoo_id.return_value = 9999
+        mock_update_odoo_record.return_value = (
+            True, '', 'http://example.com/api/res.partner/9999/partner_id')
+
+        self.sync_obj.patch_odoo_record_sync(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'payment_type_supplier': False}, context={})
+
+        mock_update_odoo_record.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', 9999, partner_id,
+            clear_vals, {})
+
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "patch_odoo_record_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__common_patch_odoo_record__does_not_use_sync_lifecycle(
+            self, mock_sync_model_enabled_amplified, mock_patch_odoo_record_sync,
+            mock_syncronize_sync):
+        partner_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus'
+        )[1]
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_patch_odoo_record_sync.return_value = (9999, partner_id)
+
+        self.sync_obj.common_patch_odoo_record(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'name': u'ASUStek'}, context={})
+
+        mock_patch_odoo_record_sync.assert_called_once_with(
+            self.cursor, self.uid, 'res.partner', partner_id,
+            {'name': u'ASUStek'}, context={})
+        mock_syncronize_sync.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
-    def test__syncronize_sync__update_record_patched_api(
+    def test__syncronize_sync__partner_sync_does_not_patch(
             self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
-            mock_exists_in_odoo, mock_get_dict_to_patch, mock_update_odoo_record,
+            mock_get_partner_odoo_id, mock_update_odoo_record,
             mock_update_odoo_id):
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
@@ -706,21 +851,15 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'pnt_erp_id': partner_id,
             'name': u'ASUStek',
         }
-        mock_exists_in_odoo.return_value = (9999, partner_id, {'name': u'Old'})
-        mock_get_dict_to_patch.return_value = {'name': u'ASUStek'}
-        mock_update_odoo_record.return_value = (
-            True, '', 'http://example.com/api/res.partner/9999/partner_id')
+        mock_get_partner_odoo_id.return_value = 9999
 
         odoo_id, erp_id = self.sync_obj.syncronize_sync(
-            self.cursor, self.uid, 'res.partner', 'write', partner_id, context={}
+            self.cursor, self.uid, 'res.partner', 'sync', partner_id, context={}
         )
 
         self.assertEqual(odoo_id, 9999)
         self.assertEqual(erp_id, partner_id)
-        mock_update_odoo_record.assert_called_once_with(
-            mock.ANY, self.uid, 'res.partner', 9999, partner_id,
-            {'name': u'ASUStek'}, {}
-        )
+        mock_update_odoo_record.assert_not_called()
         mock_update_odoo_id.assert_called_once_with(
             mock.ANY, self.uid, 'res.partner', partner_id, 9999, context=mock.ANY
         )

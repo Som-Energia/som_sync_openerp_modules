@@ -15,6 +15,11 @@ class TestResPartnerBank(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, "som_sync_openerp", "res_partner_bank_agrolait"
         )[1]
         odoo_partner_id = 1001
+        sync_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "odoo_partner_already_syncred"
+        )[1]
+        self.sync_obj.write(
+            self.cursor, self.uid, sync_id, {'odoo_id': odoo_partner_id})
 
         result = self.rpb_obj.get_endpoint_suffix(self.cursor, self.uid, partner_bank_id)
 

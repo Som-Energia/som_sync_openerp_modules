@@ -19,16 +19,10 @@ class ResPartnerAddress(osv.osv):
         'city': 'city',
     }
 
-    MAPPING_TRIGGER_WRITE = {
-        'nv': 'nv',
-        'pnp': 'pnp',
-        'bq': 'bq',
-        'es': 'es',
-        'pt': 'pt',
-        'pu': 'pu',
-        'cpo': 'cpo',
-        'cpa': 'cpa',
-    }
+    # These stored components recompute the mapped ``street`` field.
+    MAPPING_TRIGGER_WRITE = (
+        'nv', 'pnp', 'bq', 'es', 'pt', 'pu',
+    )
 
     MAPPING_FK = {
         'state_id': 'res.country.state',
@@ -94,14 +88,23 @@ class ResPartnerAddress(osv.osv):
 
         res = super(ResPartnerAddress, self).write(cr, uid, ids, vals, context=context)
 
-        # we check if any of the fields to sync is in vals
-        if (any(field in vals.keys() for field in self.MAPPING_FIELDS_TO_SYNC.keys())
-                or any(field in vals.keys() for field in self.MAPPING_TRIGGER_WRITE.keys())):
+        has_street_component = any(
+            field in vals for field in self.MAPPING_TRIGGER_WRITE)
+        if (any(field in vals for field in self.MAPPING_FIELDS_TO_SYNC)
+                or has_street_component):
             with Sudo(uid=1, gid=0):
                 sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, 'write', ids, context=context
-                )
+                if has_street_component:
+                    for address_id in ids:
+                        patch_vals = vals.copy()
+                        patch_vals['street'] = self.read(
+                            cr, uid, address_id, ['street'], context=context)['street']
+                        sync_obj.common_patch_odoo_record(
+                            cr, uid, self._name, [address_id], patch_vals, context=context)
+                else:
+                    sync_obj.common_patch_odoo_record(
+                        cr, uid, self._name, ids, vals, context=context
+                    )
 
         return res
 

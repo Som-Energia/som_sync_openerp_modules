@@ -124,33 +124,64 @@ class OdooSync(osv.osv):
                 self.sync_model_enabled_amplified(cursor, uid, model))
             if action == 'sync':
                 auto_sync = True  # force sync for on-demand
-            if sync_enabled and auto_sync:
-                # check special restriction for some models
-                has_special_restrictions = hasattr(
-                    self.pool.get(model), 'check_special_restrictions')
-                for _id in ids:
-                    if has_special_restrictions and not \
-                            self.pool.get(model).check_special_restrictions(
-                                cursor, uid, _id, context=context):
-                        logger = logging.getLogger('openerp.odoo.sync')
-                        logger.info(
-                            "Special restrictions not passed for record {} of model {}, "
-                            "skipping sync".format(_id, model))
-                        continue
-                    if async_enabled and not context.get('from_fk_sync', False):
-                        # Use job queue for async sync
-                        self.syncronize(
-                            cursor, uid, model, action, _id, context=context)
-                        return None, None
-                    else:
-                        # Sync synchronously
-                        return self.syncronize_sync(
-                            cursor, uid, model, action, _id, context=context)
-            return None, None
+            if not (sync_enabled and auto_sync):
+                return None, None
+            # check special restriction for some models
+            has_special_restrictions = hasattr(
+                self.pool.get(model), 'check_special_restrictions')
+            for _id in ids:
+                if has_special_restrictions and not \
+                        self.pool.get(model).check_special_restrictions(
+                            cursor, uid, _id, context=context):
+                    logger = logging.getLogger('openerp.odoo.sync')
+                    logger.info(
+                        "Special restrictions not passed for record {} of model {}, "
+                        "skipping sync".format(_id, model))
+                    continue
+                if async_enabled and not context.get('from_fk_sync', False):
+                    # Use job queue for async sync
+                    self.syncronize(
+                        cursor, uid, model, action, _id, context=context)
+                    return None, None
+                else:
+                    # Sync synchronously
+                    return self.syncronize_sync(
+                        cursor, uid, model, action, _id, context=context)
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
                 "Error during common_sync_model_create_update for model {}".format(model))
+
+    def common_patch_odoo_record(self, cursor, uid, model, ids, vals, context=None):
+        if context is None:
+            context = {}
+        try:
+            if not isinstance(ids, list):
+                ids = [ids]
+            sync_enabled, auto_sync, async_enabled = (
+                self.sync_model_enabled_amplified(cursor, uid, model))
+            if not (sync_enabled and auto_sync):
+                return None, None
+            has_special_restrictions = hasattr(
+                self.pool.get(model), 'check_special_restrictions')
+            for openerp_id in ids:
+                if has_special_restrictions and not \
+                        self.pool.get(model).check_special_restrictions(
+                            cursor, uid, openerp_id, context=context):
+                    logger = logging.getLogger('openerp.odoo.sync')
+                    logger.info(
+                        "Special restrictions not passed for record {} of model {}, "
+                        "skipping sync".format(openerp_id, model))
+                    continue
+                if async_enabled:
+                    self.patch_odoo_record(
+                        cursor, uid, model, openerp_id, vals, context=context)
+                    return None, None
+                return self.patch_odoo_record_sync(
+                    cursor, uid, model, openerp_id, vals, context=context)
+        except Exception:
+            logger = logging.getLogger('openerp.odoo.sync')
+            logger.exception("Error during PATCH scheduling for model {}".format(model))
 
     def _clean_context_update_data(self, cursor, uid, context=None):
         if context is None:
@@ -296,6 +327,127 @@ class OdooSync(osv.osv):
                     modified_fields[key] = erp_data[key]
         return modified_fields
 
+    def get_model_vals_to_patch(self, cursor, uid, model, openerp_id, vals,
+                                context=None):
+        if context is None:
+            context = {}
+
+        rp_obj = self.pool.get(model)
+        patch_data = {}
+        mapping_fields = rp_obj.MAPPING_FIELDS_TO_SYNC
+        mapping_fk = getattr(rp_obj, 'MAPPING_FK', {})
+        for erp_key, value in vals.items():
+            if erp_key not in mapping_fields:
+                continue
+            odoo_key = mapping_fields[erp_key]
+            if erp_key in mapping_fk:
+                if not value:
+                    patch_data[odoo_key] = None
+                    continue
+                model_fk = mapping_fk[erp_key]
+                if model_fk == 'res.partner':
+                    odoo_id = self.get_partner_odoo_id_by_erp_id(
+                        cursor, uid, value)
+                else:
+                    fk_context = self._clean_context_update_data(
+                        cursor, uid, context)
+                    fk_context['from_fk_sync'] = True
+                    odoo_id, _ = self.common_sync_model_create_update(
+                        cursor, uid, model_fk, 'sync', value, fk_context)
+                if not odoo_id:
+                    raise ForeingKeyNotAvailable(
+                        "{},{}".format(model_fk, value))
+                patch_data[odoo_key] = odoo_id
+                continue
+            if value is False or value is None:
+                field_obj = rp_obj._columns.get(erp_key, False)
+                patch_data[odoo_key] = '' if field_obj and field_obj._type == 'char' else value
+            else:
+                patch_data[odoo_key] = value
+
+        if hasattr(rp_obj, 'get_related_values'):
+            patch_data.update(
+                rp_obj.get_related_values(cursor, uid, openerp_id, context=context))
+        if hasattr(rp_obj, 'get_related_values_to_patch'):
+            patch_data.update(rp_obj.get_related_values_to_patch(
+                cursor, uid, openerp_id, vals, context=context))
+        if hasattr(rp_obj, 'hook_last_modifications'):
+            patch_data.update(
+                rp_obj.hook_last_modifications(cursor, uid, patch_data, context=context))
+        return patch_data
+
+    @job(queue='sync_odoo', timeout=3600, on_commit=True)
+    def patch_odoo_record(self, cursor, uid, model, openerp_id, vals, context=None):
+        if context is None:
+            context = {}
+        context['update_last_sync'] = True
+        self.patch_odoo_record_sync(
+            cursor, uid, model, openerp_id, vals, context=context)
+
+    def patch_odoo_record_sync(self, cursor, uid, model, openerp_id, vals,
+                               context=None):
+        if context is None:
+            context = {}
+        if isinstance(openerp_id, list):
+            openerp_id = openerp_id[0]
+
+        odoo_id, erp_id = False, False
+        sync_vals = {}
+        logger = logging.getLogger('openerp.odoo.sync')
+
+        try:
+            self.check_erp_record_exist(cursor, uid, model, openerp_id)
+            rp_obj = self.pool.get(model)
+
+            if model == 'res.partner':
+                odoo_id = self.get_partner_odoo_id_by_erp_id(
+                    cursor, uid, openerp_id)
+                if odoo_id:
+                    erp_id = openerp_id
+            else:
+                endpoint_suffix = rp_obj.get_endpoint_suffix(
+                    cursor, uid, openerp_id, context=context)
+                if not endpoint_suffix:
+                    return False, False
+                odoo_id, erp_id, _ = self.exists_in_odoo(
+                    cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+
+            # A write never creates or links records. The create/sync lifecycle owns that.
+            if not odoo_id or not erp_id:
+                return False, False
+
+            patch_data = self.get_model_vals_to_patch(
+                cursor, uid, model, openerp_id, vals, context=context)
+            success, msg, endpoint = None, False, False
+            if patch_data:
+                success, msg, endpoint = self.update_odoo_record(
+                    cursor, uid, model, odoo_id, erp_id, patch_data, context)
+            sync_vals.update({
+                'sync_state': 'synced' if success is not False else 'error',
+                'update_last_sync': True,
+            })
+            if patch_data:
+                sync_vals.update({
+                    'odoo_last_update_result': self.format_response(msg),
+                    'odoo_last_sync_request': self.format_response(patch_data),
+                    'odoo_last_sync_endpoint': endpoint,
+                })
+        except Exception as e:
+            logger.exception("Unexpected error during PATCH of {}".format(model))
+            sync_vals.update({
+                'sync_state': 'error',
+                'odoo_last_update_result': self.format_response(e),
+                'update_last_sync': True,
+            })
+        finally:
+            if sync_vals:
+                final_context = context.copy()
+                final_context.update(sync_vals)
+                self.update_odoo_id(
+                    cursor, uid, model, openerp_id, odoo_id, context=final_context)
+
+        return odoo_id, erp_id
+
     @job(queue='sync_odoo', timeout=3600, on_commit=True)
     def syncronize(self, cursor, uid,
                    model, action, openerp_id, context=None):
@@ -377,16 +529,25 @@ class OdooSync(osv.osv):
                 if odoo_id:
                     return odoo_id, erp_id
 
-            has_get = hasattr(rp_obj, 'get_endpoint_suffix')
-            if not has_get:
-                # If no method to get endpoint suffix, we cannot check if record exists in Odoo
-                odoo_id = False
-            else:
-                # Check if the record already exists in Odoo
-                endpoint_suffix = rp_obj.get_endpoint_suffix(
-                    cursor, uid, openerp_id, context=context)
-                odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
-                    cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+            if model == 'res.partner':
+                # The ERP id is the canonical partner identity. VAT is only a fallback
+                # for legacy partners that have not yet been linked to the ERP.
+                odoo_id = self.get_partner_odoo_id_by_erp_id(
+                    cursor, uid, openerp_id)
+                if odoo_id:
+                    erp_id = openerp_id
+
+            if not odoo_id:
+                has_get = hasattr(rp_obj, 'get_endpoint_suffix')
+                if not has_get:
+                    # If no method to get endpoint suffix, we cannot check if record exists in Odoo
+                    odoo_id = False
+                else:
+                    # Check if the record already exists in Odoo
+                    endpoint_suffix = rp_obj.get_endpoint_suffix(
+                        cursor, uid, openerp_id, context=context)
+                    odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
+                        cursor, uid, model, endpoint_suffix, openerp_id, context=context)
 
             # ERP data preparation for sync
             erp_data = self.get_model_vals_to_sync(
@@ -415,21 +576,6 @@ class OdooSync(osv.osv):
                             'update_last_sync': True,
                         })
 
-                if MAPPING_MODELS_PATCH.get(model, False):
-                    erp_data.pop('pnt_erp_id', False)
-                    odoo_metadata.pop('company_id', False)
-                    odoo_metadata.pop('company_name', False)
-                    dict_to_patch = self.get_dict_to_patch(cursor, uid, erp_data, odoo_metadata)
-                    if dict_to_patch:
-                        success, msg, endpoint = self.update_odoo_record(
-                            cursor, uid, model, odoo_id, erp_id, dict_to_patch, context)
-                        sync_vals.update({
-                            'sync_state': 'synced' if success else 'error',
-                            'odoo_last_update_result': self.format_response(msg),
-                            'update_last_sync': True,
-                            'odoo_last_sync_request': self.format_response(dict_to_patch),
-                            'odoo_last_sync_endpoint': endpoint,
-                        })
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
                 odoo_id, msg, endpoint = self.create_odoo_record(

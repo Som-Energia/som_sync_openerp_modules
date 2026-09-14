@@ -65,6 +65,14 @@ class ResPartner(osv.osv):
                 }
         return res
 
+    def get_related_values_to_patch(self, cr, uid, id, vals, context=None):
+        if context is None:
+            context = {}
+        if ('payment_type_supplier' in vals
+                and not vals['payment_type_supplier']):
+            return {'property_outbound_payment_method_line_id': None}
+        return {}
+
     def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
         """
         This method is used to get the suffix to identify the record in Odoo
@@ -109,8 +117,8 @@ class ResPartner(osv.osv):
         if any(field in vals for field in self.MAPPING_TRIGGER_WRITE):
             with Sudo(uid=1, gid=0):
                 sync_obj = self.pool.get('odoo.sync')
-                sync_obj.common_sync_model_create_update(
-                    cr, uid, self._name, 'write', ids, context=context)
+                sync_obj.common_patch_odoo_record(
+                    cr, uid, self._name, ids, vals, context=context)
 
         return res
 
@@ -126,7 +134,7 @@ class ResPartner(osv.osv):
         """
         if context is None:
             context = {}
-        if data['vat']:
+        if data.get('vat'):
             data['vat'] = data['vat'].upper()
         if data.get('lang', False) and data['lang'] == 'en_US':
             data['lang'] = 'en_GB'

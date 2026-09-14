@@ -97,15 +97,10 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
         partner_address_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "base", "res_partner_address_8"
         )[1]
-        # sync_model_enabled_amplified returns (sync_enabled, auto_sync, async_enabled)
-        _orig_sync_model_enabled_amplified = getattr(
-            self.sync_obj, 'sync_model_enabled_amplified', None)
-        self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, True, True))
-        self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
-            self.sync_obj, 'sync_model_enabled_amplified', orig))
-        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
-        self.sync_obj.syncronize = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
+        _orig_common_patch = getattr(self.sync_obj, 'common_patch_odoo_record', None)
+        self.sync_obj.common_patch_odoo_record = MagicMock()
+        self.addCleanup(lambda orig=_orig_common_patch: setattr(
+            self.sync_obj, 'common_patch_odoo_record', orig))
 
         # Perform write operation
         self.rpa_obj.write(
@@ -115,7 +110,11 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
             {'nv': 'New Street Name'},
         )
 
-        self.sync_obj.syncronize.assert_called_once()
+        street = self.rpa_obj.read(
+            self.cursor, self.uid, partner_address_id, ['street'])['street']
+        self.sync_obj.common_patch_odoo_record.assert_called_once_with(
+            self.cursor, self.uid, 'res.partner.address', [partner_address_id],
+            {'nv': 'New Street Name', 'street': street}, context={})
 
     def test__write__autosync_not_enabled_no_trigger(self):
         partner_address_id = self.imd_obj.get_object_reference(
@@ -127,13 +126,10 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
         self.sync_obj.sync_model_enabled_amplified = MagicMock(return_value=(True, False, False))
         self.addCleanup(lambda orig=_orig_sync_model_enabled_amplified: setattr(
             self.sync_obj, 'sync_model_enabled_amplified', orig))
-        _orig_syncronize = getattr(self.sync_obj, 'syncronize', None)
-        self.sync_obj.syncronize = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize: setattr(self.sync_obj, 'syncronize', orig))
-        _orig_syncronize_sync = getattr(self.sync_obj, 'syncronize_sync', None)
-        self.sync_obj.syncronize_sync = MagicMock()
-        self.addCleanup(lambda orig=_orig_syncronize_sync: setattr(
-            self.sync_obj, 'syncronize_sync', orig))
+        _orig_patch = getattr(self.sync_obj, 'patch_odoo_record', None)
+        self.sync_obj.patch_odoo_record = MagicMock()
+        self.addCleanup(lambda orig=_orig_patch: setattr(
+            self.sync_obj, 'patch_odoo_record', orig))
 
         # Perform write operation on a field that does not trigger sync
         self.rpa_obj.write(
@@ -144,5 +140,4 @@ class TestResPartnerAddress(testing.OOTestCaseWithCursor):
         )
 
         # Assert that the sync method was not called
-        self.sync_obj.syncronize.assert_not_called()
-        self.sync_obj.syncronize_sync.assert_not_called()
+        self.sync_obj.patch_odoo_record.assert_not_called()
