@@ -46,7 +46,7 @@ class ResPartnerAddress(osv.osv):
         res = {
             'is_customer': address.partner_id.customer,
             'is_supplier': address.partner_id.supplier,
-            'lang': address.partner_id.lang,
+            'lang': address.partner_id.lang or 'es_ES',
         }
         return res
 
