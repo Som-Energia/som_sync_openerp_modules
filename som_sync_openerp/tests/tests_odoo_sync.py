@@ -640,6 +640,53 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     @mock.patch.object(odoo_sync.OdooSync, "syncronize")
+    def test__common_sync_model_create_update_async_processes_all_ids(
+            self, mock_syncronize, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, True)
+        partner_asus_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus')[1]
+        partner_thymbra_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_thymbra')[1]
+        partner_ids = [partner_asus_id, partner_thymbra_id]
+
+        result = self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'res.partner', 'create', partner_ids, {})
+
+        self.assertEqual(result, (None, None))
+        mock_syncronize.assert_has_calls([
+            mock.call(
+                mock.ANY, self.uid, 'res.partner', 'create', partner_asus_id, context={}),
+            mock.call(
+                mock.ANY, self.uid, 'res.partner', 'create', partner_thymbra_id, context={}),
+        ])
+        self.assertEqual(mock_syncronize.call_count, len(partner_ids))
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_sync_processes_all_ids(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_syncronize_sync.side_effect = [(10, 1), (20, 2)]
+        partner_asus_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_asus')[1]
+        partner_thymbra_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'base', 'res_partner_thymbra')[1]
+        partner_ids = [partner_asus_id, partner_thymbra_id]
+
+        result = self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'res.partner', 'sync', partner_ids, {})
+
+        self.assertEqual(result, (20, 2))
+        mock_syncronize_sync.assert_has_calls([
+            mock.call(
+                mock.ANY, self.uid, 'res.partner', 'sync', partner_asus_id, context={}),
+            mock.call(
+                mock.ANY, self.uid, 'res.partner', 'sync', partner_thymbra_id, context={}),
+        ])
+        self.assertEqual(mock_syncronize_sync.call_count, len(partner_ids))
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__common_sync_model_create_update_open_invoice(
             self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
         mock_sync_model_enabled_amplified.return_value = (True, True, True)
