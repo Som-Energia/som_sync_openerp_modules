@@ -686,6 +686,29 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(mock_syncronize_sync.call_count, len(partner_ids))
 
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "syncronize_sync")
+    def test__common_sync_model_create_update_sync_continues_after_record_error(
+            self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_syncronize_sync.side_effect = [
+            (10, 1),
+            Exception('sync failed'),
+            (30, 3),
+        ]
+        partner_ids = [1, 2, 3]
+
+        result = self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'res.partner', 'sync', partner_ids, {})
+
+        self.assertEqual(result, (30, 3))
+        mock_syncronize_sync.assert_has_calls([
+            mock.call(mock.ANY, self.uid, 'res.partner', 'sync', 1, context={}),
+            mock.call(mock.ANY, self.uid, 'res.partner', 'sync', 2, context={}),
+            mock.call(mock.ANY, self.uid, 'res.partner', 'sync', 3, context={}),
+        ])
+        self.assertEqual(mock_syncronize_sync.call_count, len(partner_ids))
+
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     def test__common_sync_model_create_update_open_invoice(
             self, mock_syncronize_sync, mock_sync_model_enabled_amplified):
