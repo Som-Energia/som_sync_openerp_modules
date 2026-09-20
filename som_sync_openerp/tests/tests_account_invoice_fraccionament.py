@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 from destral import testing
+import json
 import mock
 
 from ..models import odoo_sync
@@ -125,6 +126,54 @@ class TestAccountInvoiceFraccionament(testing.OOTestCaseWithCursor):
             ),
             'invoices/payments'
         )
+
+    def test__hook_after_odoo_creation_creates_sync_records_for_payment_lines(self):
+        response = {
+            'data': {
+                'metadata': [
+                    {'erp_id': 8001, 'odoo_id': 9001},
+                    {'erp_id': 8002, 'odoo_id': 9002},
+                ]
+            }
+        }
+
+        self.frac_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, {'sync_state': 'synced'}
+        )
+
+        sync_ids = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice.fraccionament.fraccionaments'),
+            ('res_id', 'in', [8001, 8002]),
+        ])
+        sync_data = self.sync_obj.read(
+            self.cursor, self.uid, sync_ids, ['res_id', 'odoo_id', 'sync_state']
+        )
+
+        self.assertEqual(len(sync_data), 2)
+        self.assertEqual(
+            sorted([(row['res_id'], row['odoo_id']) for row in sync_data]),
+            [(8001, 9001), (8002, 9002)]
+        )
+        self.assertEqual(set([row['sync_state'] for row in sync_data]), set(['synced']))
+
+    def test__hook_after_odoo_creation_accepts_string_response(self):
+        response = json.dumps({
+            'data': {
+                'metadata': [
+                    {'erp_id': 8101, 'odoo_id': 9101},
+                ]
+            }
+        })
+
+        self.frac_obj.hook_after_odoo_creation(
+            self.cursor, self.uid, response, {'sync_state': 'synced'}
+        )
+
+        sync_ids = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice.fraccionament.fraccionaments'),
+            ('res_id', '=', 8101),
+        ])
+        self.assertTrue(sync_ids)
 
     @mock.patch.object(odoo_sync.OdooSync, 'get_odoo_id_by_erp_id')
     def test__get_endpoint_odoo_record_suffix(self, mock_get_odoo_id_by_erp_id):
