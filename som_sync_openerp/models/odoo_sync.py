@@ -111,12 +111,16 @@ class OdooSync(osv.osv):
         return False, False, False
 
     def common_sync_model_create_update(self, cursor, uid, model, action, ids, context=None):
+        """
+        Sync model records on create or update actions.
+
+        ``ids`` accepts a single ID or a list; every eligible record is
+        attempted independently. Async synchronization schedules every record
+        and returns ``(None, None)``. Synchronous synchronization returns the
+        ``(odoo_id, erp_id)`` result from the last successfully processed record.
+        """
         if context is None:
             context = {}
-        """
-            Common method to sync model records on create or update actions.
-            Allows multiple ids to be processed.
-        """
         try:
             if not isinstance(ids, list):
                 ids = [ids]
@@ -129,24 +133,31 @@ class OdooSync(osv.osv):
             # check special restriction for some models
             has_special_restrictions = hasattr(
                 self.pool.get(model), 'check_special_restrictions')
+            result = (None, None)
             for _id in ids:
-                if has_special_restrictions and not \
-                        self.pool.get(model).check_special_restrictions(
-                            cursor, uid, _id, context=context):
+                try:
+                    if has_special_restrictions and not \
+                            self.pool.get(model).check_special_restrictions(
+                                cursor, uid, _id, context=context):
+                        logger = logging.getLogger('openerp.odoo.sync')
+                        logger.info(
+                            "Special restrictions not passed for record {} of model {}, "
+                            "skipping sync".format(_id, model))
+                        continue
+                    if async_enabled and not context.get('from_fk_sync', False):
+                        # Use job queue for async sync
+                        self.syncronize(
+                            cursor, uid, model, action, _id, context=context)
+                    else:
+                        # Sync synchronously
+                        result = self.syncronize_sync(
+                            cursor, uid, model, action, _id, context=context)
+                except Exception:
                     logger = logging.getLogger('openerp.odoo.sync')
-                    logger.info(
-                        "Special restrictions not passed for record {} of model {}, "
+                    logger.exception(
+                        "Error during synchronization of record {} of model {}, "
                         "skipping sync".format(_id, model))
-                    continue
-                if async_enabled and not context.get('from_fk_sync', False):
-                    # Use job queue for async sync
-                    self.syncronize(
-                        cursor, uid, model, action, _id, context=context)
-                    return None, None
-                else:
-                    # Sync synchronously
-                    return self.syncronize_sync(
-                        cursor, uid, model, action, _id, context=context)
+            return result
         except Exception:
             logger = logging.getLogger('openerp.odoo.sync')
             logger.exception(
