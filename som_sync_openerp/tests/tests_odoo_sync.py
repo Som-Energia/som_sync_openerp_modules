@@ -34,6 +34,28 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             odoo_sync.MAPPING_MODELS_GET_ENTITIES['res.partner.address'],
             'partner_address')
 
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    def test_get_odoo_id_by_erp_id_from_odoo_uses_partner_address_entity(
+            self, mock_get_conn_params, mock_requests_get):
+        mock_get_conn_params.return_value = ('http://odoo.test/api/', 'key')
+        mock_requests_get.return_value.status_code = 200
+        mock_requests_get.return_value.json.return_value = {
+            'success': True,
+            'data': {'odoo_id': 42},
+        }
+
+        result = self.sync_obj.get_odoo_id_by_erp_id_from_odoo(
+            self.cursor, self.uid, 'res.partner.address', 123)
+
+        self.assertEqual(result, 42)
+        mock_requests_get.assert_called_once_with(
+            'http://odoo.test/api/entities/partner_address/123',
+            headers={
+                'X-API-Key': 'key',
+                'Accept': 'application/json',
+            })
+
     def test_check_erp_record_exist__True(self):
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'
