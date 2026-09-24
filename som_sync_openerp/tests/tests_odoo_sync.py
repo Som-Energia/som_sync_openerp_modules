@@ -26,6 +26,14 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         with self.assertRaises(CreationNotSupportedException):
             self.sync_obj.create_odoo_record(self.cursor, self.uid, 'res.municipi', {})
 
+    def test_mapping_models_entities_separates_partner_addresses(self):
+        self.assertEqual(odoo_sync.MAPPING_MODELS_ENTITIES['res.partner'], 'partner')
+        self.assertEqual(
+            odoo_sync.MAPPING_MODELS_ENTITIES['res.partner.address'], 'partner')
+        self.assertEqual(
+            odoo_sync.MAPPING_MODELS_GET_ENTITIES['res.partner.address'],
+            'partner_address')
+
     def test_check_erp_record_exist__True(self):
         partner_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'base', 'res_partner_asus'

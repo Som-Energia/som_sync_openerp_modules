@@ -28,6 +28,11 @@ MAPPING_MODELS_ENTITIES = {
     'account.invoice.fraccionament.fraccionaments': 'payment',
 }
 
+# Mapping of models to entities used only to retrieve an Odoo ID by ERP ID.
+# OpenERP partner addresses are child res.partner records in Odoo.
+MAPPING_MODELS_GET_ENTITIES = dict(MAPPING_MODELS_ENTITIES)
+MAPPING_MODELS_GET_ENTITIES['res.partner.address'] = 'partner_address'
+
 STATIC_MODELS = [
     'account.fiscal.position',
     'account.journal',
@@ -1016,7 +1021,7 @@ class OdooSync(osv.osv):
         # in cases where we don't have the sync record created yet in OpenERP
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = '{}entities/{}/{}'.format(
-            odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), erp_id)
+            odoo_url_api, MAPPING_MODELS_GET_ENTITIES.get(model), erp_id)
         headers = {
             "X-API-Key": odoo_api_key,
             "Accept": "application/json",
