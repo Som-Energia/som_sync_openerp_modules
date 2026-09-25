@@ -395,25 +395,26 @@ class PaymentOrder(osv.osv):
         if not isinstance(ids, list):
             ids = [ids]
 
-        previous_states = {}
-        if vals.get('state') == 'done':
-            orders = self.read(cr, uid, ids, ['state'], context=context)
-            previous_states = {
-                order['id']: order['state']
+        previous_paid = {}
+        if vals.get('paid'):
+            orders = self.read(cr, uid, ids, ['paid'], context=context)
+            previous_paid = {
+                order['id']: order['paid']
                 for order in orders
             }
 
         res = super(PaymentOrder, self).write(cr, uid, ids, vals, context=context)
 
-        if vals.get('state') == 'done':
-            transitioned_ids = [
-                order_id for order_id in ids
-                if previous_states.get(order_id) != 'done'
+        if vals.get('paid'):
+            orders = self.read(cr, uid, ids, ['state'], context=context)
+            paid_order_ids = [
+                order['id'] for order in orders
+                if not previous_paid.get(order['id']) and order['state'] == 'done'
             ]
-            if transitioned_ids:
+            if paid_order_ids:
                 with Sudo(uid=1, gid=0):
                     sync_obj = self.pool.get('odoo.sync')
-                    for order_id in transitioned_ids:
+                    for order_id in paid_order_ids:
                         sync_obj.common_sync_model_create_update(
                             cr, uid, self._name, 'create', order_id, context=context
                         )
