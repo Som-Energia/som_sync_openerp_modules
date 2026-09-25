@@ -395,26 +395,27 @@ class PaymentOrder(osv.osv):
         if not isinstance(ids, list):
             ids = [ids]
 
-        previous_paid = {}
-        if vals.get('paid'):
-            orders = self.read(cr, uid, ids, ['paid'], context=context)
-            previous_paid = {
-                order['id']: order['paid']
+        previous_eligible = {}
+        if 'paid' in vals or 'state' in vals:
+            orders = self.read(cr, uid, ids, ['state', 'paid'], context=context)
+            previous_eligible = {
+                order['id']: order['state'] == 'done' and order['paid']
                 for order in orders
             }
 
         res = super(PaymentOrder, self).write(cr, uid, ids, vals, context=context)
 
-        if vals.get('paid'):
-            orders = self.read(cr, uid, ids, ['state'], context=context)
-            paid_order_ids = [
+        if previous_eligible:
+            orders = self.read(cr, uid, ids, ['state', 'paid'], context=context)
+            eligible_order_ids = [
                 order['id'] for order in orders
-                if not previous_paid.get(order['id']) and order['state'] == 'done'
+                if not previous_eligible[order['id']]
+                and order['state'] == 'done' and order['paid']
             ]
-            if paid_order_ids:
+            if eligible_order_ids:
                 with Sudo(uid=1, gid=0):
                     sync_obj = self.pool.get('odoo.sync')
-                    for order_id in paid_order_ids:
+                    for order_id in eligible_order_ids:
                         sync_obj.common_sync_model_create_update(
                             cr, uid, self._name, 'create', order_id, context=context
                         )

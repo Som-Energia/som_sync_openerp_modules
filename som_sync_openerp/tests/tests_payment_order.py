@@ -616,17 +616,44 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         mock_sync_create_update.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
-    def test__write_does_not_sync_when_only_transitioning_to_done(
+    def test__write_syncs_when_paid_order_transitions_to_done(
             self, mock_sync_create_update):
         remesa_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
         )[1]
+        self.cursor.execute(
+            "UPDATE payment_order SET state = 'open', paid = FALSE WHERE id = %s", (remesa_id,)
+        )
+        self.po_obj.write(
+            self.cursor, self.uid, [remesa_id], {'paid': True}
+        )
+        mock_sync_create_update.assert_not_called()
 
         self.po_obj.write(
             self.cursor, self.uid, [remesa_id], {'state': 'done'}
         )
 
-        mock_sync_create_update.assert_not_called()
+        mock_sync_create_update.assert_called_once_with(
+            self.cursor, self.uid, 'payment.order', 'create', remesa_id, context={}
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__write_syncs_when_paid_and_done_together(
+            self, mock_sync_create_update):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        self.cursor.execute(
+            "UPDATE payment_order SET state = 'open', paid = FALSE WHERE id = %s", (remesa_id,)
+        )
+
+        self.po_obj.write(
+            self.cursor, self.uid, [remesa_id], {'state': 'done', 'paid': True}
+        )
+
+        mock_sync_create_update.assert_called_once_with(
+            self.cursor, self.uid, 'payment.order', 'create', remesa_id, context={}
+        )
 
     @mock.patch.object(odoo_sync.OdooSync, "search")
     @mock.patch.object(odoo_sync.OdooSync, "read")
