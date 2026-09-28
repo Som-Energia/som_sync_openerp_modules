@@ -119,6 +119,18 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertTrue(is_syncrozable)
 
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__post_triggers_sync(self, mock_sync_create_update):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_001"
+        )[1]
+
+        self.am_obj.post(self.cursor, self.uid, [move_id])
+
+        mock_sync_create_update.assert_called_once_with(
+            self.cursor, self.uid, 'account.move', 'create', [move_id], context={}
+        )
+
     @mock.patch.object(odoo_sync.OdooSync, "syncronize")
     @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
     def test__write_triggers_async(self, mock_sync_model_enabled_amplified, mock_syncronize_sync):
