@@ -67,6 +67,9 @@ class AccountMove(osv.osv):
 
         res = super(AccountMove, self).post(cr, uid, ids, context=context)
 
+        if context.get('invoice'):
+            return res
+
         with Sudo(uid=1, gid=0):
             sync_obj = self.pool.get('odoo.sync')
             sync_obj.common_sync_model_create_update(
