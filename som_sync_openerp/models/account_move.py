@@ -61,6 +61,23 @@ class AccountMove(osv.osv):
                 return True
         return False
 
+    def post(self, cr, uid, ids, context=None):
+        if context is None:
+            context = {}
+
+        res = super(AccountMove, self).post(cr, uid, ids, context=context)
+
+        if context.get('invoice'):
+            return res
+
+        with Sudo(uid=1, gid=0):
+            sync_obj = self.pool.get('odoo.sync')
+            sync_obj.common_sync_model_create_update(
+                cr, uid, self._name, 'create', ids, context=context
+            )
+
+        return res
+
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}
