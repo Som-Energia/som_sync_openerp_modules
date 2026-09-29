@@ -250,10 +250,11 @@ class PaymentOrder(osv.osv):
             fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
             amount_total += fraccl_data['import']
 
-            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id(
-                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id
-            )
-            if not payment_odoo_id and not dry_run:
+            if dry_run:
+                payment_odoo_id = sync_obj.get_odoo_id_by_erp_id(
+                    cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id
+                )
+            else:
                 payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
                     cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id,
                     context=context

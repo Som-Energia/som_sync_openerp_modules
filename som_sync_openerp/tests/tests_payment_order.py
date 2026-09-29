@@ -992,11 +992,12 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         odoo_payment_id_1 = 201
         odoo_payment_id_2 = 202
         mock_sync_create_update.return_value = (999, 1)
-        mock_get_local_odoo_id.return_value = False
         mock_get_odoo_id.side_effect = [odoo_payment_id_1, odoo_payment_id_2]
 
-        self.utils_create_fraccionament_in_order(remesa_id, import_amount=400.0)
-        self.utils_create_fraccionament_in_order(remesa_id, import_amount=100.0)
+        fraccl_id_1 = self.utils_create_fraccionament_in_order(
+            remesa_id, import_amount=400.0)
+        fraccl_id_2 = self.utils_create_fraccionament_in_order(
+            remesa_id, import_amount=100.0)
 
         payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
         payment_ids, amount = self.po_obj._get_order_payment_lines_from_splitted_invoices(
@@ -1005,6 +1006,48 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertEqual(payment_ids, [odoo_payment_id_1, odoo_payment_id_2])
         self.assertEqual(amount, 500.0)
+        mock_get_local_odoo_id.assert_not_called()
+        mock_get_odoo_id.assert_has_calls([
+            mock.call(
+                self.cursor, self.uid,
+                'account.invoice.fraccionament.fraccionaments', fraccl_id_1,
+                context={}
+            ),
+            mock.call(
+                self.cursor, self.uid,
+                'account.invoice.fraccionament.fraccionaments', fraccl_id_2,
+                context={}
+            ),
+        ])
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
+    def test__get_order_payment_lines_uses_remote_id_when_local_mapping_is_stale(
+            self, mock_get_remote_odoo_id, mock_get_local_odoo_id):
+        remesa_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "remesa_0001"
+        )[1]
+        local_odoo_id = 201
+        remote_odoo_id = 301
+        mock_get_local_odoo_id.return_value = local_odoo_id
+        mock_get_remote_odoo_id.return_value = remote_odoo_id
+
+        fraccl_id = self.utils_create_fraccionament_in_order(
+            remesa_id, import_amount=400.0)
+
+        payment_order = self.po_obj.browse(self.cursor, self.uid, remesa_id)
+        payment_ids, amount = self.po_obj._get_order_payment_lines_from_splitted_invoices(
+            self.cursor, self.uid, payment_order
+        )
+
+        self.assertEqual(payment_ids, [remote_odoo_id])
+        self.assertEqual(amount, 400.0)
+        mock_get_local_odoo_id.assert_not_called()
+        mock_get_remote_odoo_id.assert_called_once_with(
+            self.cursor, self.uid,
+            'account.invoice.fraccionament.fraccionaments', fraccl_id,
+            context={}
+        )
 
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_order_payment_lines_from_splitted_invoices_returns_empty_when_no_fraccionaments(
@@ -1041,6 +1084,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertEqual(payment_ids, [])
         self.assertEqual(amount, 500.0)
+        self.assertEqual(mock_get_local_odoo_id.call_count, 2)
         mock_get_remote_odoo_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id_from_odoo")
@@ -1062,6 +1106,7 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
 
         self.assertEqual(payment_ids, [201])
         self.assertEqual(amount, 500.0)
+        self.assertEqual(mock_get_local_odoo_id.call_count, 2)
         mock_get_remote_odoo_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "get_odoo_id_by_erp_id")
@@ -1093,6 +1138,8 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
             )
 
         mock_sync_create_update.assert_not_called()
+        mock_get_local_odoo_id.assert_not_called()
+        self.assertEqual(mock_get_odoo_id.call_count, 2)
         self.assertIn(str(fraccl_id), str(error.exception))
         self.assertIn(str(other_fraccl_id), str(error.exception))
 
