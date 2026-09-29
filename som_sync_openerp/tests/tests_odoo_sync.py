@@ -26,6 +26,77 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         with self.assertRaises(CreationNotSupportedException):
             self.sync_obj.create_odoo_record(self.cursor, self.uid, 'res.municipi', {})
 
+    def test_dry_run_common_entrypoints_do_not_schedule_sync(self):
+        context = {'is_dry_run': True}
+        with mock.patch.object(odoo_sync.OdooSync, 'syncronize') as syncronize, \
+                mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync') as syncronize_sync, \
+                mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record') as patch_record, \
+                mock.patch.object(
+                    odoo_sync.OdooSync, 'patch_odoo_record_sync'
+                ) as patch_record_sync:
+            sync_result = self.sync_obj.common_sync_model_create_update(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            )
+            patch_result = self.sync_obj.common_patch_odoo_record(
+                self.cursor, self.uid, 'res.partner', 1, {'name': 'Dry'}, context=context
+            )
+
+            self.assertEqual(sync_result, (None, None))
+            self.assertEqual(patch_result, (None, None))
+            syncronize.assert_not_called()
+            syncronize_sync.assert_not_called()
+            patch_record.assert_not_called()
+            patch_record_sync.assert_not_called()
+
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.patch')
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
+    def test_dry_run_http_boundaries_do_not_call_odoo(
+            self, requests_get, requests_post, requests_patch):
+        context = {'is_dry_run': True}
+
+        self.sync_obj.get_odoo_data(
+            self.cursor, self.uid, 'res.partner', '1', context=context
+        )
+        self.sync_obj.create_odoo_record(
+            self.cursor, self.uid, 'res.partner', {}, context=context
+        )
+        self.sync_obj.update_odoo_record(
+            self.cursor, self.uid, 'res.partner', 1, 1, {}, context=context
+        )
+        self.sync_obj.update_erp_id(
+            self.cursor, self.uid, 'res.partner', 1, 1, context=context
+        )
+        self.sync_obj.get_odoo_id_by_erp_id_from_odoo(
+            self.cursor, self.uid, 'res.partner', 1, context=context
+        )
+        self.sync_obj.poll_payment_order_status_sync(
+            self.cursor, self.uid, 'payment.order', 1, context=context
+        )
+
+        requests_get.assert_not_called()
+        requests_post.assert_not_called()
+        requests_patch.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    def test_dry_run_sync_entrypoints_do_not_update_local_sync(self, update_odoo_id):
+        context = {'is_dry_run': True}
+
+        self.assertEqual(
+            self.sync_obj.syncronize_sync(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            ),
+            (False, False),
+        )
+        self.assertEqual(
+            self.sync_obj.patch_odoo_record_sync(
+                self.cursor, self.uid, 'res.partner', 1, {}, context=context
+            ),
+            (False, False),
+        )
+
+        update_odoo_id.assert_not_called()
+
     def test_mapping_models_entities_separates_partner_addresses(self):
         self.assertEqual(odoo_sync.MAPPING_MODELS_ENTITIES['res.partner'], 'partner')
         self.assertEqual(

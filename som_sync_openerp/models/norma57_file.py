@@ -1,9 +1,12 @@
 #  -*- coding: utf-8 -*-
+from __future__ import absolute_import
+
 from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
 
 from .odoo_exceptions import ForeingKeyNotAvailable
+from base_extended_som.utils import is_dry_run, skip_job_in_dry_run
 
 import logging
 
@@ -162,15 +165,20 @@ class Norma57File(osv.osv):
 
         return res
 
+    @skip_job_in_dry_run
     @job(queue='sync_odoo', timeout=3600)
     def update_pending_state(self, cursor, uid, openerp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
 
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
 
         sync_obj = self.pool.get('odoo.sync')
         return sync_obj.poll_payment_order_status_sync(

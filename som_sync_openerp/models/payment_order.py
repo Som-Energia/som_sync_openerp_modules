@@ -1,6 +1,8 @@
 #  -*- coding: utf-8 -*-
+from __future__ import absolute_import
 
 from oorq.decorators import job
+from base_extended_som.utils import is_dry_run, skip_job_in_dry_run
 from osv import osv
 from service.security import Sudo
 from .odoo_exceptions import ForeingKeyNotAvailable
@@ -245,7 +247,9 @@ class PaymentOrder(osv.osv):
         # now we can get the odoo_ids of the fraccionaments lines
         for fraccl_id in fraccl_ids:
             payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
-                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id)
+                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id,
+                context=context
+            )
             if payment_odoo_id:
                 payment_ids.append(payment_odoo_id)
                 fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
@@ -422,11 +426,14 @@ class PaymentOrder(osv.osv):
 
         return res
 
+    @skip_job_in_dry_run
     @job(queue='sync_odoo', timeout=3600)
     def update_pending_state(self, cursor, uid,
                              openerp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
 
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
@@ -449,6 +456,8 @@ class PaymentOrder(osv.osv):
         """
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         sync_obj = self.pool.get('odoo.sync')
         return sync_obj.poll_payment_order_status_sync(
             cr, uid, self._name, erp_id, context=context)

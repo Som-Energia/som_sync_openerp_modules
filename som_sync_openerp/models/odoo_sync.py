@@ -11,6 +11,9 @@ from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsEx
 import logging
 import json
 
+from base_extended_som.utils import is_dry_run, skip_job_in_dry_run
+
+
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 
 # Mapping of models entities to update erp_id in Odoo: key -> erp model, value -> odoo entity name
@@ -126,6 +129,8 @@ class OdooSync(osv.osv):
         """
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return None, None
         try:
             if not isinstance(ids, list):
                 ids = [ids]
@@ -171,6 +176,8 @@ class OdooSync(osv.osv):
     def common_patch_odoo_record(self, cursor, uid, model, ids, vals, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return None, None
         try:
             if not isinstance(ids, list):
                 ids = [ids]
@@ -259,7 +266,7 @@ class OdooSync(osv.osv):
                     odoo_id = False
                     if model_fk == 'res.partner':
                         odoo_id = self.get_partner_odoo_id_by_erp_id(
-                            cursor, uid, id_fk[0])
+                            cursor, uid, id_fk[0], context=context)
                     if not odoo_id:
                         odoo_id, _ = self.common_sync_model_create_update(
                             cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
@@ -297,7 +304,9 @@ class OdooSync(osv.osv):
 
         return result_data
 
-    def get_partner_odoo_id_by_erp_id(self, cursor, uid, erp_id):
+    def get_partner_odoo_id_by_erp_id(self, cursor, uid, erp_id, context=None):
+        if is_dry_run(context):
+            return False
         local_odoo_id = self.get_odoo_id_by_erp_id(
             cursor, uid, 'res.partner', erp_id)
         odoo_id, is_conclusive = self.get_odoo_id_by_erp_id_from_odoo(
@@ -309,7 +318,9 @@ class OdooSync(osv.osv):
         if odoo_id != local_odoo_id:
             self.update_odoo_id(
                 cursor, uid, 'res.partner', erp_id, odoo_id,
-                context={'sync_state': 'synced', 'update_last_sync': True})
+                context=dict(
+                    context or {}, sync_state='synced', update_last_sync=True
+                ))
         return odoo_id
 
     def check_erp_record_exist(self, cursor, uid, model, openerp_id):
@@ -363,7 +374,7 @@ class OdooSync(osv.osv):
                 model_fk = mapping_fk[erp_key]
                 if model_fk == 'res.partner':
                     odoo_id = self.get_partner_odoo_id_by_erp_id(
-                        cursor, uid, value)
+                        cursor, uid, value, context=context)
                 else:
                     fk_context = self._clean_context_update_data(
                         cursor, uid, context)
@@ -392,6 +403,7 @@ class OdooSync(osv.osv):
                 rp_obj.hook_last_modifications(cursor, uid, patch_data, context=context))
         return patch_data
 
+    @skip_job_in_dry_run
     @job(queue='sync_odoo', timeout=3600, on_commit=True)
     def patch_odoo_record(self, cursor, uid, model, openerp_id, vals, context=None):
         if context is None:
@@ -404,6 +416,8 @@ class OdooSync(osv.osv):
                                context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False
         if isinstance(openerp_id, list):
             openerp_id = openerp_id[0]
 
@@ -417,7 +431,7 @@ class OdooSync(osv.osv):
 
             if model == 'res.partner':
                 odoo_id = self.get_partner_odoo_id_by_erp_id(
-                    cursor, uid, openerp_id)
+                    cursor, uid, openerp_id, context=context)
                 if odoo_id:
                     erp_id = openerp_id
             else:
@@ -464,6 +478,7 @@ class OdooSync(osv.osv):
 
         return odoo_id, erp_id
 
+    @skip_job_in_dry_run
     @job(queue='sync_odoo', timeout=3600, on_commit=True)
     def syncronize(self, cursor, uid,
                    model, action, openerp_id, context=None):
@@ -479,6 +494,8 @@ class OdooSync(osv.osv):
         """
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False
 
         # Ensure openerp_id is an integer if passed as a list
         if isinstance(openerp_id, list):
@@ -549,7 +566,7 @@ class OdooSync(osv.osv):
                 # The ERP id is the canonical partner identity. VAT is only a fallback
                 # for legacy partners that have not yet been linked to the ERP.
                 odoo_id = self.get_partner_odoo_id_by_erp_id(
-                    cursor, uid, openerp_id)
+                    cursor, uid, openerp_id, context=context)
                 if odoo_id:
                     erp_id = openerp_id
 
@@ -653,6 +670,8 @@ class OdooSync(osv.osv):
             self, cursor, uid, model, openerp_id, odoo_id=False, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
             ('res_id', '=', openerp_id),
@@ -686,6 +705,8 @@ class OdooSync(osv.osv):
     def create_odoo_record(self, cursor, uid, model, data, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False, False
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         post_sufix = MAPPING_MODELS_POST.get(model, False)
         if hasattr(self.pool.get(model), 'get_mapping_model_post'):
@@ -713,7 +734,8 @@ class OdooSync(osv.osv):
                         not data_response.get('success', False) and \
                         data_response.get('error_code', False) == 'DUPLICATE_INVOICE_NUMBER':
                     odoo_id = self.get_odoo_id_by_erp_id_from_odoo(
-                        cursor, uid, model, data.get('pnt_erp_id', False))
+                        cursor, uid, model, data.get('pnt_erp_id', False), context=context
+                    )
                     if odoo_id:
                         return odoo_id, False, url_base
                     else:
@@ -727,6 +749,8 @@ class OdooSync(osv.osv):
     def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False, False
         # TODO: needs an endpoint with PATCH operation to implement this
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = '{}{}/{}/{}'.format(
@@ -746,6 +770,8 @@ class OdooSync(osv.osv):
     def exists_in_odoo(self, cursor, uid, model, url_sufix, erp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False, False
         # if context.get('from_fk_sync') and not MAPPING_MODELS_PATCH.get(model, False):
         #     odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
         #     if odoo_id:
@@ -768,6 +794,8 @@ class OdooSync(osv.osv):
     def get_odoo_data(self, cursor, uid, model, url_sufix, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = '{}{}/{}'.format(odoo_url_api, MAPPING_MODELS_GET.get(model), url_sufix)
         headers = {
@@ -784,6 +812,8 @@ class OdooSync(osv.osv):
     def update_odoo_id(self, cursor, uid, model, openerp_id, odoo_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
 
         str_now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -807,6 +837,8 @@ class OdooSync(osv.osv):
         return True
 
     def _create_sync_record(self, cursor, uid, model, openerp_id, odoo_id, str_now, context):
+        if is_dry_run(context):
+            return False
         model_id = self.pool.get('ir.model').search(
             cursor, uid, [('model', '=', model)], limit=1
         )[0]
@@ -897,6 +929,8 @@ class OdooSync(osv.osv):
     def update_erp_id(self, cursor, uid, model, odoo_id, erp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         url_base = "{}entities/{}/{}/{}".format(
             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), odoo_id, erp_id
@@ -924,6 +958,8 @@ class OdooSync(osv.osv):
     def check_update_odoo_data(self, cursor, uid, model, odoo_id, erp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False, False, False
         rp_obj = self.pool.get(model)
         # get odoo data
         url_sufix = rp_obj.get_endpoint_suffix(
@@ -1016,7 +1052,9 @@ class OdooSync(osv.osv):
         return result
 
     def get_odoo_id_by_erp_id_from_odoo(
-            self, cursor, uid, model, erp_id, return_status=False):
+            self, cursor, uid, model, erp_id, return_status=False, context=None):
+        if is_dry_run(context):
+            return (False, False) if return_status else False
         # This method is used when we want to get the odoo_id from Odoo using the ERP id,
         # in cases where we don't have the sync record created yet in OpenERP
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
@@ -1082,6 +1120,8 @@ class OdooSync(osv.osv):
     def common_update_pending_state(self, cursor, uid, id, context=None):
         if not context:
             context = {}
+        if is_dry_run(context):
+            return False
         if isinstance(id, list):
             id = id[0]
         sync_record = self.browse(cursor, uid, id)
@@ -1105,6 +1145,8 @@ class OdooSync(osv.osv):
     def poll_payment_order_status_sync(self, cursor, uid, model_name, erp_id, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
 
         odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
         sync_vals = {}
@@ -1142,6 +1184,8 @@ class OdooSync(osv.osv):
     def _cron_update_pending_state(self, cursor, uid, context=None):
         if context is None:
             context = {}
+        if is_dry_run(context):
+            return False
         pending_sync_ids = self.search(cursor, uid, [
             ('sync_state', '=', 'pending'),
         ])
