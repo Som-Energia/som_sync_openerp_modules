@@ -33,7 +33,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
                 mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record') as patch_record, \
                 mock.patch.object(
                     odoo_sync.OdooSync, 'patch_odoo_record_sync'
-                ) as patch_record_sync:
+        ) as patch_record_sync:
             sync_result = self.sync_obj.common_sync_model_create_update(
                 self.cursor, self.uid, 'res.partner', 'write', 1, context=context
             )
