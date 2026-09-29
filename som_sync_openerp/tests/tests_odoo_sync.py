@@ -47,6 +47,15 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.assertEqual(
                 result, (42, response.text,
                          'http://odoo.test/api/v1/bank_statement_lines'))
+            mock_post.assert_called_with(
+                'http://odoo.test/api/v1/bank_statement_lines',
+                json={'amount': 10.0},
+                headers={
+                    'X-API-Key': 'key',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                timeout=30)
 
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
     @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
@@ -143,12 +152,35 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             False, '{"success": false}',
             'http://odoo.test/api/v1/bank_statement_lines')
 
-        with self.assertRaises(Exception):
-            self.sync_obj.sync_bank_statement_line(
-                self.cursor, self.uid, 'norma57.file', 987656, {'amount': 10.0})
+        result = self.sync_obj.sync_bank_statement_line(
+            self.cursor, self.uid, 'norma57.file', 987656, {'amount': 10.0})
 
         marker = self.sync_obj.read(
             self.cursor, self.uid, sync_id, ['sync_state'])
+        self.assertFalse(result)
+        self.assertEqual(marker['sync_state'], 'pending')
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
+    def test_sync_bank_statement_line_requeues_norma57_transport_error(
+            self, mock_post, mock_get_conn_params):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987657,
+            'odoo_id': 55,
+            'sync_state': 'synced',
+        })
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        mock_post.side_effect = IOError('Connection reset')
+
+        result = self.sync_obj.sync_bank_statement_line(
+            self.cursor, self.uid, 'norma57.file', 987657, {'amount': 10.0})
+
+        marker = self.sync_obj.read(
+            self.cursor, self.uid, sync_id, ['sync_state'])
+        self.assertFalse(result)
         self.assertEqual(marker['sync_state'], 'pending')
 
     def test_mapping_models_entities_separates_partner_addresses(self):

@@ -5,6 +5,8 @@ import mock
 
 from destral import testing
 
+from som_sync_openerp.models.odoo_exceptions import ForeingKeyNotAvailable
+
 
 class TestAccountMoveLineBankStatement(testing.OOTestCaseWithCursor):
 
@@ -222,6 +224,15 @@ class TestAccountMoveLineBankStatement(testing.OOTestCaseWithCursor):
         mock_prepare.assert_called_once_with(
             self.cursor, self.uid, 'account.move.line', 100, context={})
         mock_sync.assert_not_called()
+
+    def test_manual_sync_keeps_marker_pending_when_mapping_is_missing(self):
+        with mock.patch.object(
+                self.aml_obj, '_get_manual_bank_statement_line_values',
+                side_effect=ForeingKeyNotAvailable('account.journal,6')):
+            result = self.aml_obj._sync_manual_bank_statement_line(
+                self.cursor, self.uid, 100)
+
+        self.assertFalse(result)
 
     def test_norma57_context_skips_manual_payment_sync(self):
         self.assertTrue(self.aml_obj._skip_bank_statement_line_payment_sync({

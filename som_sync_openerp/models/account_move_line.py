@@ -207,8 +207,11 @@ class AccountMoveLine(osv.osv):
             self, cr, uid, liquidity_line_id, context=None):
         if context is None:
             context = {}
-        values = self._get_manual_bank_statement_line_values(
-            cr, uid, liquidity_line_id, context=context)
+        try:
+            values = self._get_manual_bank_statement_line_values(
+                cr, uid, liquidity_line_id, context=context)
+        except ForeingKeyNotAvailable:
+            return False
         if not values:
             return False
         return self.pool.get('odoo.sync').sync_bank_statement_line(

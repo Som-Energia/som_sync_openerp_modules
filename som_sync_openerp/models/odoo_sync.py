@@ -734,7 +734,7 @@ class OdooSync(osv.osv):
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
-        response = requests.post(url_base, json=data, headers=headers)
+        response = requests.post(url_base, json=data, headers=headers, timeout=30)
         if response.status_code in (200, 201):
             response_data = response.json()
             if response_data and response_data.get('success', False):
@@ -813,20 +813,21 @@ class OdooSync(osv.osv):
                 vals['pnt_bank_statement_line_odoo_id'] = odoo_id
         except Exception as error:
             vals['pnt_bank_statement_line_last_result'] = str(error)
+            if model == 'norma57.file':
+                vals['sync_state'] = 'pending'
             with Sudo(uid=1, gid=0):
                 self.write(cursor, uid, [sync_id], vals, context=context)
+            if model == 'norma57.file':
+                return False
             raise
 
+        if not odoo_id and model == 'norma57.file':
+            vals['sync_state'] = 'pending'
         with Sudo(uid=1, gid=0):
             self.write(cursor, uid, [sync_id], vals, context=context)
         if not odoo_id:
             if model == 'norma57.file':
-                # The payment order is already done, so retain the pending state
-                # that makes the regular cron retry its bank statement line.
-                with Sudo(uid=1, gid=0):
-                    self.write(cursor, uid, [sync_id], {
-                        'sync_state': 'pending',
-                    }, context=context)
+                return False
             raise Exception('Bank statement line synchronization failed: {}'.format(result))
         if model == 'account.move.line':
             with Sudo(uid=1, gid=0):
