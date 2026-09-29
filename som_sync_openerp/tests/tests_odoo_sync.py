@@ -26,6 +26,131 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         with self.assertRaises(CreationNotSupportedException):
             self.sync_obj.create_odoo_record(self.cursor, self.uid, 'res.municipi', {})
 
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    def test_post_bank_statement_line_accepts_created_and_idempotent_success(
+            self, mock_get_conn_params, mock_post):
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        for status_code in (200, 201):
+            response = mock.Mock()
+            response.status_code = status_code
+            response.text = '{"success": true}'
+            response.json.return_value = {
+                'success': True,
+                'data': {'odoo_id': 42},
+            }
+            mock_post.return_value = response
+
+            result = self.sync_obj.post_bank_statement_line(
+                self.cursor, self.uid, {'amount': 10.0})
+
+            self.assertEqual(
+                result, (42, response.text,
+                         'http://odoo.test/api/v1/bank_statement_lines'))
+
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    def test_post_bank_statement_line_rejects_failure(
+            self, mock_get_conn_params, mock_post):
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        response = mock.Mock()
+        response.status_code = 409
+        response.text = '{"success": false}'
+        mock_post.return_value = response
+
+        result = self.sync_obj.post_bank_statement_line(
+            self.cursor, self.uid, {'amount': 10.0})
+
+        self.assertEqual(
+            result, (False, response.text,
+                     'http://odoo.test/api/v1/bank_statement_lines'))
+
+    @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
+    def test_sync_bank_statement_line_short_circuits_synced_marker(self, mock_post):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.move.line')], limit=1)[0]
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987654,
+            'sync_state': 'draft',
+            'pnt_bank_statement_line_odoo_id': 77,
+        })
+
+        result = self.sync_obj.sync_bank_statement_line(
+            self.cursor, self.uid, 'account.move.line', 987654, {'amount': 10.0})
+
+        self.assertEqual(result, 77)
+        mock_post.assert_not_called()
+
+    def test_prepare_bank_statement_line_marker_marks_manual_payment_pending(self):
+        marker_id = self.sync_obj.prepare_bank_statement_line_marker(
+            self.cursor, self.uid, 'account.move.line', 987655)
+
+        marker = self.sync_obj.read(
+            self.cursor, self.uid, marker_id, ['sync_state'])
+
+        self.assertEqual(marker['sync_state'], 'pending')
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
+    def test_sync_bank_statement_line_preserves_primary_odoo_id(
+            self, mock_post, mock_get_conn_params):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987654,
+            'odoo_id': 55,
+            'sync_state': 'synced',
+        })
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        mock_post.return_value = (
+            77, '{"success": true}',
+            'http://odoo.test/api/v1/bank_statement_lines')
+
+        result = self.sync_obj.sync_bank_statement_line(
+            self.cursor, self.uid, 'norma57.file', 987654, {'amount': 10.0})
+        marker = self.sync_obj.read(self.cursor, self.uid, sync_id, [
+            'odoo_id', 'pnt_bank_statement_line_odoo_id',
+            'pnt_bank_statement_line_last_request',
+            'pnt_bank_statement_line_last_result',
+            'pnt_bank_statement_line_last_endpoint',
+        ])
+
+        self.assertEqual(result, 77)
+        self.assertEqual(marker['odoo_id'], 55)
+        self.assertEqual(marker['pnt_bank_statement_line_odoo_id'], 77)
+        self.assertIn('10.0', marker['pnt_bank_statement_line_last_request'])
+        self.assertIn('success', marker['pnt_bank_statement_line_last_result'])
+        self.assertEqual(
+            marker['pnt_bank_statement_line_last_endpoint'],
+            'http://odoo.test/api/v1/bank_statement_lines')
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
+    def test_sync_bank_statement_line_requeues_failed_norma57(
+            self, mock_post, mock_get_conn_params):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987656,
+            'odoo_id': 55,
+            'sync_state': 'synced',
+        })
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        mock_post.return_value = (
+            False, '{"success": false}',
+            'http://odoo.test/api/v1/bank_statement_lines')
+
+        with self.assertRaises(Exception):
+            self.sync_obj.sync_bank_statement_line(
+                self.cursor, self.uid, 'norma57.file', 987656, {'amount': 10.0})
+
+        marker = self.sync_obj.read(
+            self.cursor, self.uid, sync_id, ['sync_state'])
+        self.assertEqual(marker['sync_state'], 'pending')
+
     def test_mapping_models_entities_separates_partner_addresses(self):
         self.assertEqual(odoo_sync.MAPPING_MODELS_ENTITIES['res.partner'], 'partner')
         self.assertEqual(

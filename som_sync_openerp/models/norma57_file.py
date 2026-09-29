@@ -1,4 +1,5 @@
 #  -*- coding: utf-8 -*-
+import json
 from oorq.decorators import job
 from osv import osv
 from service.security import Sudo
@@ -149,7 +150,10 @@ class Norma57File(osv.osv):
         if context is None:
             context = {}
 
-        res = super(Norma57File, self).confirm(cursor, uid, ids, context=context)
+        payment_context = context.copy()
+        payment_context['skip_bank_statement_line_payment_sync'] = True
+        res = super(Norma57File, self).confirm(
+            cursor, uid, ids, context=payment_context)
 
         if not isinstance(ids, (list, tuple)):
             ids = [ids]
@@ -173,8 +177,62 @@ class Norma57File(osv.osv):
             context = {}
 
         sync_obj = self.pool.get('odoo.sync')
-        return sync_obj.poll_payment_order_status_sync(
+        result = sync_obj.poll_payment_order_status_sync(
             cr, uid, self._name, erp_id, context=context)
+        if not result:
+            return result
+
+        sync_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', self._name),
+            ('res_id', '=', erp_id),
+            ('sync_state', '=', 'synced'),
+        ], limit=1)
+        if sync_ids:
+            sync_obj.sync_bank_statement_line(
+                cr, uid, self._name, erp_id,
+                self._get_bank_statement_line_values(
+                    cr, uid, erp_id, sync_id=sync_ids[0], context=context),
+                context=context)
+        return result
+
+    def _get_synced_payment_order_amount(
+            self, cr, uid, sync_id, norma57_file, context=None):
+        sync_obj = self.pool.get('odoo.sync')
+        request_data = sync_obj.read(
+            cr, uid, sync_id, ['odoo_last_sync_request'], context=context)
+        try:
+            payload = json.loads(request_data.get('odoo_last_sync_request') or '{}')
+        except (TypeError, ValueError):
+            payload = {}
+        amount = payload.get('amount')
+        if amount:
+            return round(amount, 2)
+        return round(sum([
+            abs(line.amount) for line in norma57_file.lines
+            if line.state == 'confirmed'
+        ]), 2)
+
+    def _get_bank_statement_line_values(
+            self, cr, uid, erp_id, sync_id=False, context=None):
+        if context is None:
+            context = {}
+        norma57_file = self.browse(cr, uid, erp_id, context=context)
+        amount = self._get_synced_payment_order_amount(
+            cr, uid, sync_id, norma57_file, context=context) if sync_id else round(sum([
+                abs(line.amount) for line in norma57_file.lines
+                if line.state == 'confirmed'
+            ]), 2)
+        if not amount:
+            raise Exception('Norma57 file has no nonzero confirmed amount')
+        return {
+            'pnt_source_model': self._name,
+            'pnt_erp_id': erp_id,
+            'journal_id': self._get_destination_journal_odoo_id(
+                cr, uid, context=context),
+            'date': norma57_file.header_presentation_date,
+            'amount': amount,
+            'payment_ref': '[REMESA] {}'.format(norma57_file.name),
+        }
 
 
 Norma57File()

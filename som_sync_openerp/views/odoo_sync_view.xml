@@ -18,6 +18,11 @@
                     <field name="odoo_last_sync_request" />
                     <field name="odoo_last_sync_endpoint" widget="url"/>
                     <field name="odoo_last_update_result" />
+                    <separator string="Bank statement line" colspan="2"/>
+                    <field name="pnt_bank_statement_line_odoo_id"/>
+                    <field name="pnt_bank_statement_line_last_request"/>
+                    <field name="pnt_bank_statement_line_last_endpoint" widget="url"/>
+                    <field name="pnt_bank_statement_line_last_result"/>
                     <field name="sync_state" />
                 </form>
             </field>

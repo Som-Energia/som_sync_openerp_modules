@@ -724,6 +724,117 @@ class OdooSync(osv.osv):
             raise CreationNotSupportedException(model)
         return False, False, False
 
+    def post_bank_statement_line(self, cursor, uid, data, context=None):
+        if context is None:
+            context = {}
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        url_base = '{}/bank_statement_lines'.format(odoo_url_api.rstrip('/'))
+        headers = {
+            "X-API-Key": odoo_api_key,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        response = requests.post(url_base, json=data, headers=headers)
+        if response.status_code in (200, 201):
+            response_data = response.json()
+            if response_data and response_data.get('success', False):
+                odoo_id = response_data.get('data', {}).get('odoo_id', False)
+                if odoo_id:
+                    return odoo_id, response.text, url_base
+        return False, response.text, url_base
+
+    def _get_or_create_bank_statement_line_marker(
+            self, cursor, uid, model, erp_id, context=None):
+        if context is None:
+            context = {}
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', erp_id),
+        ], limit=1)
+        if sync_ids:
+            return sync_ids[0]
+
+        model_ids = self.pool.get('ir.model').search(
+            cursor, uid, [('model', '=', model)], limit=1)
+        if not model_ids:
+            raise Exception('Model not found: {}'.format(model))
+        with Sudo(uid=1, gid=0):
+            return self.create(cursor, uid, {
+                'model': model_ids[0],
+                'res_id': erp_id,
+                'sync_state': 'pending' if model == 'account.move.line' else 'draft',
+            }, context=context)
+
+    def prepare_bank_statement_line_marker(
+            self, cursor, uid, model, erp_id, context=None):
+        return self._get_or_create_bank_statement_line_marker(
+            cursor, uid, model, erp_id, context=context)
+
+    def get_bank_statement_line_odoo_id(self, cursor, uid, model, erp_id):
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', '=', erp_id),
+        ], limit=1)
+        if not sync_ids:
+            return False
+        return self.read(
+            cursor, uid, sync_ids[0],
+            ['pnt_bank_statement_line_odoo_id']
+        )['pnt_bank_statement_line_odoo_id']
+
+    def sync_bank_statement_line(
+            self, cursor, uid, model, erp_id, data, context=None):
+        if context is None:
+            context = {}
+        sync_id = self._get_or_create_bank_statement_line_marker(
+            cursor, uid, model, erp_id, context=context)
+        cursor.execute(
+            'SELECT id FROM odoo_sync WHERE id = %s FOR UPDATE', (sync_id,))
+        marker = self.read(cursor, uid, sync_id, [
+            'pnt_bank_statement_line_odoo_id',
+        ])
+        if marker['pnt_bank_statement_line_odoo_id']:
+            return marker['pnt_bank_statement_line_odoo_id']
+
+        odoo_url_api, _ = self._get_conn_params(cursor, uid)
+        endpoint = '{}/bank_statement_lines'.format(odoo_url_api.rstrip('/'))
+        vals = {
+            'pnt_bank_statement_line_last_request': self.format_response(data),
+            'pnt_bank_statement_line_last_endpoint': endpoint,
+        }
+        try:
+            odoo_id, result, endpoint = self.post_bank_statement_line(
+                cursor, uid, data, context=context)
+            vals.update({
+                'pnt_bank_statement_line_last_result': self.format_response(result),
+                'pnt_bank_statement_line_last_endpoint': endpoint,
+            })
+            if odoo_id:
+                vals['pnt_bank_statement_line_odoo_id'] = odoo_id
+        except Exception as error:
+            vals['pnt_bank_statement_line_last_result'] = str(error)
+            with Sudo(uid=1, gid=0):
+                self.write(cursor, uid, [sync_id], vals, context=context)
+            raise
+
+        with Sudo(uid=1, gid=0):
+            self.write(cursor, uid, [sync_id], vals, context=context)
+        if not odoo_id:
+            if model == 'norma57.file':
+                # The payment order is already done, so retain the pending state
+                # that makes the regular cron retry its bank statement line.
+                with Sudo(uid=1, gid=0):
+                    self.write(cursor, uid, [sync_id], {
+                        'sync_state': 'pending',
+                    }, context=context)
+            raise Exception('Bank statement line synchronization failed: {}'.format(result))
+        if model == 'account.move.line':
+            with Sudo(uid=1, gid=0):
+                self.write(cursor, uid, [sync_id], {
+                    'sync_state': 'synced',
+                }, context=context)
+        return odoo_id
+
     def update_odoo_record(self, cursor, uid, model, odoo_id, erp_id, data, context=None):
         if context is None:
             context = {}
@@ -1161,6 +1272,14 @@ class OdooSync(osv.osv):
         'odoo_last_update_result': fields.text('Odoo last update result'),
         'odoo_last_sync_request': fields.text('Odoo last sync request'),
         'odoo_last_sync_endpoint': fields.char('Odoo last sync endpoint', size=512),
+        'pnt_bank_statement_line_odoo_id': fields.integer(
+            'Bank statement line Odoo id'),
+        'pnt_bank_statement_line_last_result': fields.text(
+            'Bank statement line last result'),
+        'pnt_bank_statement_line_last_request': fields.text(
+            'Bank statement line last request'),
+        'pnt_bank_statement_line_last_endpoint': fields.char(
+            'Bank statement line last endpoint', size=512),
         'sync_state': fields.selection([
             ('draft', 'Draft'),
             ('error', 'Error'),
