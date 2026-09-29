@@ -5,7 +5,7 @@ import time
 
 import netsvc
 from destral import testing
-from ..models import odoo_sync
+from ..models import norma57_file, odoo_sync, payment_order
 from som_sync_openerp.models.odoo_exceptions import (
     CreationNotSupportedException, ERPObjectNotExistsException, ForeingKeyNotAvailable
 )
@@ -47,6 +47,40 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             syncronize_sync.assert_not_called()
             patch_record.assert_not_called()
             patch_record_sync.assert_not_called()
+
+    @mock.patch.object(norma57_file.Norma57File, 'update_pending_state_sync')
+    @mock.patch.object(payment_order.PaymentOrder, 'update_pending_state_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
+    @mock.patch('oorq.decorators.setup_redis_connection')
+    def test_dry_run_decorated_jobs_are_not_enqueued(
+            self, setup_redis, syncronize_sync, patch_record_sync,
+            payment_update_sync, norma57_update_sync):
+        context = {'is_dry_run': True}
+        payment_order_obj = self.openerp.pool.get('payment.order')
+        norma57_obj = self.openerp.pool.get('norma57.file')
+
+        results = [
+            self.sync_obj.syncronize(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            ),
+            self.sync_obj.patch_odoo_record(
+                self.cursor, self.uid, 'res.partner', 1, {}, context=context
+            ),
+            payment_order_obj.update_pending_state(
+                self.cursor, self.uid, 1, context=context
+            ),
+            norma57_obj.update_pending_state(
+                self.cursor, self.uid, 1, context=context
+            ),
+        ]
+
+        self.assertEqual(results, [False, False, False, False])
+        setup_redis.assert_not_called()
+        syncronize_sync.assert_not_called()
+        patch_record_sync.assert_not_called()
+        payment_update_sync.assert_not_called()
+        norma57_update_sync.assert_not_called()
 
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.patch')
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')

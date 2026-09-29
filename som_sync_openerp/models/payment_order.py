@@ -245,16 +245,22 @@ class PaymentOrder(osv.osv):
                 'sync', fracc_id, context_copy)
 
         # now we can get the odoo_ids of the fraccionaments lines
+        dry_run = is_dry_run(context)
         for fraccl_id in fraccl_ids:
-            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
-                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id,
-                context=context
+            fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
+            amount_total += fraccl_data['import']
+
+            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id(
+                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id
             )
+            if not payment_odoo_id and not dry_run:
+                payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
+                    cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id,
+                    context=context
+                )
             if payment_odoo_id:
                 payment_ids.append(payment_odoo_id)
-                fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
-                amount_total += fraccl_data['import']
-            else:
+            elif not dry_run:
                 missing_fraccl_ids.append(fraccl_id)
 
         if missing_fraccl_ids:
