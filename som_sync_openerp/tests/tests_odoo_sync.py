@@ -170,9 +170,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(res, True)
 
-    def test_check_erp_record_exist__Exception(self):
+    @mock.patch('som_sync_openerp.models.odoo_sync.sleep', return_value=None)
+    def test_check_erp_record_exist__Exception(self, mock_sleep):
         with self.assertRaises(ERPObjectNotExistsException):
             self.sync_obj.check_erp_record_exist(self.cursor, self.uid, 'res.partner', 123456)
+        mock_sleep.assert_called()
 
     def test___create_sync_record__ok(self):
         partner_id = self.imd_obj.get_object_reference(
