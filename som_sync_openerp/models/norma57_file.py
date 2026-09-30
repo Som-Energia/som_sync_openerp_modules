@@ -170,8 +170,6 @@ class Norma57File(osv.osv):
     def update_pending_state(self, cursor, uid, openerp_id, context=None):
         if context is None:
             context = {}
-        if is_dry_run(context):
-            return False
         self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
 
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):

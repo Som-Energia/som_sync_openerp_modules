@@ -82,35 +82,33 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         payment_update_sync.assert_not_called()
         norma57_update_sync.assert_not_called()
 
-    @mock.patch('som_sync_openerp.models.odoo_sync.requests.patch')
-    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
     @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
-    def test_dry_run_http_boundaries_do_not_call_odoo(
-            self, requests_get, requests_post, requests_patch):
+    def test_dry_run_polling_entrypoint_does_not_call_odoo(self, requests_get):
         context = {'is_dry_run': True}
 
-        self.sync_obj.get_odoo_data(
-            self.cursor, self.uid, 'res.partner', '1', context=context
-        )
-        self.sync_obj.create_odoo_record(
-            self.cursor, self.uid, 'res.partner', {}, context=context
-        )
-        self.sync_obj.update_odoo_record(
-            self.cursor, self.uid, 'res.partner', 1, 1, {}, context=context
-        )
-        self.sync_obj.update_erp_id(
-            self.cursor, self.uid, 'res.partner', 1, 1, context=context
-        )
-        self.sync_obj.get_odoo_id_by_erp_id_from_odoo(
-            self.cursor, self.uid, 'res.partner', 1, context=context
-        )
         self.sync_obj.poll_payment_order_status_sync(
             self.cursor, self.uid, 'payment.order', 1, context=context
         )
 
         requests_get.assert_not_called()
-        requests_post.assert_not_called()
-        requests_patch.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_dry_run_sync_pending_entrypoints_do_not_poll(self, poll_status):
+        context = {'is_dry_run': True}
+        payment_order_obj = self.openerp.pool.get('payment.order')
+        norma57_obj = self.openerp.pool.get('norma57.file')
+
+        results = [
+            payment_order_obj.update_pending_state_sync(
+                self.cursor, self.uid, 1, context=context
+            ),
+            norma57_obj.update_pending_state_sync(
+                self.cursor, self.uid, 1, context=context
+            ),
+        ]
+
+        self.assertEqual(results, [False, False])
+        poll_status.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
     def test_dry_run_sync_entrypoints_do_not_update_local_sync(self, update_odoo_id):

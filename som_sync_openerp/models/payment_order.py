@@ -245,23 +245,14 @@ class PaymentOrder(osv.osv):
                 'sync', fracc_id, context_copy)
 
         # now we can get the odoo_ids of the fraccionaments lines
-        dry_run = is_dry_run(context)
         for fraccl_id in fraccl_ids:
-            fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
-            amount_total += fraccl_data['import']
-
-            if dry_run:
-                payment_odoo_id = sync_obj.get_odoo_id_by_erp_id(
-                    cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id
-                )
-            else:
-                payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
-                    cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id,
-                    context=context
-                )
+            payment_odoo_id = sync_obj.get_odoo_id_by_erp_id_from_odoo(
+                cr, uid, 'account.invoice.fraccionament.fraccionaments', fraccl_id)
             if payment_odoo_id:
                 payment_ids.append(payment_odoo_id)
-            elif not dry_run:
+                fraccl_data = aiff_obj.read(cr, uid, fraccl_id, ['import'], context=context)
+                amount_total += fraccl_data['import']
+            else:
                 missing_fraccl_ids.append(fraccl_id)
 
         if missing_fraccl_ids:
@@ -439,8 +430,6 @@ class PaymentOrder(osv.osv):
                              openerp_id, context=None):
         if context is None:
             context = {}
-        if is_dry_run(context):
-            return False
         self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
 
     def update_pending_state_sync(self, cr, uid, erp_id, context=None):
