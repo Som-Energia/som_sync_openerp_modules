@@ -5,8 +5,6 @@ import mock
 
 from destral import testing
 
-from ..models import odoo_sync
-
 
 class TestNorma57File(testing.OOTestCaseWithCursor):
 
@@ -14,7 +12,6 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         self.imd_obj = self.openerp.pool.get('ir.model.data')
         self.conf_obj = self.openerp.pool.get('res.config')
         self.n57_obj = self.openerp.pool.get('norma57.file')
-        self.n57_line_obj = self.openerp.pool.get('norma57.file.line')
         self.ai_obj = self.openerp.pool.get('account.invoice')
         super(TestNorma57File, self).setUp()
 
@@ -23,74 +20,6 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
             'name': name,
             'header_presentation_date': '2026-01-15',
         })
-
-    def _build_mock_line(
-            self, resource_id, amount=100.0, state='confirmed', resource_model='account.invoice'):
-        line = mock.Mock()
-        line.state = state
-        line.amount = amount
-        line.resource = '{},{}'.format(resource_model, resource_id)
-        return line
-
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    def test_get_related_values_builds_simple_payment_order_payload(self, mock_sync):
-        invoice_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
-        )[1]
-        norma57_id = self._create_norma57_file()
-        mock_line = self._build_mock_line(invoice_id, amount=125.5)
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
-        mock_sync.return_value = (99, invoice_id)
-
-        with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies') as mock_discrepancies:  # noqa: E501
-            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
-                norma57_file = mock.Mock()
-                norma57_file.name = 'Norma57 test'
-                norma57_file.header_presentation_date = '2026-01-15'
-                norma57_file.lines = [mock_line]
-                mock_browse.return_value = norma57_file
-                related_values = self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
-
-        self.assertEqual(related_values, {
-            'destination_journal_id': 17,
-            'payment_method_line_id': 411,
-            'name': 'Norma57 test',
-            'sdd_required_collection_date': '2026-01-15',
-            'amount': 125.5,
-            'lines': [{
-                'invoice_id': 99,
-                'amount': 125.5,
-            }],
-        })
-        mock_discrepancies.assert_called_once_with(
-            self.cursor, self.uid, [invoice_id], [{'invoice_id': 99, 'amount': 125.5}],
-            is_grouped=False, context={}
-        )
-
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    def test_get_model_vals_to_sync_includes_norma57_source_model(self, mock_sync):
-        invoice_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
-        )[1]
-        norma57_id = self._create_norma57_file()
-        mock_line = self._build_mock_line(invoice_id, amount=125.5)
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
-        mock_sync.return_value = (99, invoice_id)
-
-        with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies'):
-            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
-                norma57_file = mock.Mock()
-                norma57_file.name = 'Norma57 test'
-                norma57_file.header_presentation_date = '2026-01-15'
-                norma57_file.lines = [mock_line]
-                mock_browse.return_value = norma57_file
-                payload = self.openerp.pool.get('odoo.sync').get_model_vals_to_sync(
-                    self.cursor, self.uid, 'norma57.file', norma57_id)
-
-        self.assertEqual(payload['pnt_source_model'], 'norma57.file')
-        self.assertEqual(payload['batch_type'], 'inbound')
 
     def test_get_line_invoice_erp_id_raises_when_resource_is_not_supported(self):
         line = mock.Mock()
@@ -110,141 +39,60 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
 
         self.assertEqual(invoice_id, 42)
         mock_get.assert_called_once_with('giscedata.facturacio.factura')
-        factura_obj.read.assert_called_once_with(
-            self.cursor, self.uid, 7, ['invoice_id'], context={}
-        )
 
-    def test_get_line_invoice_erp_id_returns_false_when_resource_is_empty(self):
+    def test_get_bank_statement_line_values_uses_confirmed_line_identity(self):
+        self.conf_obj.set(
+            self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
+        norma57_file = mock.Mock()
+        norma57_file.header_presentation_date = '2026-01-15'
         line = mock.Mock()
-        line.resource = False
+        line.id = 81
+        line.amount = -25.5
+        line.file_id = norma57_file
 
-        invoice_id = self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
+        with mock.patch.object(
+                self.n57_obj, '_get_line_invoice_erp_id', return_value=42):
+            with mock.patch.object(
+                    self.ai_obj, 'read', return_value={'number': 'INV/2026/001'}):
+                values = self.n57_obj._get_bank_statement_line_values(
+                    self.cursor, self.uid, line)
 
-        self.assertFalse(invoice_id)
+        self.assertEqual(values, {
+            'pnt_source_model': 'norma57.file.line',
+            'pnt_erp_id': 81,
+            'journal_id': 17,
+            'date': '2026-01-15',
+            'amount': 25.5,
+            'payment_ref': '[FACTURA] INV/2026/001',
+        })
 
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    def test_get_related_values_raises_when_destination_journal_is_missing(self, mock_sync):
-        invoice_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'invoice_0004'
-        )[1]
+    def test_sync_bank_statement_lines_creates_one_line_per_confirmed_line(self):
         norma57_id = self._create_norma57_file()
-        mock_line = self._build_mock_line(invoice_id)
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '0')
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
-        mock_sync.return_value = (99, invoice_id)
+        confirmed_line = mock.Mock(id=81, state='confirmed')
+        ignored_line = mock.Mock(id=82, state='error')
+        norma57_file = mock.Mock(lines=[confirmed_line, ignored_line])
+        sync_obj = self.openerp.pool.get('odoo.sync')
+        payload = {'pnt_erp_id': 81}
 
-        with mock.patch.object(type(self.ai_obj), 'process_lines_with_discrepancies'):
-            with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
-                norma57_file = mock.Mock()
-                norma57_file.name = 'Norma57 test'
-                norma57_file.header_presentation_date = '2026-01-15'
-                norma57_file.lines = [mock_line]
-                mock_browse.return_value = norma57_file
-                with self.assertRaises(Exception):
-                    self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
-
-    def test_get_related_values_raises_when_no_confirmed_lines_are_syncable(self):
-        norma57_id = self._create_norma57_file()
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
-        self.conf_obj.set(self.cursor, self.uid, 'odoo_norma57_payment_method', '411')
-
-        with mock.patch.object(self.n57_obj, 'browse') as mock_browse:
-            norma57_file = mock.Mock()
-            norma57_file.name = 'Norma57 test'
-            norma57_file.header_presentation_date = '2026-01-15'
-            norma57_file.lines = []
-            mock_browse.return_value = norma57_file
-            with self.assertRaises(Exception):
-                self.n57_obj.get_related_values(self.cursor, self.uid, norma57_id)
-
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    def test_confirm_triggers_norma57_sync(self, mock_sync):
-        norma57_id = self._create_norma57_file()
-
-        result = self.n57_obj.confirm(self.cursor, self.uid, norma57_id)
+        with mock.patch.object(self.n57_obj, 'browse', return_value=norma57_file):
+            with mock.patch.object(
+                    self.n57_obj, '_get_bank_statement_line_values', return_value=payload):
+                with mock.patch.object(
+                        sync_obj, 'sync_bank_statement_line', return_value=91) as mock_sync:
+                    result = self.n57_obj.sync_bank_statement_lines(
+                        self.cursor, self.uid, norma57_id)
 
         self.assertTrue(result)
         mock_sync.assert_called_once_with(
-            self.cursor, self.uid, 'norma57.file', 'write', norma57_id, context={}
-        )
+            self.cursor, self.uid, 'norma57.file.line', 81, payload, context={})
 
-    def test_get_bank_statement_line_values_aggregates_confirmed_lines(self):
-        norma57_id = self._create_norma57_file(name='N57-001')
-        self.conf_obj.set(
-            self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
-        norma57_file = mock.Mock()
-        norma57_file.name = 'N57-001'
-        norma57_file.header_presentation_date = '2026-01-15'
-        norma57_file.lines = [
-            mock.Mock(state='confirmed', amount=-25.5),
-            mock.Mock(state='confirmed', amount=74.5),
-            mock.Mock(state='error', amount=500.0),
-        ]
-
-        with mock.patch.object(self.n57_obj, 'browse', return_value=norma57_file):
-            values = self.n57_obj._get_bank_statement_line_values(
-                self.cursor, self.uid, norma57_id)
-
-        self.assertEqual(values, {
-            'pnt_source_model': 'norma57.file',
-            'pnt_erp_id': norma57_id,
-            'journal_id': 17,
-            'date': '2026-01-15',
-            'amount': 100.0,
-            'payment_ref': '[REMESA] N57-001',
-        })
-
-    def test_get_bank_statement_line_values_reuses_synced_adjusted_amount(self):
-        norma57_id = self._create_norma57_file(name='N57-ADJUSTED')
-        self.conf_obj.set(
-            self.cursor, self.uid, 'odoo_norma57_destination_journal', '17')
-        norma57_file = mock.Mock()
-        norma57_file.name = 'N57-ADJUSTED'
-        norma57_file.header_presentation_date = '2026-01-15'
-        norma57_file.lines = [mock.Mock(state='confirmed', amount=100.0)]
-        sync_obj = self.openerp.pool.get('odoo.sync')
-
-        with mock.patch.object(self.n57_obj, 'browse', return_value=norma57_file):
-            with mock.patch.object(sync_obj, 'read', return_value={
-                    'odoo_last_sync_request': '{"amount": 99.99}',
-            }):
-                values = self.n57_obj._get_bank_statement_line_values(
-                    self.cursor, self.uid, norma57_id, sync_id=7)
-
-        self.assertEqual(values['amount'], 99.99)
-
-    @mock.patch.object(odoo_sync.OdooSync, 'sync_bank_statement_line')
-    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
-    def test_pending_success_creates_bank_statement_line(
-            self, mock_poll, mock_sync_bank_line):
+    def test_confirm_triggers_bank_statement_line_sync(self):
         norma57_id = self._create_norma57_file()
-        sync_obj = self.openerp.pool.get('odoo.sync')
-        mock_poll.return_value = True
-        payload = {'amount': 100.0}
 
-        with mock.patch.object(sync_obj, 'search', return_value=[1]):
-            with mock.patch.object(
-                    self.n57_obj, '_get_bank_statement_line_values',
-                    return_value=payload):
-                result = self.n57_obj.update_pending_state_sync(
-                    self.cursor, self.uid, norma57_id)
+        with mock.patch.object(
+                self.n57_obj, 'sync_bank_statement_lines') as mock_sync:
+            result = self.n57_obj.confirm(self.cursor, self.uid, norma57_id)
 
         self.assertTrue(result)
-        mock_sync_bank_line.assert_called_once_with(
-            self.cursor, self.uid, 'norma57.file', norma57_id, payload,
-            context={})
-
-    @mock.patch.object(odoo_sync.OdooSync, 'sync_bank_statement_line')
-    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
-    def test_pending_error_does_not_create_bank_statement_line(
-            self, mock_poll, mock_sync_bank_line):
-        norma57_id = self._create_norma57_file()
-        sync_obj = self.openerp.pool.get('odoo.sync')
-        mock_poll.return_value = True
-
-        with mock.patch.object(sync_obj, 'search', return_value=[]):
-            result = self.n57_obj.update_pending_state_sync(
-                self.cursor, self.uid, norma57_id)
-
-        self.assertTrue(result)
-        mock_sync_bank_line.assert_not_called()
+        mock_sync.assert_called_once_with(
+            self.cursor, self.uid, norma57_id, context={})

@@ -105,7 +105,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def test_sync_bank_statement_line_preserves_primary_odoo_id(
             self, mock_post, mock_get_conn_params):
         model_id = self.openerp.pool.get('ir.model').search(
-            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+            self.cursor, self.uid, [('model', '=', 'norma57.file.line')], limit=1)[0]
         sync_id = self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 987654,
@@ -118,7 +118,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'http://odoo.test/api/v1/bank_statement_lines')
 
         result = self.sync_obj.sync_bank_statement_line(
-            self.cursor, self.uid, 'norma57.file', 987654, {'amount': 10.0})
+            self.cursor, self.uid, 'norma57.file.line', 987654, {'amount': 10.0})
         marker = self.sync_obj.read(self.cursor, self.uid, sync_id, [
             'odoo_id', 'pnt_bank_statement_line_odoo_id',
             'pnt_bank_statement_line_last_request',
@@ -137,10 +137,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
     @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
-    def test_sync_bank_statement_line_requeues_failed_norma57(
+    def test_sync_bank_statement_line_requeues_failed_norma57_line(
             self, mock_post, mock_get_conn_params):
         model_id = self.openerp.pool.get('ir.model').search(
-            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+            self.cursor, self.uid, [('model', '=', 'norma57.file.line')], limit=1)[0]
         sync_id = self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 987656,
@@ -153,7 +153,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             'http://odoo.test/api/v1/bank_statement_lines')
 
         result = self.sync_obj.sync_bank_statement_line(
-            self.cursor, self.uid, 'norma57.file', 987656, {'amount': 10.0})
+            self.cursor, self.uid, 'norma57.file.line', 987656, {'amount': 10.0})
 
         marker = self.sync_obj.read(
             self.cursor, self.uid, sync_id, ['sync_state'])
@@ -162,10 +162,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
     @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
-    def test_sync_bank_statement_line_requeues_norma57_transport_error(
+    def test_sync_bank_statement_line_requeues_norma57_line_transport_error(
             self, mock_post, mock_get_conn_params):
         model_id = self.openerp.pool.get('ir.model').search(
-            self.cursor, self.uid, [('model', '=', 'norma57.file')], limit=1)[0]
+            self.cursor, self.uid, [('model', '=', 'norma57.file.line')], limit=1)[0]
         sync_id = self.sync_obj.create(self.cursor, self.uid, {
             'model': model_id,
             'res_id': 987657,
@@ -176,7 +176,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_post.side_effect = IOError('Connection reset')
 
         result = self.sync_obj.sync_bank_statement_line(
-            self.cursor, self.uid, 'norma57.file', 987657, {'amount': 10.0})
+            self.cursor, self.uid, 'norma57.file.line', 987657, {'amount': 10.0})
 
         marker = self.sync_obj.read(
             self.cursor, self.uid, sync_id, ['sync_state'])

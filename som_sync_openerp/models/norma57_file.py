@@ -1,10 +1,5 @@
 #  -*- coding: utf-8 -*-
-import json
-from oorq.decorators import job
 from osv import osv
-from service.security import Sudo
-
-from .odoo_exceptions import ForeingKeyNotAvailable
 
 import logging
 
@@ -15,25 +10,6 @@ logger = logging.getLogger('openerp.odoo.sync')
 class Norma57File(osv.osv):
     _name = 'norma57.file'
     _inherit = 'norma57.file'
-
-    MAPPING_FIELDS_TO_SYNC = {
-        'id': 'pnt_erp_id',
-        'header_presentation_date': 'date',
-    }
-    MAPPING_FK = {}
-    MAPPING_CONSTANTS = {
-        'batch_type': 'inbound',
-        'pnt_source_model': 'norma57.file',
-    }
-
-    def get_mapping_model_post(self, cr, uid, id, context=None):
-        return 'payment_orders'
-
-    def get_sync_state_on_creation(self, cr, uid, id, context=None):
-        return 'pending'
-
-    def get_endpoint_odoo_record_suffix(self, cr, uid, id, odoo_id, context=None):
-        return '/action-375/{}'.format(odoo_id)
 
     def _get_config_odoo_id(self, cr, uid, key, context=None):
         if context is None:
@@ -52,13 +28,6 @@ class Norma57File(osv.osv):
         if not journal_odoo_id:
             raise Exception('odoo_norma57_destination_journal is not configured')
         return journal_odoo_id
-
-    def _get_payment_method_line_odoo_id(self, cr, uid, context=None):
-        payment_method_line_id = self._get_config_odoo_id(
-            cr, uid, 'odoo_norma57_payment_method', context=context)
-        if not payment_method_line_id:
-            raise Exception('odoo_norma57_payment_method is not configured')
-        return payment_method_line_id
 
     def _get_line_invoice_erp_id(self, cr, uid, line, context=None):
         if context is None:
@@ -82,69 +51,43 @@ class Norma57File(osv.osv):
             return False
         return invoice_id[0]
 
-    def _build_line_values(self, cr, uid, line, context=None):
+    def _get_bank_statement_line_values(self, cr, uid, line, context=None):
         if context is None:
             context = {}
 
-        sync_obj = self.pool.get('odoo.sync')
         invoice_erp_id = self._get_line_invoice_erp_id(cr, uid, line, context=context)
         if not invoice_erp_id:
-            raise ForeingKeyNotAvailable('account.invoice,False')
-
-        context_copy = context.copy()
-        context_copy['from_fk_sync'] = True
-        invoice_odoo_id, _ = sync_obj.common_sync_model_create_update(
-            cr, uid, 'account.invoice', 'sync', invoice_erp_id, context_copy)
-        if not invoice_odoo_id:
-            raise ForeingKeyNotAvailable('account.invoice,{}'.format(invoice_erp_id))
-
+            raise Exception('Norma57 line has no invoice')
+        inv_obj = self.pool.get('account.invoice')
+        invoice = inv_obj.read(
+            cr, uid, invoice_erp_id, ['number'], context=context)
+        if not invoice.get('number'):
+            raise Exception('Norma57 invoice has no number')
         return {
-            'invoice_id': invoice_odoo_id,
+            'pnt_source_model': 'norma57.file.line',
+            'pnt_erp_id': line.id,
+            'journal_id': self._get_destination_journal_odoo_id(
+                cr, uid, context=context),
+            'date': line.file_id.header_presentation_date,
             'amount': abs(line.amount),
-        }, invoice_erp_id
+            'payment_ref': '[FACTURA] {}'.format(invoice['number']),
+        }
 
-    def get_related_values(self, cr, uid, id, context=None):
+    def sync_bank_statement_lines(self, cr, uid, id, context=None):
         if context is None:
             context = {}
-
         norma57_file = self.browse(cr, uid, id, context=context)
-        inv_obj = self.pool.get('account.invoice')
-        destination_journal_id = self._get_destination_journal_odoo_id(
-            cr, uid, context=context)
-        payment_method_line_id = self._get_payment_method_line_odoo_id(
-            cr, uid, context=context)
-        lines = []
-        invoice_ids = []
-
+        sync_obj = self.pool.get('odoo.sync')
+        result = True
         for line in norma57_file.lines:
             if line.state != 'confirmed':
                 continue
-            line_vals, invoice_id = self._build_line_values(cr, uid, line, context=context)
-            lines.append(line_vals)
-            invoice_ids.append(invoice_id)
-
-        if not lines:
-            raise Exception('Norma57 file has no syncable confirmed invoice lines')
-
-        inv_obj.process_lines_with_discrepancies(
-            cr, uid, invoice_ids, lines, is_grouped=False, context=context)
-
-        total_amount = round(sum([line['amount'] for line in lines]), 2)
-
-        return {
-            'destination_journal_id': destination_journal_id,
-            'payment_method_line_id': payment_method_line_id,
-            'name': norma57_file.name or '',
-            'sdd_required_collection_date': norma57_file.header_presentation_date,
-            'amount': total_amount,
-            'lines': lines,
-        }
-
-    def check_special_restrictions(self, cr, uid, id, context=None):
-        if context is None:
-            context = {}
-        norma57_file = self.browse(cr, uid, id, context=context)
-        return any([line.state == 'confirmed' for line in norma57_file.lines])
+            if not sync_obj.sync_bank_statement_line(
+                    cr, uid, 'norma57.file.line', line.id,
+                    self._get_bank_statement_line_values(
+                        cr, uid, line, context=context), context=context):
+                result = False
+        return result
 
     def confirm(self, cursor, uid, ids, context=None):
         if context is None:
@@ -158,81 +101,11 @@ class Norma57File(osv.osv):
         if not isinstance(ids, (list, tuple)):
             ids = [ids]
 
-        with Sudo(uid=1, gid=0):
-            sync_obj = self.pool.get('odoo.sync')
-            for norma57_id in ids:
-                sync_obj.common_sync_model_create_update(
-                    cursor, uid, 'norma57.file', 'write', norma57_id, context=context)
+        for norma57_id in ids:
+            self.sync_bank_statement_lines(
+                cursor, uid, norma57_id, context=context)
 
         return res
-
-    @job(queue='sync_odoo', timeout=3600)
-    def update_pending_state(self, cursor, uid, openerp_id, context=None):
-        if context is None:
-            context = {}
-        self.update_pending_state_sync(cursor, uid, openerp_id, context=context)
-
-    def update_pending_state_sync(self, cr, uid, erp_id, context=None):
-        if context is None:
-            context = {}
-
-        sync_obj = self.pool.get('odoo.sync')
-        result = sync_obj.poll_payment_order_status_sync(
-            cr, uid, self._name, erp_id, context=context)
-        if not result:
-            return result
-
-        sync_ids = sync_obj.search(cr, uid, [
-            ('model.model', '=', self._name),
-            ('res_id', '=', erp_id),
-            ('sync_state', '=', 'synced'),
-        ], limit=1)
-        if sync_ids:
-            sync_obj.sync_bank_statement_line(
-                cr, uid, self._name, erp_id,
-                self._get_bank_statement_line_values(
-                    cr, uid, erp_id, sync_id=sync_ids[0], context=context),
-                context=context)
-        return result
-
-    def _get_synced_payment_order_amount(
-            self, cr, uid, sync_id, norma57_file, context=None):
-        sync_obj = self.pool.get('odoo.sync')
-        request_data = sync_obj.read(
-            cr, uid, sync_id, ['odoo_last_sync_request'], context=context)
-        try:
-            payload = json.loads(request_data.get('odoo_last_sync_request') or '{}')
-        except (TypeError, ValueError):
-            payload = {}
-        amount = payload.get('amount')
-        if amount:
-            return round(amount, 2)
-        return round(sum([
-            abs(line.amount) for line in norma57_file.lines
-            if line.state == 'confirmed'
-        ]), 2)
-
-    def _get_bank_statement_line_values(
-            self, cr, uid, erp_id, sync_id=False, context=None):
-        if context is None:
-            context = {}
-        norma57_file = self.browse(cr, uid, erp_id, context=context)
-        amount = self._get_synced_payment_order_amount(
-            cr, uid, sync_id, norma57_file, context=context) if sync_id else round(sum([
-                abs(line.amount) for line in norma57_file.lines
-                if line.state == 'confirmed'
-            ]), 2)
-        if not amount:
-            raise Exception('Norma57 file has no nonzero confirmed amount')
-        return {
-            'pnt_source_model': self._name,
-            'pnt_erp_id': erp_id,
-            'journal_id': self._get_destination_journal_odoo_id(
-                cr, uid, context=context),
-            'date': norma57_file.header_presentation_date,
-            'amount': amount,
-            'payment_ref': '[REMESA] {}'.format(norma57_file.name),
-        }
 
 
 Norma57File()

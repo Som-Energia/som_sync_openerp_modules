@@ -12,13 +12,13 @@ import logging
 import json
 
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
+BANK_STATEMENT_LINE_RETRY_MODELS = ('norma57.file', 'norma57.file.line')
 
 # Mapping of models entities to update erp_id in Odoo: key -> erp model, value -> odoo entity name
 MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
     'account.invoice': 'invoice',
     'payment.order': 'payment_orders',
-    'norma57.file': 'payment_orders',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -59,7 +59,6 @@ MAPPING_MODELS_POST = {
     'account.invoice': 'invoices',
     'account.move': 'entries',
     'payment.order': 'payment_orders',
-    'norma57.file': 'payment_orders',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
@@ -762,7 +761,8 @@ class OdooSync(osv.osv):
             return self.create(cursor, uid, {
                 'model': model_ids[0],
                 'res_id': erp_id,
-                'sync_state': 'pending' if model == 'account.move.line' else 'draft',
+                'sync_state': 'pending' if model in (
+                    'account.move.line', 'norma57.file.line') else 'draft',
             }, context=context)
 
     def prepare_bank_statement_line_marker(
@@ -813,20 +813,20 @@ class OdooSync(osv.osv):
                 vals['pnt_bank_statement_line_odoo_id'] = odoo_id
         except Exception as error:
             vals['pnt_bank_statement_line_last_result'] = str(error)
-            if model == 'norma57.file':
+            if model in BANK_STATEMENT_LINE_RETRY_MODELS:
                 vals['sync_state'] = 'pending'
             with Sudo(uid=1, gid=0):
                 self.write(cursor, uid, [sync_id], vals, context=context)
-            if model == 'norma57.file':
+            if model in BANK_STATEMENT_LINE_RETRY_MODELS:
                 return False
             raise
 
-        if not odoo_id and model == 'norma57.file':
+        if not odoo_id and model in BANK_STATEMENT_LINE_RETRY_MODELS:
             vals['sync_state'] = 'pending'
         with Sudo(uid=1, gid=0):
             self.write(cursor, uid, [sync_id], vals, context=context)
         if not odoo_id:
-            if model == 'norma57.file':
+            if model in BANK_STATEMENT_LINE_RETRY_MODELS:
                 return False
             raise Exception('Bank statement line synchronization failed: {}'.format(result))
         if model == 'account.move.line':
