@@ -12,6 +12,7 @@ from . import payment_line
 from . import payment_mode
 from . import payment_order
 from . import norma57_file
+from . import norma57_file_line
 from . import res_country
 from . import res_country_state
 from . import res_municipi
