@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-import pooler
-
 from oopgrade.oopgrade import load_data
 from tools import config
 
@@ -8,13 +6,6 @@ from tools import config
 def up(cursor, installed_version):
     if not installed_version or config.updating_all:
         return
-
-    for field_name in (
-            'pnt_bank_statement_line_odoo_id',
-            'pnt_bank_statement_line_last_result',
-            'pnt_bank_statement_line_last_request',
-            'pnt_bank_statement_line_last_endpoint'):
-        cursor.execute('ALTER TABLE odoo_sync DROP COLUMN IF EXISTS %s' % field_name)
 
     cursor.execute("""
         DELETE FROM odoo_sync_model_config
@@ -49,10 +40,6 @@ def up(cursor, installed_version):
         )
     """)
 
-    pool = pooler.get_pool(cursor.dbname)
-    pool.get('odoo.sync')._auto_init(
-        cursor, context={'module': 'som_sync_openerp'}
-    )
     load_data(
         cursor, 'som_sync_openerp', 'data/som_sync_openerp_data.xml',
         idref=None, mode='update')
