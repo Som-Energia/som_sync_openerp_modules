@@ -93,8 +93,8 @@ class Norma57File(osv.osv):
                 result = False
         return result
 
-    def check_special_restrictions(self, cr, uid, id, context=None):
-        return False
+    def sync_directly_to_odoo(self, cr, uid, id, context=None):
+        return self.sync_bank_statement_lines(cr, uid, id, context=context)
 
     def confirm(self, cursor, uid, ids, context=None):
         if context is None:

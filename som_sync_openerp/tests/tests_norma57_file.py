@@ -28,16 +28,20 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         with self.assertRaises(Exception):
             self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
 
-    def test_generic_synchronization_is_disabled_for_norma57_files(self):
+    @mock.patch('som_sync_openerp.models.odoo_sync.OdooSync.sync_bank_statement_line')
+    def test_generic_synchronization_delegates_to_norma57_lines(self, mock_sync):
         norma57_id = self._create_norma57_file()
         sync_obj = self.openerp.pool.get('odoo.sync')
 
-        values = sync_obj.get_model_vals_to_sync(
-            self.cursor, self.uid, 'norma57.file', norma57_id)
+        with mock.patch.object(
+                self.n57_obj, 'sync_directly_to_odoo', return_value=True) as mock_direct:
+            result = sync_obj.common_sync_model_create_update(
+                self.cursor, self.uid, 'norma57.file', 'sync', norma57_id)
 
-        self.assertEqual(values, {})
-        self.assertFalse(self.n57_obj.check_special_restrictions(
-            self.cursor, self.uid, norma57_id))
+        self.assertEqual(result, (True, None))
+        mock_direct.assert_called_once_with(
+            self.cursor, self.uid, norma57_id, context={})
+        mock_sync.assert_not_called()
 
     def test_get_line_invoice_erp_id_returns_invoice_from_giscedata_factura(self):
         line = mock.Mock()

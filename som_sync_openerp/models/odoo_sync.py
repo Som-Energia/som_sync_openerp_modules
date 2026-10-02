@@ -134,14 +134,23 @@ class OdooSync(osv.osv):
                 auto_sync = True  # force sync for on-demand
             if not (sync_enabled and auto_sync):
                 return None, None
+            model_obj = self.pool.get(model)
+            has_direct_sync = hasattr(model_obj, 'sync_directly_to_odoo')
             # check special restriction for some models
             has_special_restrictions = hasattr(
-                self.pool.get(model), 'check_special_restrictions')
+                model_obj, 'check_special_restrictions')
             result = (None, None)
             for _id in ids:
                 try:
+                    if has_direct_sync:
+                        result = (
+                            model_obj.sync_directly_to_odoo(
+                                cursor, uid, _id, context=context),
+                            None,
+                        )
+                        continue
                     if has_special_restrictions and not \
-                            self.pool.get(model).check_special_restrictions(
+                            model_obj.check_special_restrictions(
                                 cursor, uid, _id, context=context):
                         logger = logging.getLogger('openerp.odoo.sync')
                         logger.info(
@@ -498,6 +507,11 @@ class OdooSync(osv.osv):
         if not sync_enabled:
             return False, False
 
+        rp_obj = self.pool.get(model)
+        if hasattr(rp_obj, 'sync_directly_to_odoo'):
+            return rp_obj.sync_directly_to_odoo(
+                cursor, uid, openerp_id, context=context), openerp_id
+
         # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
         sync_obj = self.pool.get('odoo.sync')
@@ -521,7 +535,6 @@ class OdooSync(osv.osv):
                 return False
 
         erp_data = {}
-        rp_obj = self.pool.get(model)
         odoo_id, erp_id, odoo_metadata = False, False, False
 
         # Initialize sync status tracking
