@@ -28,7 +28,7 @@ def up(cursor, installed_version):
         AND name = 'Synchronize with Odoo'
     """)
     cursor.execute("""
-        DELETE FROM ir_actions_act_window
+        DELETE FROM ir_act_window
         WHERE id IN (
             SELECT res_id FROM ir_model_data
             WHERE module = 'som_sync_openerp'
