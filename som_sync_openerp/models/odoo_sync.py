@@ -812,6 +812,8 @@ class OdooSync(osv.osv):
         odoo_url_api, _ = self._get_conn_params(cursor, uid)
         endpoint = '{}/bank_statement_lines'.format(odoo_url_api.rstrip('/'))
         vals = {
+            'odoo_last_sync_request': self.format_response(data),
+            'odoo_last_sync_endpoint': endpoint,
             'pnt_bank_statement_line_last_request': self.format_response(data),
             'pnt_bank_statement_line_last_endpoint': endpoint,
         }
@@ -819,12 +821,15 @@ class OdooSync(osv.osv):
             odoo_id, result, endpoint = self.post_bank_statement_line(
                 cursor, uid, data, context=context)
             vals.update({
+                'odoo_last_update_result': self.format_response(result),
+                'odoo_last_sync_endpoint': endpoint,
                 'pnt_bank_statement_line_last_result': self.format_response(result),
                 'pnt_bank_statement_line_last_endpoint': endpoint,
             })
             if odoo_id:
                 vals['pnt_bank_statement_line_odoo_id'] = odoo_id
         except Exception as error:
+            vals['odoo_last_update_result'] = str(error)
             vals['pnt_bank_statement_line_last_result'] = str(error)
             if model in BANK_STATEMENT_LINE_RETRY_MODELS:
                 vals['sync_state'] = 'pending'

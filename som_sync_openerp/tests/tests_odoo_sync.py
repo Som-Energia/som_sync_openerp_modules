@@ -121,6 +121,8 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'norma57.file.line', 987654, {'amount': 10.0})
         marker = self.sync_obj.read(self.cursor, self.uid, sync_id, [
             'odoo_id', 'pnt_bank_statement_line_odoo_id',
+            'odoo_last_sync_request', 'odoo_last_update_result',
+            'odoo_last_sync_endpoint',
             'pnt_bank_statement_line_last_request',
             'pnt_bank_statement_line_last_result',
             'pnt_bank_statement_line_last_endpoint',
@@ -129,6 +131,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(result, 77)
         self.assertEqual(marker['odoo_id'], 55)
         self.assertEqual(marker['pnt_bank_statement_line_odoo_id'], 77)
+        self.assertIn('10.0', marker['odoo_last_sync_request'])
+        self.assertIn('success', marker['odoo_last_update_result'])
+        self.assertEqual(
+            marker['odoo_last_sync_endpoint'],
+            'http://odoo.test/api/v1/bank_statement_lines')
         self.assertIn('10.0', marker['pnt_bank_statement_line_last_request'])
         self.assertIn('success', marker['pnt_bank_statement_line_last_result'])
         self.assertEqual(
@@ -155,10 +162,12 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         result = self.sync_obj.sync_bank_statement_line(
             self.cursor, self.uid, 'norma57.file.line', 987656, {'amount': 10.0})
 
-        marker = self.sync_obj.read(
-            self.cursor, self.uid, sync_id, ['sync_state'])
+        marker = self.sync_obj.read(self.cursor, self.uid, sync_id, [
+            'sync_state', 'odoo_last_update_result',
+        ])
         self.assertFalse(result)
         self.assertEqual(marker['sync_state'], 'pending')
+        self.assertIn('success', marker['odoo_last_update_result'])
 
     @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
     @mock.patch.object(odoo_sync.OdooSync, 'post_bank_statement_line')
