@@ -11,6 +11,10 @@ class Norma57File(osv.osv):
     _name = 'norma57.file'
     _inherit = 'norma57.file'
 
+    MAPPING_FIELDS_TO_SYNC = {}
+    MAPPING_FK = {}
+    MAPPING_CONSTANTS = {}
+
     def _get_config_odoo_id(self, cr, uid, key, context=None):
         if context is None:
             context = {}
@@ -88,6 +92,9 @@ class Norma57File(osv.osv):
                         cr, uid, line, context=context), context=context):
                 result = False
         return result
+
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        return False
 
     def confirm(self, cursor, uid, ids, context=None):
         if context is None:

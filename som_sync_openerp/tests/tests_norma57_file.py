@@ -28,6 +28,17 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         with self.assertRaises(Exception):
             self.n57_obj._get_line_invoice_erp_id(self.cursor, self.uid, line)
 
+    def test_generic_synchronization_is_disabled_for_norma57_files(self):
+        norma57_id = self._create_norma57_file()
+        sync_obj = self.openerp.pool.get('odoo.sync')
+
+        values = sync_obj.get_model_vals_to_sync(
+            self.cursor, self.uid, 'norma57.file', norma57_id)
+
+        self.assertEqual(values, {})
+        self.assertFalse(self.n57_obj.check_special_restrictions(
+            self.cursor, self.uid, norma57_id))
+
     def test_get_line_invoice_erp_id_returns_invoice_from_giscedata_factura(self):
         line = mock.Mock()
         line.resource = 'giscedata.facturacio.factura,7'
