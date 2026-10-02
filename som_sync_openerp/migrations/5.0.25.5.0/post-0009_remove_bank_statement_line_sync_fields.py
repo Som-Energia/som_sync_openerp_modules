@@ -32,7 +32,10 @@ def up(cursor, installed_version):
         WHERE id IN (
             SELECT res_id FROM ir_model_data
             WHERE module = 'som_sync_openerp'
-            AND name = 'action_wizard_sync_odoo_from_norma57_file'
+            AND name IN (
+                'action_wizard_sync_odoo_from_norma57_file',
+                'get_synced_records_odoo_action_norma57_file'
+            )
         )
     """)
     cursor.execute("""
@@ -55,6 +58,9 @@ def up(cursor, installed_version):
         idref=None, mode='update')
     load_data(
         cursor, 'som_sync_openerp', 'views/odoo_sync_view.xml',
+        idref=None, mode='update')
+    load_data(
+        cursor, 'som_sync_openerp', 'wizard/wizard_sync_object_odoo_view.xml',
         idref=None, mode='update')
 
 
