@@ -850,7 +850,7 @@ class OdooSync(osv.osv):
             return self.create(cursor, uid, vals)
 
     def _build_update_vals(self, cursor, uid, id, odoo_id, str_now, context):
-        vals = {'odoo_id': odoo_id}
+        vals = {}
         update = False
 
         if context.get('update_last_sync'):
@@ -893,8 +893,9 @@ class OdooSync(osv.osv):
 
         # Case odoo_id change
         sync_record = self.browse(cursor, uid, id)
-        if sync_record.odoo_id != odoo_id:
+        if odoo_id and sync_record.odoo_id != odoo_id:
             vals.update({
+                'odoo_id': odoo_id,
                 'odoo_last_sync_at': str_now,
             })
             update = True

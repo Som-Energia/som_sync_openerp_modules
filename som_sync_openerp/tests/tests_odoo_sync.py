@@ -209,6 +209,25 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(vals, expected_vals)
         self.assertEqual(update, True)
 
+    def test__update_odoo_id__error_preserves_existing_odoo_id(self):
+        sync_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'odoo_partner_already_syncred'
+        )[1]
+        self.sync_obj.write(self.cursor, self.uid, sync_id, {'odoo_id': 1001})
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, sync_record.model.model, sync_record.res_id,
+            False, context={
+                'sync_state': 'error',
+                'odoo_last_update_result': 'Request failed',
+                'update_last_sync': True,
+            })
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(sync_record.odoo_id, 1001)
+        self.assertEqual(sync_record.sync_state, 'error')
+
     def test__build_update_vals__syncCountryStateError_withOk(self):
         sync_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'odoo_country_state_error'
