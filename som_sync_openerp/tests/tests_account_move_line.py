@@ -54,7 +54,7 @@ class TestAccountMoveLineBankStatement(testing.OOTestCaseWithCursor):
                 self.aml_obj, '_amounts_match_currency_precision', return_value=True),
             mock.patch.object(self.am_obj, 'browse', return_value=counterpart_move),
             mock.patch.object(
-                self.sync_obj, 'get_bank_statement_line_odoo_id',
+                self.sync_obj, 'get_odoo_id_by_erp_id',
                 return_value=77 if already_synced else False),
         ]
         return patches
@@ -171,7 +171,7 @@ class TestAccountMoveLineBankStatement(testing.OOTestCaseWithCursor):
                             with mock.patch.object(
                                     self.sync_obj, 'get_partner_odoo_id_by_erp_id',
                                     return_value=90):
-                                values = self.aml_obj._get_manual_bank_statement_line_values(
+                                values = self.aml_obj.get_sync_values(
                                     self.cursor, self.uid, 100)
 
         self.assertEqual(values, {
@@ -191,43 +191,35 @@ class TestAccountMoveLineBankStatement(testing.OOTestCaseWithCursor):
                 return_value=[100, 100]):
             with mock.patch.object(self.aml_obj, 'browse', return_value=liquidity):
                 with mock.patch.object(
-                        self.sync_obj, 'prepare_bank_statement_line_marker'):
+                        self.sync_obj, 'get_odoo_id_by_erp_id', return_value=60):
                     with mock.patch.object(
-                            self.sync_obj, 'get_odoo_id_by_erp_id', return_value=60):
-                        with mock.patch.object(
-                                self.aml_obj,
-                                'sync_manual_bank_statement_line') as mock_sync:
-                            self.aml_obj._enqueue_reconciled_bank_statement_lines(
-                                self.cursor, self.uid, [1, 2])
+                            self.aml_obj,
+                            'sync_manual_bank_statement_line') as mock_sync:
+                        self.aml_obj._enqueue_reconciled_bank_statement_lines(
+                            self.cursor, self.uid, [1, 2])
 
         mock_sync.assert_called_once_with(
             self.cursor, self.uid, 100, context={})
 
-    def test_enqueue_persists_pending_marker_without_journal_mapping(self):
+    def test_enqueue_skips_manual_sync_without_journal_mapping(self):
         liquidity = mock.Mock(journal_id=mock.Mock(id=6))
         with mock.patch.object(
                 self.aml_obj, '_classify_reconciled_bank_statement_lines',
                 return_value=[100]):
             with mock.patch.object(self.aml_obj, 'browse', return_value=liquidity):
                 with mock.patch.object(
-                        self.sync_obj,
-                        'prepare_bank_statement_line_marker') as mock_prepare:
+                        self.sync_obj, 'get_odoo_id_by_erp_id', return_value=False):
                     with mock.patch.object(
-                            self.sync_obj, 'get_odoo_id_by_erp_id',
-                            return_value=False):
-                        with mock.patch.object(
-                                self.aml_obj,
-                                'sync_manual_bank_statement_line') as mock_sync:
-                            self.aml_obj._enqueue_reconciled_bank_statement_lines(
-                                self.cursor, self.uid, [1, 2])
+                            self.aml_obj,
+                            'sync_manual_bank_statement_line') as mock_sync:
+                        self.aml_obj._enqueue_reconciled_bank_statement_lines(
+                            self.cursor, self.uid, [1, 2])
 
-        mock_prepare.assert_called_once_with(
-            self.cursor, self.uid, 'account.move.line', 100, context={})
         mock_sync.assert_not_called()
 
     def test_manual_sync_keeps_marker_pending_when_mapping_is_missing(self):
         with mock.patch.object(
-                self.aml_obj, '_get_manual_bank_statement_line_values',
+                self.aml_obj, 'get_sync_values',
                 side_effect=ForeingKeyNotAvailable('account.journal,6')):
             result = self.aml_obj._sync_manual_bank_statement_line(
                 self.cursor, self.uid, 100)

@@ -24,6 +24,9 @@ class AccountMoveLine(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    def get_mapping_model_post(self, cr, uid, id, context=None):
+        return 'bank_statement_lines'
+
     def hook_last_modifications(self, cr, uid, data, context=None):
         if context is None:
             context = {}
@@ -150,13 +153,12 @@ class AccountMoveLine(osv.osv):
                 cr, uid, invoice, invoice_lines, liquidity_line):
             return []
 
-        sync_obj = self.pool.get('odoo.sync')
-        if sync_obj.get_bank_statement_line_odoo_id(
+        if self.pool.get('odoo.sync').get_odoo_id_by_erp_id(
                 cr, uid, self._name, liquidity_line.id):
             return []
         return [liquidity_line.id]
 
-    def _get_manual_bank_statement_line_values(
+    def get_sync_values(
             self, cr, uid, liquidity_line_id, context=None):
         if context is None:
             context = {}
@@ -208,27 +210,18 @@ class AccountMoveLine(osv.osv):
         if context is None:
             context = {}
         try:
-            values = self._get_manual_bank_statement_line_values(
+            values = self.get_sync_values(
                 cr, uid, liquidity_line_id, context=context)
         except ForeingKeyNotAvailable:
             return False
         if not values:
             return False
-        return self.pool.get('odoo.sync').sync_bank_statement_line(
-            cr, uid, self._name, liquidity_line_id, values, context=context)
+        odoo_id, _ = self.pool.get('odoo.sync').common_sync_model_create_update(
+            cr, uid, self._name, 'sync', liquidity_line_id, context=context)
+        return odoo_id
 
     @job(queue='sync_odoo', timeout=3600, on_commit=True)
     def sync_manual_bank_statement_line(
-            self, cr, uid, liquidity_line_id, context=None):
-        return self._sync_manual_bank_statement_line(
-            cr, uid, liquidity_line_id, context=context)
-
-    @job(queue='sync_odoo', timeout=3600)
-    def update_pending_state(self, cr, uid, liquidity_line_id, context=None):
-        return self._sync_manual_bank_statement_line(
-            cr, uid, liquidity_line_id, context=context)
-
-    def update_pending_state_sync(
             self, cr, uid, liquidity_line_id, context=None):
         return self._sync_manual_bank_statement_line(
             cr, uid, liquidity_line_id, context=context)
@@ -241,8 +234,6 @@ class AccountMoveLine(osv.osv):
             cr, uid, ids, context=context)
         sync_obj = self.pool.get('odoo.sync')
         for liquidity_id in set(liquidity_ids):
-            sync_obj.prepare_bank_statement_line_marker(
-                cr, uid, self._name, liquidity_id, context=context)
             liquidity_line = self.browse(
                 cr, uid, liquidity_id, context=context)
             if not sync_obj.get_odoo_id_by_erp_id(
