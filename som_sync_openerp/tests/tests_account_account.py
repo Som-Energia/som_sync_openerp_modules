@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from destral import testing
+from osv import osv
 import mock
 
 from ..models import odoo_sync
@@ -81,6 +82,41 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertIn('already linked', context['odoo_last_update_result'])
         self.assertFalse(mock_update.call_args[0][4])
 
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    @mock.patch.object(odoo_sync.OdooSync, 'get_model_vals_to_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'exists_in_odoo')
+    @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_syncronize_sync__rejects_account_without_odoo_account_code(
+            self, mock_enabled, mock_exists, mock_exists_erp, mock_vals,
+            mock_update):
+        account_id = self._account_id()
+        mock_enabled.return_value = (True, False, False)
+
+        result = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id
+        )
+
+        self.assertEqual(result, (False, False))
+        mock_exists.assert_not_called()
+        mock_vals.assert_not_called()
+        context = mock_update.call_args[1]['context']
+        self.assertEqual(context['sync_state'], 'error')
+        self.assertIn('no Odoo account code', context['odoo_last_update_result'])
+
+    def test_create__requires_odoo_account_code(self):
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+
+        self.assertRaises(osv.except_osv, self.account_obj.create,
+                          self.cursor, self.uid, {
+                              'name': 'Account without Odoo code',
+                              'code': '700000000001',
+                              'type': 'other',
+                              'user_type': account_type_id,
+                          })
+
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):
         before_count = len(self.account_obj.search(
@@ -88,7 +124,7 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         ))
 
         ensured_id = self.account_obj.ensure_demo_account_iva(
-            self.cursor, self.uid, context={}
+            self.cursor, self.uid, odoo_account_code='000475600', context={}
         )
 
         account_ids = self.account_obj.search(
@@ -123,12 +159,13 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         )['res_id']
         account = self.account_obj.read(
             self.cursor, self.uid, ensured_id,
-            ['name', 'code', 'company_id', 'currency_mode', 'type']
+            ['name', 'code', 'company_id', 'currency_mode', 'type', 'odoo_account_code']
         )
 
         self.assertEqual(xml_account_id, ensured_id)
         self.assertEqual(account['name'], 'Compte IVA per linia IESE')
         self.assertEqual(account['code'], '475600')
+        self.assertEqual(account['odoo_account_code'], '000475600')
         self.assertEqual(account['company_id'][0], 1)
         self.assertEqual(account['currency_mode'], 'current')
         self.assertEqual(account['type'], 'other')

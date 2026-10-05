@@ -6,7 +6,8 @@ class AccountAccount(osv.osv):
     _name = 'account.account'
     _inherit = 'account.account'
 
-    def ensure_demo_account_iva(self, cr, uid, context=None):
+    def ensure_demo_account_iva(
+            self, cr, uid, odoo_account_code=False, context=None):
         if context is None:
             context = {}
 
@@ -22,6 +23,8 @@ class AccountAccount(osv.osv):
             'currency_mode': 'current',
             'type': 'other',
         }
+        if odoo_account_code:
+            values['odoo_account_code'] = odoo_account_code
         xml_account_id = False
         try:
             xml_account_id = imd_obj.get_object_reference(

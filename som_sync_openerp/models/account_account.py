@@ -42,6 +42,11 @@ class AccountAccount(osv.osv):
     def create(self, cr, uid, vals, context=None):
         if context is None:
             context = {}
+        if not vals.get('odoo_account_code'):
+            raise osv.except_osv(
+                'Missing Odoo account code',
+                'An Odoo account code is required to create an account.'
+            )
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
         with Sudo(uid=1, gid=0):

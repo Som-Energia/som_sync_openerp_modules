@@ -7,7 +7,7 @@ from oorq.decorators import job
 import requests
 from datetime import datetime
 from service.security import Sudo
-from .odoo_exceptions import AccountCodeAlreadyLinkedException, CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
+from .odoo_exceptions import AccountCodeAlreadyLinkedException, AccountCodeNotConfiguredException, CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
 import json
 
@@ -562,10 +562,13 @@ class OdooSync(osv.osv):
                     # Check if the record already exists in Odoo
                     endpoint_suffix = rp_obj.get_endpoint_suffix(
                         cursor, uid, openerp_id, context=context)
+                    if model == 'account.account' and not endpoint_suffix:
+                        raise AccountCodeNotConfiguredException(openerp_id)
                     odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
                         cursor, uid, model, endpoint_suffix, openerp_id, context=context)
                     if model == 'account.account' and erp_id and erp_id != openerp_id:
                         odoo_id = False
+                        erp_id = False
                         raise AccountCodeAlreadyLinkedException(
                             endpoint_suffix, erp_id, openerp_id)
 
@@ -626,7 +629,8 @@ class OdooSync(osv.osv):
                     rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
-            AccountCodeAlreadyLinkedException, CreationNotSupportedException,
+            AccountCodeAlreadyLinkedException, AccountCodeNotConfiguredException,
+            CreationNotSupportedException,
             UpdateNotSupportedException, ForeingKeyNotAvailable
         ) as e:
             sync_vals.update({

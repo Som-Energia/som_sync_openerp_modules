@@ -72,3 +72,17 @@ class AccountCodeAlreadyLinkedException(Exception):
 
     def __str__(self):
         return self.__repr__()
+
+
+class AccountCodeNotConfiguredException(Exception):
+    """An ERP account cannot be synchronized without its Odoo code."""
+
+    def __init__(self, erp_id):
+        super(AccountCodeNotConfiguredException, self).__init__(erp_id)
+        self.msg = 'ERP account {} has no Odoo account code configured.'.format(erp_id)
+
+    def __repr__(self):
+        return self.msg
+
+    def __str__(self):
+        return self.__repr__()
