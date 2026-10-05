@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from destral import testing
+from osv.orm import FieldsValidationException
 import mock
 
 from ..models import odoo_sync
@@ -77,10 +78,10 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
     def test_sync_with_twelve_digit_code_without_mapping__is_not_started(
             self, mock_enabled, mock_syncronize_sync):
         account_id = self._account_id()
-        self.account_obj.write(self.cursor, self.uid, [account_id], {
-            'code': '700000000001',
-            'odoo_account_code': False,
-        })
+        self.cursor.execute(
+            'UPDATE account_account SET code = %s, odoo_account_code = NULL WHERE id = %s',
+            ('700000000001', account_id),
+        )
         mock_enabled.return_value = (True, False, False)
 
         result = self.sync_obj.common_sync_model_create_update(
@@ -89,6 +90,28 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
         self.assertEqual(result, (None, None))
         mock_syncronize_sync.assert_not_called()
+
+    def test_create_with_twelve_digit_code_without_mapping__is_rejected(self):
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+
+        self.assertRaises(FieldsValidationException, self.account_obj.create,
+                          self.cursor, self.uid, {
+                              'name': 'Account without Odoo code',
+                              'code': '700000000001',
+                              'type': 'other',
+                              'user_type': account_type_id,
+                          })
+
+    def test_write_with_twelve_digit_code_without_mapping__is_rejected(self):
+        account_id = self._account_id()
+
+        self.assertRaises(FieldsValidationException, self.account_obj.write,
+                          self.cursor, self.uid, [account_id], {
+                              'code': '700000000001',
+                              'odoo_account_code': False,
+                          })
 
     def test_check_special_restrictions__allows_nine_digit_account_without_mapping(self):
         account_id = self._account_id()

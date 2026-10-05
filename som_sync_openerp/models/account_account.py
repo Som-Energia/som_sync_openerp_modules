@@ -32,6 +32,20 @@ class AccountAccount(osv.osv):
         ),
     ]
 
+    def _check_odoo_account_code(self, cr, uid, ids, context=None):
+        for account in self.browse(cr, uid, ids, context=context):
+            if len(account.code or '') == 12 and not account.odoo_account_code:
+                return False
+        return True
+
+    _constraints = [
+        (
+            _check_odoo_account_code,
+            'Accounts with a 12-digit code require an Odoo account code.',
+            ['code', 'odoo_account_code'],
+        ),
+    ]
+
     def get_endpoint_suffix(self, cr, uid, id, context=None):
         if context is None:
             context = {}
