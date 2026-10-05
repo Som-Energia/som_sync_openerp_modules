@@ -39,6 +39,10 @@ class AccountAccount(osv.osv):
         account = self.browse(cr, uid, id, context=context)
         return account.odoo_account_code or False
 
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        account = self.browse(cr, uid, id, context=context)
+        return bool(account.odoo_account_code)
+
     def create(self, cr, uid, vals, context=None):
         if context is None:
             context = {}

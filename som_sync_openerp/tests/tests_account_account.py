@@ -55,54 +55,31 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
         self.assertFalse(suffix)
 
-    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
-    @mock.patch.object(odoo_sync.OdooSync, 'get_model_vals_to_sync')
-    @mock.patch.object(odoo_sync.OdooSync, 'exists_in_odoo')
-    @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
+    @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
     @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
-    def test_syncronize_sync__rejects_odoo_account_linked_to_another_erp_account(
-            self, mock_enabled, mock_check_erp_record_exist,
-            mock_exists_in_odoo, mock_get_model_vals_to_sync, mock_update):
+    def test_sync_without_odoo_account_code__is_not_started(
+            self, mock_enabled, mock_syncronize_sync):
+        account_id = self._account_id()
+        mock_enabled.return_value = (True, False, False)
+
+        result = self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.account', 'sync', account_id
+        )
+
+        self.assertEqual(result, (None, None))
+        mock_syncronize_sync.assert_not_called()
+
+    def test_check_special_restrictions__allows_account_with_odoo_account_code(self):
         account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
             'odoo_account_code': '700000001',
         })
-        mock_enabled.return_value = (True, False, False)
-        mock_exists_in_odoo.return_value = (123, account_id + 1, {})
-        mock_get_model_vals_to_sync.return_value = {}
 
-        result = self.sync_obj.syncronize_sync(
-            self.cursor, self.uid, 'account.account', 'sync', account_id
+        result = self.account_obj.check_special_restrictions(
+            self.cursor, self.uid, account_id
         )
 
-        self.assertEqual(result, (False, False))
-        mock_get_model_vals_to_sync.assert_not_called()
-        context = mock_update.call_args[1]['context']
-        self.assertEqual(context['sync_state'], 'error')
-        self.assertIn('already linked', context['odoo_last_update_result'])
-        self.assertFalse(mock_update.call_args[0][4])
-
-    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
-    @mock.patch.object(odoo_sync.OdooSync, 'get_model_vals_to_sync')
-    @mock.patch.object(odoo_sync.OdooSync, 'exists_in_odoo')
-    @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
-    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
-    def test_syncronize_sync__rejects_account_without_odoo_account_code(
-            self, mock_enabled, mock_check_erp_record_exist,
-            mock_exists_in_odoo, mock_get_model_vals_to_sync, mock_update):
-        account_id = self._account_id()
-        mock_enabled.return_value = (True, False, False)
-
-        result = self.sync_obj.syncronize_sync(
-            self.cursor, self.uid, 'account.account', 'sync', account_id
-        )
-
-        self.assertEqual(result, (False, False))
-        mock_exists_in_odoo.assert_not_called()
-        mock_get_model_vals_to_sync.assert_not_called()
-        context = mock_update.call_args[1]['context']
-        self.assertEqual(context['sync_state'], 'error')
-        self.assertIn('no Odoo account code', context['odoo_last_update_result'])
+        self.assertTrue(result)
 
     def test_create__requires_odoo_account_code(self):
         account_type_id = self.imd_obj.get_object_reference(

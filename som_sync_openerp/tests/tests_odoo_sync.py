@@ -993,9 +993,6 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             mock_exists_in_odoo, mock_get_model_vals_to_sync):
         account_id = self.aa_obj.search(
             self.cursor, self.uid, [('code', 'like', '4300%0')])[0]
-        self.aa_obj.write(self.cursor, self.uid, [account_id], {
-            'odoo_account_code': '4300TEST',
-        })
         mock_sync_model_enabled_amplified.return_value = (True, True, False)
         mock_get_odoo_id_by_erp_id.return_value = 555
 
