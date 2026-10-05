@@ -146,7 +146,7 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.account_obj.unlink(self.cursor, self.uid, [account_id])
 
         ensured_id = self.account_obj.ensure_demo_account_iva(
-            self.cursor, self.uid, context={}
+            self.cursor, self.uid, odoo_account_code='000475600', context={}
         )
         xml_account_id = self.imd_obj.read(
             self.cursor, self.uid,
