@@ -98,13 +98,8 @@
         </record>
         <record id="odoo_sync_model_config_norma57_file_line" model="odoo.sync.model.config">
             <field name="model_id" search="[('model', '=', 'norma57.file.line')]"/>
-            <field name="auto_sync">False</field>
-            <field name="async_enabled">False</field>
-        </record>
-        <record id="odoo_sync_model_config_account_move_line" model="odoo.sync.model.config">
-            <field name="model_id" search="[('model', '=', 'account.move.line')]"/>
-            <field name="auto_sync">False</field>
-            <field name="async_enabled">False</field>
+            <field name="auto_sync">True</field>
+            <field name="async_enabled">True</field>
         </record>
         <record id="odoo_sync_invoice_amount_tolerance" model="res.config">
             <field name="name">odoo_sync_invoice_amount_tolerance</field>

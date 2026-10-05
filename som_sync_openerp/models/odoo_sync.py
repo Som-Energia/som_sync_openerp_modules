@@ -216,13 +216,10 @@ class OdooSync(osv.osv):
             return rp_obj.get_related_values(cursor, uid, id, context=context)
         return {}
 
-    def get_model_vals_to_sync(
-            self, cursor, uid, model, id, context=None, use_sync_values=True):
+    def get_model_vals_to_sync(self, cursor, uid, model, id, context=None):
         if context is None:
             context = {}
         rp_obj = self.pool.get(model)
-        if use_sync_values and hasattr(rp_obj, 'get_sync_values'):
-            return rp_obj.get_sync_values(cursor, uid, id, context=context)
 
         result_data = {}
 

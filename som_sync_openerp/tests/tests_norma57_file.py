@@ -4,13 +4,13 @@ from __future__ import absolute_import
 import mock
 
 from destral import testing
+from ..models import odoo_sync
 
 
 class TestNorma57File(testing.OOTestCaseWithCursor):
 
     def setUp(self):
         self.conf_obj = self.openerp.pool.get('res.config')
-        self.n57_obj = self.openerp.pool.get('norma57.file')
         self.n57_line_obj = self.openerp.pool.get('norma57.file.line')
         self.ai_obj = self.openerp.pool.get('account.invoice')
         super(TestNorma57File, self).setUp()
@@ -46,3 +46,31 @@ class TestNorma57File(testing.OOTestCaseWithCursor):
         with mock.patch.object(self.n57_line_obj, 'browse', return_value=line):
             self.assertFalse(self.n57_line_obj.check_special_restrictions(
                 self.cursor, self.uid, 81))
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    @mock.patch('som_sync_openerp.models.norma57_file_line.osv.osv.write')
+    def test_confirming_line_triggers_automatic_sync(
+            self, mock_write, mock_sync):
+        mock_write.return_value = True
+        with mock.patch.object(self.n57_line_obj, 'read', return_value=[{
+                'id': 81,
+                'state': 'draft',
+        }]):
+            self.n57_line_obj.write(
+                self.cursor, self.uid, [81], {'state': 'confirmed'})
+
+        mock_sync.assert_called_once_with(
+            self.cursor, self.uid, 'norma57.file.line', 'write', [81], context={})
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    @mock.patch('som_sync_openerp.models.norma57_file_line.osv.osv.write')
+    def test_reconfirming_line_does_not_trigger_sync(self, mock_write, mock_sync):
+        mock_write.return_value = True
+        with mock.patch.object(self.n57_line_obj, 'read', return_value=[{
+                'id': 81,
+                'state': 'confirmed',
+        }]):
+            self.n57_line_obj.write(
+                self.cursor, self.uid, [81], {'state': 'confirmed'})
+
+        mock_sync.assert_not_called()

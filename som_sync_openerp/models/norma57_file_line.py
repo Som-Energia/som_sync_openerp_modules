@@ -2,6 +2,7 @@
 import logging
 
 from osv import osv
+from service.security import Sudo
 
 
 logger = logging.getLogger('openerp.odoo.sync')
@@ -18,6 +19,29 @@ class Norma57FileLine(osv.osv):
     MAPPING_CONSTANTS = {
         'pnt_source_model': 'norma57.file.line',
     }
+
+    def write(self, cr, uid, ids, vals, context=None):
+        if context is None:
+            context = {}
+        if not isinstance(ids, list):
+            ids = [ids]
+
+        confirmed_ids = []
+        if vals.get('state') == 'confirmed':
+            lines = self.read(cr, uid, ids, ['state'], context=context)
+            confirmed_ids = [
+                line['id'] for line in lines if line['state'] != 'confirmed'
+            ]
+
+        result = super(Norma57FileLine, self).write(
+            cr, uid, ids, vals, context=context)
+
+        if confirmed_ids:
+            with Sudo(uid=1, gid=0):
+                self.pool.get('odoo.sync').common_sync_model_create_update(
+                    cr, uid, self._name, 'write', confirmed_ids, context=context)
+
+        return result
 
     def _get_destination_journal_odoo_id(self, cr, uid, context=None):
         if context is None:

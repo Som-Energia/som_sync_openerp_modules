@@ -30,8 +30,7 @@ class AccountMove(osv.osv):
         sync_obj = self.pool.get('odoo.sync')
         for line in account_move.line_id:
             aml_vals = sync_obj.get_model_vals_to_sync(
-                cr, uid, 'account.move.line', line.id, context=context,
-                use_sync_values=False)
+                cr, uid, 'account.move.line', line.id, context=context)
             if aml_vals['debit'] == 0:
                 # remove the item from the dictionary
                 aml_vals.pop('debit')
