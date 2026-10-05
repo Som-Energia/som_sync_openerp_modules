@@ -61,22 +61,22 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
     @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
     @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
     def test_syncronize_sync__rejects_odoo_account_linked_to_another_erp_account(
-            self, mock_enabled, mock_exists, mock_exists_erp, mock_vals,
-            mock_update):
+            self, mock_enabled, mock_check_erp_record_exist,
+            mock_exists_in_odoo, mock_get_model_vals_to_sync, mock_update):
         account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
             'odoo_account_code': '700000001',
         })
         mock_enabled.return_value = (True, False, False)
-        mock_exists.return_value = (123, account_id + 1, {})
-        mock_vals.return_value = {}
+        mock_exists_in_odoo.return_value = (123, account_id + 1, {})
+        mock_get_model_vals_to_sync.return_value = {}
 
         result = self.sync_obj.syncronize_sync(
             self.cursor, self.uid, 'account.account', 'sync', account_id
         )
 
         self.assertEqual(result, (False, False))
-        mock_vals.assert_not_called()
+        mock_get_model_vals_to_sync.assert_not_called()
         context = mock_update.call_args[1]['context']
         self.assertEqual(context['sync_state'], 'error')
         self.assertIn('already linked', context['odoo_last_update_result'])
@@ -88,8 +88,8 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
     @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
     @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
     def test_syncronize_sync__rejects_account_without_odoo_account_code(
-            self, mock_enabled, mock_exists, mock_exists_erp, mock_vals,
-            mock_update):
+            self, mock_enabled, mock_check_erp_record_exist,
+            mock_exists_in_odoo, mock_get_model_vals_to_sync, mock_update):
         account_id = self._account_id()
         mock_enabled.return_value = (True, False, False)
 
@@ -98,8 +98,8 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         )
 
         self.assertEqual(result, (False, False))
-        mock_exists.assert_not_called()
-        mock_vals.assert_not_called()
+        mock_exists_in_odoo.assert_not_called()
+        mock_get_model_vals_to_sync.assert_not_called()
         context = mock_update.call_args[1]['context']
         self.assertEqual(context['sync_state'], 'error')
         self.assertIn('no Odoo account code', context['odoo_last_update_result'])
