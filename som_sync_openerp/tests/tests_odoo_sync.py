@@ -26,6 +26,44 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         with self.assertRaises(CreationNotSupportedException):
             self.sync_obj.create_odoo_record(self.cursor, self.uid, 'res.municipi', {})
 
+    def test_norma57_file_line_posts_bank_statement_lines(self):
+        self.assertEqual(
+            odoo_sync.MAPPING_MODELS_POST['norma57.file.line'],
+            'bank_statement_lines')
+
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    def test_create_odoo_record_accepts_idempotent_success(
+            self, mock_get_conn_params, mock_post):
+        mock_get_conn_params.return_value = ('http://odoo.test/api/v1/', 'key')
+        for status_code in (200, 201):
+            response = mock.Mock()
+            response.status_code = status_code
+            response.text = '{"success": true}'
+            response.json.return_value = {
+                'success': True,
+                'data': {'odoo_id': 42},
+            }
+            mock_post.return_value = response
+
+            result = self.sync_obj.create_odoo_record(
+                self.cursor, self.uid, 'norma57.file.line', {
+                    'pnt_erp_id': 81,
+                })
+
+            self.assertEqual(
+                result, (42, response.text,
+                         'http://odoo.test/api/v1/bank_statement_lines'))
+            mock_post.assert_called_with(
+                'http://odoo.test/api/v1/bank_statement_lines',
+                json={'pnt_erp_id': 81},
+                headers={
+                    'X-API-Key': 'key',
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                timeout=30)
+
     def test_mapping_models_entities_separates_partner_addresses(self):
         self.assertEqual(odoo_sync.MAPPING_MODELS_ENTITIES['res.partner'], 'partner')
         self.assertEqual(
@@ -170,6 +208,25 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         }
         self.assertEqual(vals, expected_vals)
         self.assertEqual(update, True)
+
+    def test__update_odoo_id__error_preserves_existing_odoo_id(self):
+        sync_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'odoo_partner_already_syncred'
+        )[1]
+        self.sync_obj.write(self.cursor, self.uid, sync_id, {'odoo_id': 1001})
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, sync_record.model.model, sync_record.res_id,
+            False, context={
+                'sync_state': 'error',
+                'odoo_last_update_result': 'Request failed',
+                'update_last_sync': True,
+            })
+
+        sync_record = self.sync_obj.browse(self.cursor, self.uid, sync_id)
+        self.assertEqual(sync_record.odoo_id, 1001)
+        self.assertEqual(sync_record.sync_state, 'error')
 
     def test__build_update_vals__syncCountryStateError_withOk(self):
         sync_id = self.imd_obj.get_object_reference(
@@ -1165,6 +1222,33 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         mock_common_update_pending_state.assert_called_once_with(
             self.cursor, self.uid, sync_id, context={'update_pending_state_sync': True}
         )
+
+    @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    def test__syncronize_sync__pending_without_handler_retries_generic_sync(
+            self, mock_sync_model_enabled_amplified, mock_get_model_vals_to_sync,
+            mock_create_odoo_record, mock_update_odoo_id):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'norma57.file.line')], limit=1
+        )[0]
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': 987655,
+            'sync_state': 'pending',
+        })
+        mock_sync_model_enabled_amplified.return_value = (True, True, False)
+        mock_get_model_vals_to_sync.return_value = {'pnt_erp_id': 987655}
+        mock_create_odoo_record.return_value = (4322, '', 'http://example.com/api')
+
+        result = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'norma57.file.line', 'sync', 987655, context={}
+        )
+
+        self.assertEqual(result, (4322, 987655))
+        mock_create_odoo_record.assert_called_once()
+        mock_update_odoo_id.assert_called_once()
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_update_pending_state")
