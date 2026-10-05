@@ -2,181 +2,84 @@
 from destral import testing
 import mock
 
-from ..models import account_account
 from ..models import odoo_sync
 
 
 class TestAccountAccount(testing.OOTestCaseWithCursor):
 
     def setUp(self):
-        self.account_obj = self.openerp.pool.get("account.account")
-        self.conf_obj = self.openerp.pool.get("res.config")
-        self.sync_obj = self.openerp.pool.get("odoo.sync")
-        self.imd_obj = self.openerp.pool.get("ir.model.data")
+        self.account_obj = self.openerp.pool.get('account.account')
+        self.sync_obj = self.openerp.pool.get('odoo.sync')
+        self.imd_obj = self.openerp.pool.get('ir.model.data')
         super(TestAccountAccount, self).setUp()
 
-    def test_get_endpoint_suffix(self):
-        account_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "account", "account_unpaid"
+    def _account_id(self):
+        return self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'account', 'account_unpaid'
         )[1]
 
-        suffix = self.account_obj.get_endpoint_suffix(self.cursor, self.uid, account_id)
-
-        self.assertEqual(suffix, '412345')
-
-    def test__normalize_account_code_for_odoo__returns_original_when_config_empty(self):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', ''
-        )
-
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700000000103'
-        )
-
-        self.assertEqual(normalized, '700000000103')
-
-    def test__normalize_account_code_for_odoo__reduces_middle_zeroes(self):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
-        )
-
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700000000103'
-        )
-
-        self.assertEqual(normalized, '700000103')
-
-    def test__normalize_account_code_for_odoo__uses_configured_target_length(self):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '8'
-        )
-
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700000000103'
-        )
-
-        self.assertEqual(normalized, '70000103')
-
-    @mock.patch.object(account_account.logger, 'warning')
-    def test__normalize_account_code_for_odoo__warns_when_not_reducible(
-            self, mock_warning):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
-        )
-
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700123456789'
-        )
-
-        self.assertEqual(normalized, '700123456789')
-        mock_warning.assert_called_once_with(
-            'Cannot normalize account code %s to target length %s '
-            'without removing non-zero middle digits',
-            '700123456789', 9,
-        )
-
-    def test__get_endpoint_suffix__returns_normalized_code_when_enabled(self):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
-        )
-        account_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "account", "account_unpaid"
-        )[1]
+    def test_get_endpoint_suffix__uses_explicit_odoo_account_code(self):
+        account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
-            'code': '700000000103',
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
         })
 
         suffix = self.account_obj.get_endpoint_suffix(
             self.cursor, self.uid, account_id
         )
 
-        self.assertEqual(suffix, '700000103')
+        self.assertEqual(suffix, '700000001')
 
-    def test__get_model_vals_to_sync__normalizes_code_when_enabled(self):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
-        )
-        account_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, "account", "account_unpaid"
-        )[1]
+    def test_get_model_vals_to_sync__uses_explicit_odoo_account_code(self):
+        account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
-            'code': '700000000103',
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
         })
 
         vals = self.sync_obj.get_model_vals_to_sync(
             self.cursor, self.uid, 'account.account', account_id
         )
 
-        self.assertEqual(vals['code'], '700000103')
+        self.assertEqual(vals['code'], '700000001')
+        self.assertNotIn('odoo_account_code', vals)
 
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    @mock.patch.object(account_account.logger, 'warning')
-    def test__normalize_account_code_for_odoo__keeps_original_when_normalized_code_exists(
-            self, mock_warning, mock_sync):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
+    def test_get_endpoint_suffix__returns_false_without_mapping(self):
+        account_id = self._account_id()
+
+        suffix = self.account_obj.get_endpoint_suffix(
+            self.cursor, self.uid, account_id
         )
-        account_type_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
-        )[1]
-        source_id = self.account_obj.create(self.cursor, self.uid, {
-            'name': 'Long ERP account',
-            'code': '700000000103',
-            'type': 'other',
-            'user_type': account_type_id,
+
+        self.assertFalse(suffix)
+
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    @mock.patch.object(odoo_sync.OdooSync, 'get_model_vals_to_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'exists_in_odoo')
+    @mock.patch.object(odoo_sync.OdooSync, 'check_erp_record_exist')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_syncronize_sync__rejects_odoo_account_linked_to_another_erp_account(
+            self, mock_enabled, mock_exists, mock_exists_erp, mock_vals,
+            mock_update):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'odoo_account_code': '700000001',
         })
-        self.account_obj.create(self.cursor, self.uid, {
-            'name': 'Existing normalized account',
-            'code': '700000103',
-            'type': 'other',
-            'user_type': account_type_id,
-        })
+        mock_enabled.return_value = (True, False, False)
+        mock_exists.return_value = (123, account_id + 1, {})
+        mock_vals.return_value = {}
 
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700000000103', account_id=source_id
+        result = self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id
         )
 
-        self.assertEqual(normalized, '700000000103')
-        mock_warning.assert_called_once_with(
-            'Cannot normalize account code %s to %s because account %s already uses that code',
-            '700000000103', '700000103', mock.ANY,
-        )
-
-    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
-    def test__normalize_account_code_for_odoo__returns_normalized_when_no_existing_short_code(
-            self, mock_sync):
-        self.conf_obj.set(
-            self.cursor, self.uid,
-            'odoo_sync_account_code_normalized_length', '9'
-        )
-        account_type_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
-        )[1]
-        source_id = self.account_obj.create(self.cursor, self.uid, {
-            'name': 'Long ERP account',
-            'code': '700000000103',
-            'type': 'other',
-            'user_type': account_type_id,
-        })
-        self.account_obj.create(self.cursor, self.uid, {
-            'name': 'Different account',
-            'code': '701000103',
-            'type': 'other',
-            'user_type': account_type_id,
-        })
-
-        normalized = self.account_obj._normalize_account_code_for_odoo(
-            self.cursor, self.uid, '700000000103', account_id=source_id
-        )
-
-        self.assertEqual(normalized, '700000103')
+        self.assertEqual(result, (False, False))
+        mock_vals.assert_not_called()
+        context = mock_update.call_args[1]['context']
+        self.assertEqual(context['sync_state'], 'error')
+        self.assertIn('already linked', context['odoo_last_update_result'])
+        self.assertFalse(mock_update.call_args[0][4])
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):

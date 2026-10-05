@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <record id="view_account_form_inherit_som_sync" model="ir.ui.view">
+            <field name="name">account.account.form.inherit.som.sync</field>
+            <field name="model">account.account</field>
+            <field name="inherit_id" ref="account.view_account_form"/>
+            <field name="arch" type="xml">
+                <field name="code" position="after">
+                    <field name="odoo_account_code" required="1"/>
+                </field>
+            </field>
+        </record>
+        <record id="view_account_tree_inherit_som_sync" model="ir.ui.view">
+            <field name="name">account.account.tree.inherit.som.sync</field>
+            <field name="model">account.account</field>
+            <field name="inherit_id" ref="account.view_account_tree"/>
+            <field name="arch" type="xml">
+                <field name="code" position="after">
+                    <field name="odoo_account_code"/>
+                </field>
+            </field>
+        </record>
+    </data>
+</openerp>

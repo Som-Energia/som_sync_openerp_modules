@@ -55,3 +55,20 @@ class ForeingKeyNotAvailable(Exception):
 
     def __str__(self):
         return self.__repr__()
+
+
+class AccountCodeAlreadyLinkedException(Exception):
+    """An Odoo account code belongs to another ERP account."""
+
+    def __init__(self, account_code, odoo_erp_id, erp_id):
+        super(AccountCodeAlreadyLinkedException, self).__init__(account_code)
+        self.msg = (
+            'Odoo account code {} is already linked to ERP account {} '
+            'and cannot be linked to {}.'
+        ).format(account_code, odoo_erp_id, erp_id)
+
+    def __repr__(self):
+        return self.msg
+
+    def __str__(self):
+        return self.__repr__()

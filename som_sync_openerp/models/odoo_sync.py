@@ -7,7 +7,7 @@ from oorq.decorators import job
 import requests
 from datetime import datetime
 from service.security import Sudo
-from .odoo_exceptions import CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
+from .odoo_exceptions import AccountCodeAlreadyLinkedException, CreationNotSupportedException, ERPObjectNotExistsException, UpdateNotSupportedException, ForeingKeyNotAvailable  # noqa: E501
 import logging
 import json
 
@@ -564,6 +564,10 @@ class OdooSync(osv.osv):
                         cursor, uid, openerp_id, context=context)
                     odoo_id, erp_id, odoo_metadata = self.exists_in_odoo(
                         cursor, uid, model, endpoint_suffix, openerp_id, context=context)
+                    if model == 'account.account' and erp_id and erp_id != openerp_id:
+                        odoo_id = False
+                        raise AccountCodeAlreadyLinkedException(
+                            endpoint_suffix, erp_id, openerp_id)
 
             # ERP data preparation for sync
             erp_data = self.get_model_vals_to_sync(
@@ -622,11 +626,12 @@ class OdooSync(osv.osv):
                     rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
-            CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
+            AccountCodeAlreadyLinkedException, CreationNotSupportedException,
+            UpdateNotSupportedException, ForeingKeyNotAvailable
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': self.format_response(e),
+                'odoo_last_update_result': self.format_response(str(e)),
                 'update_last_sync': True,
                 'odoo_last_sync_request': self.format_response(erp_data),
             })
@@ -636,7 +641,7 @@ class OdooSync(osv.osv):
             logger.exception("Unexpected error during synchronization of {}".format(model))
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': self.format_response(e),
+                'odoo_last_update_result': self.format_response(str(e)),
                 'update_last_sync': True,
                 'odoo_last_sync_request': self.format_response(erp_data),
             })
