@@ -568,9 +568,10 @@ class OdooSync(osv.osv):
                         cursor, uid, model, endpoint_suffix, openerp_id, context=context)
                     if model == 'account.account' and erp_id and erp_id != openerp_id:
                         odoo_id = False
+                        linked_erp_id = erp_id
                         erp_id = False
                         raise AccountCodeAlreadyLinkedException(
-                            endpoint_suffix, erp_id, openerp_id)
+                            endpoint_suffix, linked_erp_id, openerp_id)
 
             # ERP data preparation for sync
             erp_data = self.get_model_vals_to_sync(
