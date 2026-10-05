@@ -7,7 +7,7 @@
             <field name="inherit_id" ref="account.view_account_form"/>
             <field name="arch" type="xml">
                 <field name="code" position="after">
-                    <field name="odoo_account_code" required="1"/>
+                    <field name="odoo_account_code"/>
                 </field>
             </field>
         </record>

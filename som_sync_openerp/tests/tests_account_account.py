@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from destral import testing
-from osv import osv
 import mock
 
 from ..models import odoo_sync
@@ -46,20 +45,42 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertEqual(vals['code'], '700000001')
         self.assertNotIn('odoo_account_code', vals)
 
-    def test_get_endpoint_suffix__returns_false_without_mapping(self):
+    def test_get_endpoint_suffix__falls_back_to_account_code_without_mapping(self):
         account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000001',
+            'odoo_account_code': False,
+        })
 
         suffix = self.account_obj.get_endpoint_suffix(
             self.cursor, self.uid, account_id
         )
 
-        self.assertFalse(suffix)
+        self.assertEqual(suffix, '700000001')
+
+    def test_get_model_vals_to_sync__falls_back_to_account_code_without_mapping(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000001',
+            'odoo_account_code': False,
+        })
+
+        vals = self.sync_obj.get_model_vals_to_sync(
+            self.cursor, self.uid, 'account.account', account_id
+        )
+
+        self.assertEqual(vals['code'], '700000001')
+        self.assertNotIn('odoo_account_code', vals)
 
     @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
     @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
-    def test_sync_without_odoo_account_code__is_not_started(
+    def test_sync_with_twelve_digit_code_without_mapping__is_not_started(
             self, mock_enabled, mock_syncronize_sync):
         account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000000001',
+            'odoo_account_code': False,
+        })
         mock_enabled.return_value = (True, False, False)
 
         result = self.sync_obj.common_sync_model_create_update(
@@ -69,10 +90,11 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertEqual(result, (None, None))
         mock_syncronize_sync.assert_not_called()
 
-    def test_check_special_restrictions__allows_account_with_odoo_account_code(self):
+    def test_check_special_restrictions__allows_nine_digit_account_without_mapping(self):
         account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
-            'odoo_account_code': '700000001',
+            'code': '700000001',
+            'odoo_account_code': False,
         })
 
         result = self.account_obj.check_special_restrictions(
@@ -81,18 +103,18 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
         self.assertTrue(result)
 
-    def test_create__requires_odoo_account_code(self):
-        account_type_id = self.imd_obj.get_object_reference(
-            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
-        )[1]
+    def test_check_special_restrictions__allows_twelve_digit_account_with_mapping(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
+        })
 
-        self.assertRaises(osv.except_osv, self.account_obj.create,
-                          self.cursor, self.uid, {
-                              'name': 'Account without Odoo code',
-                              'code': '700000000001',
-                              'type': 'other',
-                              'user_type': account_type_id,
-                          })
+        result = self.account_obj.check_special_restrictions(
+            self.cursor, self.uid, account_id
+        )
+
+        self.assertTrue(result)
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):

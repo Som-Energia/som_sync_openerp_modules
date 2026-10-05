@@ -9,7 +9,8 @@ class AccountAccount(osv.osv):
 
     MAPPING_FIELDS_TO_SYNC = {
         'name': 'name',
-        'odoo_account_code': 'code',
+        'code': 'code',
+        'odoo_account_code': 'odoo_account_code',
         'id': 'pnt_erp_id',
     }
     MAPPING_FK = {
@@ -18,8 +19,6 @@ class AccountAccount(osv.osv):
     }
 
     _columns = {
-        # The field remains nullable until the initial mapping import finalizes
-        # the database migration. The final schema enforces NOT NULL.
         'odoo_account_code': fields.char(
             'Odoo account code', size=9, select=1,
         ),
@@ -37,20 +36,21 @@ class AccountAccount(osv.osv):
         if context is None:
             context = {}
         account = self.browse(cr, uid, id, context=context)
-        return account.odoo_account_code or False
+        return account.odoo_account_code or account.code or False
+
+    def hook_last_modifications(self, cr, uid, data, context=None):
+        odoo_account_code = data.pop('odoo_account_code', False)
+        if odoo_account_code:
+            data['code'] = odoo_account_code
+        return data
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         account = self.browse(cr, uid, id, context=context)
-        return bool(account.odoo_account_code)
+        return len(account.code or '') != 12 or bool(account.odoo_account_code)
 
     def create(self, cr, uid, vals, context=None):
         if context is None:
             context = {}
-        if not vals.get('odoo_account_code'):
-            raise osv.except_osv(
-                'Missing Odoo account code',
-                'An Odoo account code is required to create an account.'
-            )
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
         with Sudo(uid=1, gid=0):
