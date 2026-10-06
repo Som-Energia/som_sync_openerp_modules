@@ -626,11 +626,12 @@ class OdooSync(osv.osv):
                     rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
-            CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
+            CreationNotSupportedException,
+            UpdateNotSupportedException, ForeingKeyNotAvailable
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': self.format_response(e),
+                'odoo_last_update_result': self.format_response(str(e)),
                 'update_last_sync': True,
                 'odoo_last_sync_request': self.format_response(erp_data),
             })

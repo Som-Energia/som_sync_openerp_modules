@@ -1,24 +1,16 @@
 #  -*- coding: utf-8 -*-
-import logging
-
-from osv import osv
+from osv import osv, fields
 from service.security import Sudo
-
-
-logger = logging.getLogger(__name__)
 
 
 class AccountAccount(osv.osv):
     _name = 'account.account'
     _inherit = 'account.account'
 
-    ODOO_SYNC_NORMALIZED_LENGTH_KEY = 'odoo_sync_account_code_normalized_length'
-    ACCOUNT_CODE_PREFIX_LENGTH = 3
-    ACCOUNT_CODE_SUFFIX_LENGTH = 3
-
     MAPPING_FIELDS_TO_SYNC = {
         'name': 'name',
         'code': 'code',
+        'odoo_account_code': 'odoo_account_code',
         'id': 'pnt_erp_id',
     }
     MAPPING_FK = {
@@ -26,128 +18,49 @@ class AccountAccount(osv.osv):
     MAPPING_CONSTANTS = {
     }
 
+    _columns = {
+        'odoo_account_code': fields.char(
+            'Odoo account code', size=9, select=1,
+        ),
+    }
+
+    _sql_constraints = [
+        (
+            'odoo_account_code_format',
+            "CHECK (odoo_account_code IS NULL OR odoo_account_code ~ '^[0-9]{9}$')",
+            'The Odoo account code must contain exactly 9 digits.',
+        ),
+    ]
+
+    def _check_odoo_account_code(self, cr, uid, ids, context=None):
+        for account in self.browse(cr, uid, ids, context=context):
+            if len(account.code or '') == 12 and not account.odoo_account_code:
+                return False
+        return True
+
+    _constraints = [
+        (
+            _check_odoo_account_code,
+            'Accounts with a 12-digit code require an Odoo account code.',
+            ['code', 'odoo_account_code'],
+        ),
+    ]
+
     def get_endpoint_suffix(self, cr, uid, id, context=None):
         if context is None:
             context = {}
         account = self.browse(cr, uid, id, context=context)
-        if account.code:
-            res = '{}'.format(self._normalize_account_code_for_odoo(
-                cr, uid, account.code, account_id=id, context=context
-            ))
-            return res
-        else:
-            return False
-
-    def _get_account_code_normalized_length(self, cr, uid, context=None):
-        if context is None:
-            context = {}
-        conf_obj = self.pool.get('res.config')
-        value = conf_obj.get(
-            cr, uid, self.ODOO_SYNC_NORMALIZED_LENGTH_KEY, ''
-        )
-        if value in (False, None, ''):
-            return False
-        try:
-            target_length = int(value)
-        except (TypeError, ValueError):
-            logger.warning(
-                'Invalid %s config value: %s',
-                self.ODOO_SYNC_NORMALIZED_LENGTH_KEY, value,
-            )
-            return False
-        if target_length <= 0:
-            logger.warning(
-                'Invalid %s config value: %s',
-                self.ODOO_SYNC_NORMALIZED_LENGTH_KEY, value,
-            )
-            return False
-        return target_length
-
-    def _find_account_with_code(self, cr, uid, account_id, code, context=None):
-        if context is None:
-            context = {}
-        if not code:
-            return False
-
-        domain = [('code', '=', code)]
-        if account_id:
-            domain.append(('id', '!=', account_id))
-        account_ids = self.search(cr, uid, domain, limit=1, context=context)
-        if not account_ids:
-            return False
-        return self.browse(cr, uid, account_ids[0], context=context)
-
-    def _normalize_account_code_for_odoo(self, cr, uid, code, account_id=None, context=None):
-        if context is None:
-            context = {}
-        if not code:
-            return code
-
-        target_length = self._get_account_code_normalized_length(
-            cr, uid, context=context
-        )
-        if not target_length:
-            return code
-
-        if not isinstance(code, basestring):
-            code = str(code)
-
-        if not code.isdigit() or len(code) <= target_length:
-            return code
-
-        prefix = code[:self.ACCOUNT_CODE_PREFIX_LENGTH]
-        suffix = code[-self.ACCOUNT_CODE_SUFFIX_LENGTH:]
-        middle = list(code[
-            self.ACCOUNT_CODE_PREFIX_LENGTH:-self.ACCOUNT_CODE_SUFFIX_LENGTH
-        ])
-
-        min_length = (
-            self.ACCOUNT_CODE_PREFIX_LENGTH + self.ACCOUNT_CODE_SUFFIX_LENGTH
-        )
-        if target_length < min_length:
-            logger.warning(
-                'Cannot normalize account code %s to target length %s: '
-                'target is shorter than preserved prefix/suffix length',
-                code, target_length,
-            )
-            return code
-
-        extra_chars = len(code) - target_length
-        zero_indexes = [index for index, char in enumerate(middle) if char == '0']
-        if len(zero_indexes) < extra_chars:
-            logger.warning(
-                'Cannot normalize account code %s to target length %s '
-                'without removing non-zero middle digits',
-                code, target_length,
-            )
-            return code
-
-        indexes_to_remove = set(zero_indexes[:extra_chars])
-        normalized_middle = ''.join([
-            char for index, char in enumerate(middle)
-            if index not in indexes_to_remove
-        ])
-        normalized_code = '{}{}{}'.format(prefix, normalized_middle, suffix)
-        collision_account = self._find_account_with_code(
-            cr, uid, account_id, normalized_code, context=context
-        )
-        if collision_account:
-            logger.warning(
-                'Cannot normalize account code %s to %s because account %s already uses that code',
-                code, normalized_code, collision_account.id,
-            )
-            return code
-        return normalized_code
+        return account.odoo_account_code or account.code or False
 
     def hook_last_modifications(self, cr, uid, data, context=None):
-        if context is None:
-            context = {}
-        if 'code' not in data:
-            return data
-        data['code'] = self._normalize_account_code_for_odoo(
-            cr, uid, data.get('code'), account_id=data.get('pnt_erp_id'), context=context
-        )
+        odoo_account_code = data.pop('odoo_account_code', False)
+        if odoo_account_code:
+            data['code'] = odoo_account_code
         return data
+
+    def check_special_restrictions(self, cr, uid, id, context=None):
+        account = self.browse(cr, uid, id, context=context)
+        return len(account.code or '') != 12 or bool(account.odoo_account_code)
 
     def create(self, cr, uid, vals, context=None):
         if context is None:
