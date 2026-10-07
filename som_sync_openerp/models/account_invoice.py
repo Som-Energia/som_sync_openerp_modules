@@ -284,6 +284,24 @@ class AccountInvoice(osv.osv):
 
         return res
 
+    def pay_and_reconcile(self, cr, uid, ids, pay_amount, pay_account_id,
+                          period_id, pay_journal_id, writeoff_acc_id,
+                          writeoff_period_id, writeoff_journal_id,
+                          context=None, name=''):
+        payment_context = dict(context or {}, defer_tpv_payment_sync=True)
+        result = super(AccountInvoice, self).pay_and_reconcile(
+            cr, uid, ids, pay_amount, pay_account_id, period_id, pay_journal_id,
+            writeoff_acc_id, writeoff_period_id, writeoff_journal_id,
+            context=payment_context, name=name)
+        # Already-paid invoices return True without creating a payment move.
+        if result and result is not True:
+            move_obj = self.pool.get('account.move')
+            if move_obj.is_tpv_payment_move(cr, uid, result, context=context):
+                with Sudo(uid=1, gid=0):
+                    self.pool.get('odoo.sync').common_sync_model_create_update(
+                        cr, uid, 'account.move', 'create', result, context=context)
+        return result
+
     def add_taxes_lines_needed_for_sync(
             self, cr, uid, invoice_id, energy_tax_id, factor_reverse=1, context=None):
         """
