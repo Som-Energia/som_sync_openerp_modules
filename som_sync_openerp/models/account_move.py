@@ -101,6 +101,14 @@ class AccountMove(osv.osv):
             cr, uid, 'account.invoice', 'sync', invoice.id, context=dependency_context)
         if not odoo_invoice_id:
             raise ValueError('TPV invoice must be synchronized with Odoo first')
+        # FK retries can return a saved Odoo ID even when invoice validation failed.
+        accepted_invoice_sync_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', 'account.invoice'), ('res_id', '=', invoice.id),
+            ('odoo_id', '=', odoo_invoice_id),
+            ('sync_state', 'in', ['synced', 'synced_with_warning', 'static']),
+        ], limit=1)
+        if not accepted_invoice_sync_ids:
+            raise ValueError('TPV invoice synchronization must be successful before collection')
         partner_id = sync_obj.get_partner_odoo_id_by_erp_id(cr, uid, invoice.partner_id.id)
         if not partner_id:
             partner_id, _ = sync_obj.common_sync_model_create_update(

@@ -137,6 +137,69 @@ class TestTpvPayment(testing.OOTestCaseWithCursor):
             with self.assertRaisesRegexp(ValueError, 'invoice must be synchronized'):
                 self._payload(move_id)
 
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    def test_rejected_invoice_and_cached_retries_block_collection_until_fixed(self, post):
+        with mock.patch.object(self.sync_obj, 'syncronize'):
+            move_id = self._collect()
+        invoice_sync_ids = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice'), ('res_id', '=', self.invoice_id),
+        ])
+        self.sync_obj.unlink(self.cursor, self.uid, invoice_sync_ids)
+        invoice_response = {'success': True, 'data': {
+            'odoo_id': 901,
+            'erp_id': self.invoice_id,
+            'metadata': [{'pnt_amount_total_erp_difference': 1.0}],
+        }}
+        post.return_value.status_code = 201
+        post.return_value.json.return_value = invoice_response
+        post.return_value.text = json.dumps(invoice_response)
+        prepare_payload = self.sync_obj.get_model_vals_to_sync
+
+        def payload(cr, uid, model, erp_id, context=None):
+            if model == 'account.invoice':
+                return {'pnt_erp_id': erp_id}
+            return prepare_payload(cr, uid, model, erp_id, context=context)
+
+        with mock.patch.object(self.sync_obj, 'get_model_vals_to_sync', side_effect=payload):
+            for _ in range(2):
+                result = self.sync_obj.syncronize_sync(
+                    self.cursor, self.uid, 'account.move', 'sync', move_id)
+                self.assertFalse(result[0])
+                invoice_sync_id = self.sync_obj.search(self.cursor, self.uid, [
+                    ('model.model', '=', 'account.invoice'),
+                    ('res_id', '=', self.invoice_id),
+                ])[0]
+                invoice_sync = self.sync_obj.browse(self.cursor, self.uid, invoice_sync_id)
+                self.assertEqual(invoice_sync.odoo_id, 901)
+                self.assertEqual(invoice_sync.sync_state, 'error')
+                move_sync_id = self.sync_obj.search(self.cursor, self.uid, [
+                    ('model.model', '=', 'account.move'), ('res_id', '=', move_id),
+                ])[0]
+                move_sync = self.sync_obj.browse(self.cursor, self.uid, move_sync_id)
+                self.assertEqual(move_sync.sync_state, 'error')
+            post.assert_called_once()
+            self.assertTrue(post.call_args[0][0].endswith('/invoices'))
+
+            self.sync_obj.write(self.cursor, self.uid, invoice_sync_id, {'sync_state': 'synced'})
+            statement_response = {'success': True, 'data': {'odoo_id': 904, 'erp_id': move_id}}
+            post.return_value.json.return_value = statement_response
+            post.return_value.text = json.dumps(statement_response)
+            self.assertEqual(self.sync_obj.syncronize_sync(
+                self.cursor, self.uid, 'account.move', 'sync', move_id), (904, move_id))
+            self.assertTrue(post.call_args[0][0].endswith('/bank_statement_lines'))
+            self.assertEqual(post.call_count, 2)
+
+    def test_invoice_sync_with_accepted_warning_allows_collection(self):
+        with mock.patch.object(self.sync_obj, 'syncronize'):
+            move_id = self._collect()
+        invoice_sync_id = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice'), ('res_id', '=', self.invoice_id),
+        ])[0]
+        self.sync_obj.write(self.cursor, self.uid, invoice_sync_id, {
+            'sync_state': 'synced_with_warning',
+        })
+        self.assertEqual(self._payload(move_id)['amount'], 1000.0)
+
     def test_partial_collection_is_not_exported_as_a_full_invoice_payment(self):
         with mock.patch.object(self.sync_obj, 'syncronize'):
             move_id = self._collect(500.0)
