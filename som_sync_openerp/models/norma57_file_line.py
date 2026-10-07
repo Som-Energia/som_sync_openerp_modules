@@ -76,15 +76,34 @@ class Norma57FileLine(osv.osv):
         invoice_id = self._get_invoice_erp_id(cr, uid, line, context=context)
         if not invoice_id:
             raise Exception('Norma57 line has no invoice')
-        invoice = self.pool.get('account.invoice').read(
-            cr, uid, invoice_id, ['number'], context=context)
+        invoice_obj = self.pool.get('account.invoice')
+        invoice = invoice_obj.read(
+            cr, uid, invoice_id, ['number', 'amount_total'], context=context)
         if not invoice.get('number'):
             raise Exception('Norma57 invoice has no number')
+        amount = abs(line.amount)
+
+        sync_obj = self.pool.get('odoo.sync')
+        sync_ids = sync_obj.search(cr, uid, [
+            ('model.model', '=', 'account.invoice'),
+            ('res_id', '=', invoice_id),
+            ('sync_state', '=', 'synced_with_warning'),
+            ('odoo_last_update_result', '!=', False),
+        ])
+        if sync_ids:
+            sync_record = sync_obj.read(
+                cr, uid, sync_ids[0], ['odoo_last_update_result'])
+            difference, _ = invoice_obj._get_total_amount_difference(sync_record)
+            odoo_amount = round(abs(invoice['amount_total']) + difference, 2)
+            # Adjust only a full-invoice debit, never a partial collection.
+            if difference and round(odoo_amount - amount, 2) == round(difference, 2):
+                amount = odoo_amount
+
         return {
             'journal_id': self._get_destination_journal_odoo_id(
                 cr, uid, context=context),
             'date': line.file_id.header_presentation_date,
-            'amount': abs(line.amount),
+            'amount': amount,
             'payment_ref': '[FACTURA] {}'.format(invoice['number']),
         }
 
