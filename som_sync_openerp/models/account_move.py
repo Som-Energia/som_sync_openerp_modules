@@ -109,6 +109,13 @@ class AccountMove(osv.osv):
         ], limit=1)
         if not accepted_invoice_sync_ids:
             raise ValueError('TPV invoice synchronization must be successful before collection')
+        invoice_sync = sync_obj.read(cr, uid, accepted_invoice_sync_ids[0], [
+            'odoo_last_update_result',
+        ])
+        difference, _ = invoice_obj._get_total_amount_difference(invoice_sync)
+        # Keep ERP validation above, but match Odoo's accepted invoice balance.
+        if difference:
+            amount = round(amount + difference, 2)
         partner_id = sync_obj.get_partner_odoo_id_by_erp_id(cr, uid, invoice.partner_id.id)
         if not partner_id:
             partner_id, _ = sync_obj.common_sync_model_create_update(

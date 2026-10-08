@@ -148,7 +148,10 @@ class TestTpvPayment(testing.OOTestCaseWithCursor):
         invoice_response = {'success': True, 'data': {
             'odoo_id': 901,
             'erp_id': self.invoice_id,
-            'metadata': [{'pnt_amount_total_erp_difference': 1.0}],
+            'metadata': [{
+                'pnt_amount_total_erp_difference': 1.0,
+                'move_type': 'out_invoice',
+            }],
         }}
         post.return_value.status_code = 201
         post.return_value.json.return_value = invoice_response
@@ -189,7 +192,7 @@ class TestTpvPayment(testing.OOTestCaseWithCursor):
             self.assertTrue(post.call_args[0][0].endswith('/bank_statement_lines'))
             self.assertEqual(post.call_count, 2)
 
-    def test_invoice_sync_with_accepted_warning_allows_collection(self):
+    def test_invoice_sync_with_accepted_warning_adjusts_collection_amount(self):
         with mock.patch.object(self.sync_obj, 'syncronize'):
             move_id = self._collect()
         invoice_sync_id = self.sync_obj.search(self.cursor, self.uid, [
@@ -197,8 +200,12 @@ class TestTpvPayment(testing.OOTestCaseWithCursor):
         ])[0]
         self.sync_obj.write(self.cursor, self.uid, invoice_sync_id, {
             'sync_state': 'synced_with_warning',
+            'odoo_last_update_result': json.dumps({'data': {'metadata': [{
+                'pnt_amount_total_erp_difference': 0.01,
+                'move_type': 'out_invoice',
+            }]}}),
         })
-        self.assertEqual(self._payload(move_id)['amount'], 1000.0)
+        self.assertEqual(self._payload(move_id)['amount'], 1000.01)
 
     def test_partial_collection_is_not_exported_as_a_full_invoice_payment(self):
         with mock.patch.object(self.sync_obj, 'syncronize'):
