@@ -131,6 +131,7 @@ dmypy.json
 # Som things
 *dbconfig.py
 *configdb.py
+*.csv
 
 # AI things
 .atl/
