@@ -17,6 +17,30 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         super(TestAccountMove, self).setUp()
 
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test_write_prevents_synced_move_from_returning_to_draft(self, mock_sync):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_001"
+        )[1]
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.move')], limit=1
+        )[0]
+        self.am_obj.write(self.cursor, self.uid, [move_id], {'state': 'posted'})
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': move_id,
+            'sync_state': 'synced',
+        })
+
+        with self.assertRaises(Exception) as error:
+            self.am_obj.write(self.cursor, self.uid, [move_id], {'state': 'draft'})
+
+        self.assertIn('synchronized journal entry', str(error.exception))
+        self.assertEqual(
+            self.am_obj.read(self.cursor, self.uid, move_id, ['state'])['state'],
+            'posted',
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
     def test__get_related_values(self, mock_partner_odoo_id, mock_syncronize_sync):
         move_id = self.imd_obj.get_object_reference(

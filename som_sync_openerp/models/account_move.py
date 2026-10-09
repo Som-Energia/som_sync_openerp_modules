@@ -174,6 +174,18 @@ class AccountMove(osv.osv):
         if not isinstance(ids, list):
             ids = [ids]
 
+        if vals.get('state') == 'draft':
+            current_records = self.read(cr, uid, ids, ['state'], context=context)
+            non_draft_ids = [
+                record['id'] for record in current_records if record['state'] != 'draft'
+            ]
+            synced_ids = self.pool.get('odoo.sync').get_synced_record_ids(
+                cr, uid, self._name, non_draft_ids, context=context)
+            if synced_ids:
+                raise osv.except_osv(
+                    'Invalid operation',
+                    'A synchronized journal entry cannot be reverted to draft.')
+
         res = super(AccountMove, self).write(cr, uid, ids, vals, context=context)
 
         if 'state' in vals and vals['state'] == 'posted':
