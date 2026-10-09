@@ -575,19 +575,34 @@ class OdooSync(osv.osv):
 
             if odoo_id:
                 if not erp_id:
-                    # Case: Record exists in Odoo but the link (erp_id) is missing
-                    if self.update_erp_id(cursor, uid, model, odoo_id, openerp_id, context=context):
+                    account = False
+                    if model == 'account.account':
+                        account = rp_obj.browse(
+                            cursor, uid, openerp_id, context=context)
+                    if account and len(account.code or '') == 12 and \
+                            account.odoo_account_code:
+                        # Several ERP accounts can share the same Odoo account code.
                         erp_id = openerp_id
                         sync_vals.update({
                             'sync_state': 'synced',
                             'update_last_sync': True,
                         })
                     else:
-                        sync_vals.update({
-                            'sync_state': 'error',
-                            'odoo_last_update_result': 'Failed to link ERP_ID in Odoo',
-                            'update_last_sync': True,
-                        })
+                        # Case: Record exists in Odoo but the link (erp_id) is missing
+                        if self.update_erp_id(
+                                cursor, uid, model, odoo_id, openerp_id,
+                                context=context):
+                            erp_id = openerp_id
+                            sync_vals.update({
+                                'sync_state': 'synced',
+                                'update_last_sync': True,
+                            })
+                        else:
+                            sync_vals.update({
+                                'sync_state': 'error',
+                                'odoo_last_update_result': 'Failed to link ERP_ID in Odoo',
+                                'update_last_sync': True,
+                            })
                 else:
                     # Case: Already linked.
                     if not context.get('from_fk_sync', False):
