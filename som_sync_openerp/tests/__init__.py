@@ -16,3 +16,4 @@ from .tests_wizard_sync import *
 from .test_devolucions import *
 from .tests_account_invoice_fraccionament import *
 from .tests_norma57_file import *
+from .tests_tpv_payment import *

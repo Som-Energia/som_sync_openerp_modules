@@ -21,7 +21,6 @@ MAPPING_MODELS_ENTITIES = {
     'account.account': 'account',
     'account.invoice': 'invoice',
     'payment.order': 'payment_orders',
-    'norma57.file': 'payment_orders',
     'res.country.state': 'state',
     'res.country': 'country',
     'res.municipi': 'city',
@@ -62,12 +61,12 @@ MAPPING_MODELS_POST = {
     'account.invoice': 'invoices',
     'account.move': 'entries',
     'payment.order': 'payment_orders',
-    'norma57.file': 'payment_orders',
     'res.country.state': 'states',
     'res.partner': 'partners',
     'res.partner.address': 'partners',
     'res.partner.bank': 'banks',
     'giscedata.facturacio.devolucio': 'payment_order_refunds',
+    'norma57.file.line': 'bank_statement_lines',
 }
 
 # Mapping of modles to patch
@@ -140,14 +139,15 @@ class OdooSync(osv.osv):
                 auto_sync = True  # force sync for on-demand
             if not (sync_enabled and auto_sync):
                 return None, None
+            model_obj = self.pool.get(model)
             # check special restriction for some models
             has_special_restrictions = hasattr(
-                self.pool.get(model), 'check_special_restrictions')
+                model_obj, 'check_special_restrictions')
             result = (None, None)
             for _id in ids:
                 try:
                     if has_special_restrictions and not \
-                            self.pool.get(model).check_special_restrictions(
+                            model_obj.check_special_restrictions(
                                 cursor, uid, _id, context=context):
                         logger = logging.getLogger('openerp.odoo.sync')
                         logger.info(
@@ -218,6 +218,11 @@ class OdooSync(osv.osv):
         res.pop('odoo_id', False)
         return res
 
+    def _get_related_values_to_sync(self, rp_obj, cursor, uid, id, context=None):
+        if hasattr(rp_obj, 'get_related_values'):
+            return rp_obj.get_related_values(cursor, uid, id, context=context)
+        return {}
+
     def get_model_vals_to_sync(self, cursor, uid, model, id, context=None):
         if context is None:
             context = {}
@@ -244,11 +249,8 @@ class OdooSync(osv.osv):
         if keys_to_read:
             data = rp_obj.read(cursor, uid, id, keys_to_read)
 
-        # Read related fields if any
-        has_related_fields = hasattr(rp_obj, 'get_related_values')
-        if has_related_fields:
-            related_values = rp_obj.get_related_values(cursor, uid, id, context=context)
-            result_data.update(related_values)
+        result_data.update(self._get_related_values_to_sync(
+            rp_obj, cursor, uid, id, context=context))
 
         # Read and sync foreign key fields
         if has_mapping_fk:
@@ -512,6 +514,8 @@ class OdooSync(osv.osv):
         if not sync_enabled:
             return False, False
 
+        rp_obj = self.pool.get(model)
+
         # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
         sync_obj = self.pool.get('odoo.sync')
@@ -523,7 +527,8 @@ class OdooSync(osv.osv):
         if sync_id:
             sync_state_before_retry = sync_obj.read(
                 cursor, uid, sync_id[0], ['sync_state'])['sync_state']
-            if sync_state_before_retry == 'pending':
+            if sync_state_before_retry == 'pending' and hasattr(
+                    rp_obj, 'update_pending_state'):
                 logger.info("Update Odoo state of record {} of model {}".format(openerp_id, model))
                 context['update_pending_state_sync'] = True
                 return self.common_update_pending_state(cursor, uid, sync_id[0], context=context)
@@ -535,7 +540,6 @@ class OdooSync(osv.osv):
                 return False
 
         erp_data = {}
-        rp_obj = self.pool.get(model)
         odoo_id, erp_id, odoo_metadata = False, False, False
 
         # Initialize sync status tracking
@@ -584,19 +588,34 @@ class OdooSync(osv.osv):
 
             if odoo_id:
                 if not erp_id:
-                    # Case: Record exists in Odoo but the link (erp_id) is missing
-                    if self.update_erp_id(cursor, uid, model, odoo_id, openerp_id, context=context):
+                    account = False
+                    if model == 'account.account':
+                        account = rp_obj.browse(
+                            cursor, uid, openerp_id, context=context)
+                    if account and len(account.code or '') == 12 and \
+                            account.odoo_account_code:
+                        # Several ERP accounts can share the same Odoo account code.
                         erp_id = openerp_id
                         sync_vals.update({
                             'sync_state': 'synced',
                             'update_last_sync': True,
                         })
                     else:
-                        sync_vals.update({
-                            'sync_state': 'error',
-                            'odoo_last_update_result': 'Failed to link ERP_ID in Odoo',
-                            'update_last_sync': True,
-                        })
+                        # Case: Record exists in Odoo but the link (erp_id) is missing
+                        if self.update_erp_id(
+                                cursor, uid, model, odoo_id, openerp_id,
+                                context=context):
+                            erp_id = openerp_id
+                            sync_vals.update({
+                                'sync_state': 'synced',
+                                'update_last_sync': True,
+                            })
+                        else:
+                            sync_vals.update({
+                                'sync_state': 'error',
+                                'odoo_last_update_result': 'Failed to link ERP_ID in Odoo',
+                                'update_last_sync': True,
+                            })
                 else:
                     # Case: Already linked.
                     if not context.get('from_fk_sync', False):
@@ -635,11 +654,12 @@ class OdooSync(osv.osv):
                     rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
-            CreationNotSupportedException, UpdateNotSupportedException, ForeingKeyNotAvailable
+            CreationNotSupportedException,
+            UpdateNotSupportedException, ForeingKeyNotAvailable
         ) as e:
             sync_vals.update({
                 'sync_state': 'error',
-                'odoo_last_update_result': self.format_response(e),
+                'odoo_last_update_result': self.format_response(str(e)),
                 'update_last_sync': True,
                 'odoo_last_sync_request': self.format_response(erp_data),
             })
@@ -712,8 +732,8 @@ class OdooSync(osv.osv):
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
-            response = requests.post(url_base, json=data, headers=headers)
-            if response.status_code == 201:
+            response = requests.post(url_base, json=data, headers=headers, timeout=30)
+            if response.status_code in (200, 201):
                 data_response = response.json()
                 if data_response and 'success' in data_response and \
                         data_response.get('success', False):
@@ -856,7 +876,7 @@ class OdooSync(osv.osv):
             return self.create(cursor, uid, vals)
 
     def _build_update_vals(self, cursor, uid, id, odoo_id, str_now, context):
-        vals = {'odoo_id': odoo_id}
+        vals = {'odoo_id': odoo_id} if odoo_id else {}
         update = False
 
         if context.get('update_last_sync'):
@@ -899,8 +919,9 @@ class OdooSync(osv.osv):
 
         # Case odoo_id change
         sync_record = self.browse(cursor, uid, id)
-        if sync_record.odoo_id != odoo_id:
+        if odoo_id and sync_record.odoo_id != odoo_id:
             vals.update({
+                'odoo_id': odoo_id,
                 'odoo_last_sync_at': str_now,
             })
             update = True

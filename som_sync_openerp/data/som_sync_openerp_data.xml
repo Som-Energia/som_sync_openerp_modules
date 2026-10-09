@@ -96,9 +96,9 @@
             <field name="auto_sync">False</field>
             <field name="async_enabled">True</field>
         </record>
-        <record id="odoo_sync_model_config_norma57_file" model="odoo.sync.model.config">
-            <field name="model_id" search="[('model', '=', 'norma57.file')]"/>
-            <field name="auto_sync">False</field>
+        <record id="odoo_sync_model_config_norma57_file_line" model="odoo.sync.model.config">
+            <field name="model_id" search="[('model', '=', 'norma57.file.line')]"/>
+            <field name="auto_sync">True</field>
             <field name="async_enabled">True</field>
         </record>
         <record id="odoo_sync_invoice_amount_tolerance" model="res.config">
@@ -143,7 +143,7 @@
             <field name="name">odoo_norma57_destination_journal</field>
             <field name="value">0</field>
             <field name="description">
-                Odoo destination journal for Norma57 remittances.
+                Odoo destination journal for Norma57 bank statement lines.
             </field>
         </record>
         <record id="odoo_default_erp_payment_term" model="res.config">
@@ -151,14 +151,6 @@
             <field name="value">0</field>
             <field name="description">
                 Default ERP account.payment.term id used when an invoice has no payment term.
-            </field>
-        </record>
-        <record id="odoo_sync_account_code_normalized_length" model="res.config">
-            <field name="name">odoo_sync_account_code_normalized_length</field>
-            <field name="value">9</field>
-            <field name="description">
-                Target length used to normalize account.account codes for Odoo sync.
-                If empty, normalization is disabled.
             </field>
         </record>
         <record id="ir_cron_update_odoo_sync_pending_state" model="ir.cron">

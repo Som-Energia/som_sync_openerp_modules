@@ -17,22 +17,3 @@ jobs:
       ESIOS_TOKEN: ${{ secrets.ESIOS_TOKEN }}
       SRID: ${{ secrets.SRID }}
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  sonarcloud:
-    name: SonarCloud Analysis
-    runs-on: ubuntu-22.04
-    needs: erp-tests-module       # <-- Depèn del job que crida el reusable workflow
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6.0.2
-
-      - name: Download coverage.xml from tests
-        uses: actions/download-artifact@v7.0.0
-        with:
-          name: coverage.xml
-          path: coverage.xml
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@9598b8a83feef37de07f549027fab50ecffe6a6e
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

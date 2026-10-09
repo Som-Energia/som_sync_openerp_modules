@@ -22,3 +22,22 @@ odoo_api_key
 
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
+
+## TPV Triodos collections
+
+Individual customer invoice collections in the OpenERP journal `TPV Triodos`
+are sent to `bank_statement_lines`, using the journal's existing `odoo.sync`
+mapping. Enable automatic, asynchronous `account.move` synchronization and the
+journal's **Sync with Odoo Account Moves** flag. The mapped Odoo journal must be
+of type `bank` and enabled for ERP synchronization.
+
+After OpenERP reconciles the collection, the worker ensures the invoice is
+synchronized and sends one line with `[FACTURA] <invoice number>`. Odoo creates
+and reconciles that line without a statement header. The move ID is the retry
+identity; these collections are not also exported as generic journal entries.
+Valid, reconciled payment lines are supported even when the OpenERP move is
+still in `draft`.
+
+Partial, grouped, foreign-currency or ambiguous collections are reported as
+sync errors. Moves already exported through `entries` require manual review
+before retrying. Inspect `odoo.sync` for the request, endpoint and result.
