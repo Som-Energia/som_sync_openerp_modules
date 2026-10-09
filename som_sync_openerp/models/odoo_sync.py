@@ -575,8 +575,10 @@ class OdooSync(osv.osv):
 
             if odoo_id:
                 if not erp_id:
-                    account = model == 'account.account' and rp_obj.browse(
-                        cursor, uid, openerp_id, context=context)
+                    account = False
+                    if model == 'account.account':
+                        account = rp_obj.browse(
+                            cursor, uid, openerp_id, context=context)
                     if account and len(account.code or '') == 12 and \
                             account.odoo_account_code:
                         # Several ERP accounts can share the same Odoo account code.
