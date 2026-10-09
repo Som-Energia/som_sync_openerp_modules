@@ -88,6 +88,20 @@ class OdooSync(osv.osv):
     _name = "odoo.sync"
     _description = 'Syncronization manager'
 
+    def get_synced_record_ids(self, cursor, uid, model, res_ids, context=None):
+        """Return local record IDs that have been successfully synchronized."""
+        if not res_ids:
+            return []
+        sync_ids = self.search(cursor, uid, [
+            ('model.model', '=', model),
+            ('res_id', 'in', res_ids),
+            ('sync_state', 'in', ['synced', 'synced_with_warning']),
+        ], context=context)
+        if not sync_ids:
+            return []
+        sync_records = self.read(cursor, uid, sync_ids, ['res_id'], context=context)
+        return [record['res_id'] for record in sync_records if record.get('res_id')]
+
     def _get_conn_params(self, cursor, uid):
         config_obj = self.pool.get('res.config')
         try:

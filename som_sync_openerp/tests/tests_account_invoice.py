@@ -22,6 +22,55 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestAccountInvoice, self).setUp()
 
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test_write_prevents_synced_invoice_from_returning_to_draft(self, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.invoice')], limit=1
+        )[0]
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'open'})
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': invoice_id,
+            'sync_state': 'synced',
+        })
+
+        with self.assertRaises(Exception) as error:
+            self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'draft'})
+
+        self.assertIn('synchronized invoice', str(error.exception))
+        self.assertEqual(
+            self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
+            'open',
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test_write_prevents_cancelled_synced_invoice_from_returning_to_draft(self, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.invoice')], limit=1
+        )[0]
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'open'})
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': invoice_id,
+            'sync_state': 'synced_with_warning',
+        })
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'cancel'})
+
+        with self.assertRaises(Exception) as error:
+            self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'draft'})
+
+        self.assertIn('synchronized invoice', str(error.exception))
+        self.assertEqual(
+            self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
+            'cancel',
+        )
+
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values(self, mock_syncronize_sync, mock_erp_id):
