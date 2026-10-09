@@ -5,7 +5,7 @@ import time
 
 import netsvc
 from destral import testing
-from ..models import odoo_sync
+from ..models import odoo_sync, payment_order
 from som_sync_openerp.models.odoo_exceptions import (
     CreationNotSupportedException, ERPObjectNotExistsException, ForeingKeyNotAvailable
 )
@@ -25,6 +25,97 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
     def test_create_odoo_record__notSupported(self):
         with self.assertRaises(CreationNotSupportedException):
             self.sync_obj.create_odoo_record(self.cursor, self.uid, 'res.municipi', {})
+
+    def test_dry_run_common_entrypoints_do_not_schedule_sync(self):
+        context = {'is_dry_run': True}
+        with mock.patch.object(odoo_sync.OdooSync, 'syncronize') as syncronize, \
+                mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync') as syncronize_sync, \
+                mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record') as patch_record, \
+                mock.patch.object(
+                    odoo_sync.OdooSync, 'patch_odoo_record_sync'
+        ) as patch_record_sync:
+            sync_result = self.sync_obj.common_sync_model_create_update(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            )
+            patch_result = self.sync_obj.common_patch_odoo_record(
+                self.cursor, self.uid, 'res.partner', 1, {'name': 'Dry'}, context=context
+            )
+
+            self.assertEqual(sync_result, (None, None))
+            self.assertEqual(patch_result, (None, None))
+            syncronize.assert_not_called()
+            syncronize_sync.assert_not_called()
+            patch_record.assert_not_called()
+            patch_record_sync.assert_not_called()
+
+    @mock.patch.object(payment_order.PaymentOrder, 'update_pending_state_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
+    @mock.patch('oorq.decorators.setup_redis_connection')
+    def test_dry_run_decorated_jobs_are_not_enqueued(
+            self, setup_redis, syncronize_sync, patch_record_sync,
+            payment_update_sync):
+        context = {'is_dry_run': True}
+        payment_order_obj = self.openerp.pool.get('payment.order')
+
+        results = [
+            self.sync_obj.syncronize(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            ),
+            self.sync_obj.patch_odoo_record(
+                self.cursor, self.uid, 'res.partner', 1, {}, context=context
+            ),
+            payment_order_obj.update_pending_state(
+                self.cursor, self.uid, 1, context=context
+            ),
+        ]
+
+        self.assertEqual(results, [False, False, False])
+        setup_redis.assert_not_called()
+        syncronize_sync.assert_not_called()
+        patch_record_sync.assert_not_called()
+        payment_update_sync.assert_not_called()
+
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.get')
+    def test_dry_run_polling_entrypoint_does_not_call_odoo(self, requests_get):
+        context = {'is_dry_run': True}
+
+        self.sync_obj.poll_payment_order_status_sync(
+            self.cursor, self.uid, 'payment.order', 1, context=context
+        )
+
+        requests_get.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'poll_payment_order_status_sync')
+    def test_dry_run_sync_pending_entrypoints_do_not_poll(self, poll_status):
+        context = {'is_dry_run': True}
+        payment_order_obj = self.openerp.pool.get('payment.order')
+
+        result = payment_order_obj.update_pending_state_sync(
+            self.cursor, self.uid, 1, context=context
+        )
+
+        self.assertFalse(result)
+        poll_status.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    def test_dry_run_sync_entrypoints_do_not_update_local_sync(self, update_odoo_id):
+        context = {'is_dry_run': True}
+
+        self.assertEqual(
+            self.sync_obj.syncronize_sync(
+                self.cursor, self.uid, 'res.partner', 'write', 1, context=context
+            ),
+            (False, False),
+        )
+        self.assertEqual(
+            self.sync_obj.patch_odoo_record_sync(
+                self.cursor, self.uid, 'res.partner', 1, {}, context=context
+            ),
+            (False, False),
+        )
+
+        update_odoo_id.assert_not_called()
 
     def test_norma57_file_line_posts_bank_statement_lines(self):
         self.assertEqual(
@@ -103,9 +194,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(res, True)
 
-    def test_check_erp_record_exist__Exception(self):
+    @mock.patch('som_sync_openerp.models.odoo_sync.sleep', return_value=None)
+    def test_check_erp_record_exist__Exception(self, mock_sleep):
         with self.assertRaises(ERPObjectNotExistsException):
             self.sync_obj.check_erp_record_exist(self.cursor, self.uid, 'res.partner', 123456)
+        mock_sleep.assert_called()
 
     def test___create_sync_record__ok(self):
         partner_id = self.imd_obj.get_object_reference(
