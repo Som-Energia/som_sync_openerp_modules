@@ -89,12 +89,18 @@ class OdooSync(osv.osv):
     _description = 'Syncronization manager'
 
     def get_synced_record_ids(self, cursor, uid, model, res_ids, context=None):
-        """Return local record IDs that have been successfully synchronized."""
+        """Return local IDs linked to Odoo or successfully synchronized.
+
+        A failed retry changes sync_state to error but keeps the Odoo ID.
+        Those records must remain protected against returning to draft.
+        """
         if not res_ids:
             return []
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
             ('res_id', 'in', res_ids),
+            '|',
+            ('odoo_id', '>', 0),
             ('sync_state', 'in', ['synced', 'synced_with_warning']),
         ], context=context)
         if not sync_ids:

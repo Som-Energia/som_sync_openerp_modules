@@ -3,6 +3,8 @@
 import json
 import mock
 import netsvc
+import requests
+from osv import osv
 
 from destral import testing
 from ..models import odoo_sync
@@ -70,6 +72,76 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
             'cancel',
         )
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    @mock.patch.object(odoo_sync.OdooSync, "sync_model_enabled_amplified")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    @mock.patch('som_sync_openerp.models.odoo_sync.requests.post')
+    def test_failed_retry_keeps_invoice_protected(
+            self, mock_post, mock_vals, mock_enabled, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'open'})
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, 'account.invoice', invoice_id, 99,
+            context={'sync_state': 'synced_with_warning'})
+        mock_enabled.return_value = (True, False, False)
+        mock_vals.return_value = {'pnt_erp_id': invoice_id}
+        mock_post.side_effect = requests.exceptions.ConnectionError('Odoo unavailable')
+
+        self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.invoice', 'sync', invoice_id)
+
+        mock_post.assert_called_once()
+        sync_ids = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice'), ('res_id', '=', invoice_id),
+        ])
+        sync_record = self.sync_obj.read(
+            self.cursor, self.uid, sync_ids[0], ['sync_state', 'odoo_id'])
+        self.assertEqual(sync_record['sync_state'], 'error')
+        self.assertEqual(sync_record['odoo_id'], 99)
+        with self.assertRaises(osv.except_osv) as error:
+            self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'draft'})
+        self.assertIn('synchronized invoice', str(error.exception))
+        self.assertEqual(
+            self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
+            'open')
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test_write_prevents_invoice_with_odoo_id_and_error_from_returning_to_draft(
+            self, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'open'})
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, 'account.invoice', invoice_id, 99,
+            context={'sync_state': 'error'})
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'cancel'})
+
+        with self.assertRaises(osv.except_osv) as error:
+            self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'draft'})
+        self.assertIn('synchronized invoice', str(error.exception))
+        self.assertEqual(
+            self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
+            'cancel')
+
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test_write_allows_invoice_without_odoo_id_after_failed_sync(self, mock_sync):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'open'})
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, 'account.invoice', invoice_id, False,
+            context={'sync_state': 'error'})
+
+        self.ai_obj.write(self.cursor, self.uid, [invoice_id], {'state': 'draft'})
+
+        self.assertEqual(
+            self.ai_obj.read(self.cursor, self.uid, invoice_id, ['state'])['state'],
+            'draft')
 
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
