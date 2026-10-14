@@ -1,101 +1,45 @@
 # -*- coding: utf-8 -*-
-"""Extreu el punt de partida de les proves d'obertura des d'una còpia de l'ERP."""
+"""Fase 1: identifica factures obertes i genera IDs ERP i un CSV de control."""
 
 from __future__ import print_function, unicode_literals
 
 import argparse
 import csv
-import hashlib
 import json
+import logging
 import sys
-from collections import defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from xmlrpc.client import Error
 
+logger = logging.getLogger(__name__)
+
 INVOICE = "account.invoice"
-AGREEMENT = "account.invoice.fraccionament"
-INSTALLMENT = "account.invoice.fraccionament.fraccionaments"
-ACTIVE_AGREEMENTS = {"no_cobrat", "parcialment_cobrat"}
+INVOICE_SCOPE_TYPES = {
+    "customers": ["out_invoice", "out_refund"],
+    "suppliers": ["in_invoice", "in_refund"],
+    "all": ["out_invoice", "out_refund", "in_invoice", "in_refund"],
+}
 INVOICE_FIELDS = [
-    "number",
-    "type",
-    "state",
-    "company_id",
-    "partner_id",
-    "account_id",
-    "currency_id",
-    "journal_id",
-    "date_invoice",
-    "date_due",
-    "move_id",
-    "amount_untaxed",
-    "amount_tax",
-    "amount_total",
-    "residual",
-    "payment_ids",
-    "payment_term",
-    "payment_type",
-    "fiscal_position",
-    "origin",
-    "reference",
-    "rectifying_id",
-    "rectificative_type",
+    "number", "type", "state", "company_id", "partner_id", "currency_id",
+    "journal_id", "date_invoice", "date_due", "amount_total", "residual",
 ]
-AGREEMENT_FIELDS = [
-    "invoice_id",
-    "company_id",
-    "state",
-    "create_date",
-    "codi",
-    "move_id",
-    "import_a_fraccionar",
-    "import_cobrat",
-    "import_no_cobrat",
-    "fraccionament_ids",
-    "origin_account_id",
-]
-INSTALLMENT_FIELDS = [
-    "invoice_fraccionament_id",
-    "company_id",
-    "state",
-    "import",
-    "data_venciment",
-    "move_line_id",
-    "applied_move_id",
-    "applied_move_line_id",
-    "canceled_move_id",
-    "invoice_desti_id",
-    "remesa_desti_id",
-    "data_aplicacio",
-]
-MOVE_LINE_FIELDS = [
-    "move_id",
-    "account_id",
-    "partner_id",
-    "date",
-    "date_maturity",
-    "debit",
-    "credit",
-    "currency_id",
-    "amount_currency",
-    "reconcile_id",
-    "reconcile_partial_id",
-    "name",
-    "ref",
+CSV_FIELDS = [
+    "erp_invoice_id", "number", "type", "state", "partner_id", "currency_id",
+    "journal_id", "date_invoice", "date_due", "original_total", "invoice_residual",
 ]
 
 
 def relation_id(value):
-    """Normalitza un many2one XML-RPC sense confondre False amb un identificador."""
+    """Normalitza un many2one retornat per erppeek."""
     if isinstance(value, (list, tuple)):
         return value[0] if value else None
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def amount(value):
-    """Conserva la precisió rebuda i rebutja imports invàlids."""
+    """Conserva la precisió rebuda i rebutja imports absents o no finits."""
     if value is False or value is None:
         raise ValueError("Import absent en un registre de l'ERP")
     try:
@@ -108,211 +52,143 @@ def amount(value):
 
 
 class Extractor:
-    """Recull registres originals i diagnòstics, sense decidir la seva importació."""
+    """Consulta únicament diaris i capçaleres de factures per identificar IDs."""
 
-    def __init__(self, client, company_id, batch_size=200):
+    def __init__(self, client, company_id, batch_size=200, invoice_scope="all"):
+        if invoice_scope not in INVOICE_SCOPE_TYPES:
+            raise ValueError("Abast de factures desconegut: {}".format(invoice_scope))
+        if company_id <= 0 or batch_size <= 0:
+            raise ValueError("L'empresa i la mida del lot han de ser positives")
         self.client = client
         self.company_id = company_id
         self.batch_size = batch_size
+        self.invoice_scope = invoice_scope
 
-    def search(self, model, domain, limit=None):
-        return self.client.execute(model, "search", domain, 0, limit or False, "id asc")
+    def search(self, model, domain):
+        logger.info("Cercant registres de %s...", model)
+        ids = self.client.execute(model, "search", domain, 0, False, "id asc")
+        logger.info("%s: %s registres trobats", model, len(ids))
+        return sorted(set(ids))
 
-    def read(self, model, ids, fields):
+    def read_invoices(self, ids):
         rows = []
-        ids = sorted(set(ids))
+        logger.info("Llegint %s capçaleres de factura, en lots de %s", len(ids), self.batch_size)
         for offset in range(0, len(ids), self.batch_size):
             batch = ids[offset: offset + self.batch_size]
-            result = self.client.execute(model, "read", batch, fields)
-            if {row["id"] for row in result} != set(batch):
-                raise ValueError("Lectura incompleta de {}; revisa els permisos".format(model))
+            logger.info("Factures: llegint registres %s-%s de %s...",
+                        offset + 1, offset + len(batch), len(ids))
+            result = self.client.execute(INVOICE, "read", batch, INVOICE_FIELDS)
+            if len(result) != len(batch) or {row["id"] for row in result} != set(batch):
+                raise ValueError("Lectura incompleta o duplicada de factures; revisa els permisos")
             rows.extend(result)
+            logger.info("Factures: %s/%s capçaleres llegides", len(rows), len(ids))
         return sorted(rows, key=lambda row: row["id"])
 
-    def extract(self, cutoff):
-        company = [("company_id", "=", self.company_id)]
-        later_moves = self.search(
-            "account.move",
-            company + [("state", "=", "posted"), ("date", ">", cutoff)],
-            limit=1,
-        )
-        if later_moves:
-            raise ValueError(
-                "Hi ha assentaments comptabilitzats posteriors al tall. "
-                "Cal una còpia de l'ERP del tall; no es reconstrueix l'històric."
-            )
-        model_ids = self.search("ir.model", [("model", "=", AGREEMENT)])
-        agreements = []
-        if model_ids:
-            agreements = self.read(
-                AGREEMENT, self.search(AGREEMENT, company), AGREEMENT_FIELDS
-            )
-        active_invoice_ids = {
-            relation_id(row["invoice_id"])
-            for row in agreements
-            if row["state"] in ACTIVE_AGREEMENTS
-        }
-        if None in active_invoice_ids:
-            raise ValueError("Hi ha un acord actiu sense factura d'origen")
-        invoice_ids = self.search(
-            INVOICE,
-            company + [("state", "in", ["open", "paid"]), ("residual", "!=", 0)],
-        )
-        invoices = self.read(
-            INVOICE, list(set(invoice_ids) | active_invoice_ids), INVOICE_FIELDS
-        )
-        for invoice in invoices:
-            if relation_id(invoice["company_id"]) != self.company_id:
-                raise ValueError("Un acord apunta a una factura d'una altra empresa")
-            if not invoice["date_invoice"] or invoice["date_invoice"] > cutoff:
-                raise ValueError("Factura {} sense data vàlida al tall".format(invoice["id"]))
-            amount(invoice["residual"])
-            amount(invoice["amount_total"])
-        selected_ids = {row["id"] for row in invoices}
-        agreements = [
-            row for row in agreements if relation_id(row["invoice_id"]) in selected_ids
-        ]
-        if any(row["create_date"][:10] > cutoff for row in agreements):
-            raise ValueError("Hi ha acords creats després del tall; revisa la còpia")
-        installments = self.read(
-            INSTALLMENT,
-            [line_id for row in agreements for line_id in row["fraccionament_ids"]],
-            INSTALLMENT_FIELDS,
-        )
-        move_ids = {relation_id(row["move_id"]) for row in invoices + agreements}
-        line_ids = {line_id for row in invoices for line_id in row["payment_ids"]}
-        for row in installments:
-            move_ids.update(
-                relation_id(row[field])
-                for field in ("applied_move_id", "canceled_move_id")
-            )
-            line_ids.update(
-                relation_id(row[field])
-                for field in ("move_line_id", "applied_move_line_id")
-            )
-        move_ids = sorted(move_ids - {None})
-        for offset in range(0, len(move_ids), self.batch_size):
-            batch = move_ids[offset: offset + self.batch_size]
-            line_ids.update(
-                self.search("account.move.line", [("move_id", "in", batch)])
-            )
-        move_lines = self.read(
-            "account.move.line", list(line_ids - {None}), MOVE_LINE_FIELDS
-        )
-        account_ids = {
-            relation_id(row["account_id"]) for row in invoices + move_lines
-        } - {None}
-        accounts = self.read(
-            "account.account", list(account_ids), ["code", "name", "type", "reconcile"]
-        )
-        diagnostics = [
-            {
-                "code": "installments_require_review",
-                "invoice_id": invoice_id,
-                "message": "No sumar quotes i residual sense validar els traspassos.",
-            }
-            for invoice_id in sorted(active_invoice_ids)
-        ]
-        for row in invoices:
-            if row["state"] not in {"open", "paid"} or not row["move_id"]:
-                diagnostics.append(
-                    {"code": "invoice_requires_review", "invoice_id": row["id"]}
-                )
-            if row["state"] == "paid" and amount(row["residual"]) != 0:
-                diagnostics.append(
-                    {"code": "paid_invoice_with_residual", "invoice_id": row["id"]}
-                )
-        return {
-            "invoices": invoices,
-            "agreements": agreements,
-            "installments": installments,
-            "move_lines": move_lines,
-            "accounts": accounts,
-            "diagnostics": diagnostics,
-            "installment_model_available": bool(model_ids),
-        }
+    def extract(self, reference_date):
+        logger.info("Identificant factures amb pendent actual: empresa %s; referència %s; abast %s",
+                    self.company_id, reference_date, self.invoice_scope)
+        journal_ids = self.search("account.journal", [("som_sync_odoo_invoices", "=", True)])
+        invoice_types = INVOICE_SCOPE_TYPES[self.invoice_scope]
+        invoice_ids = self.search(INVOICE, [
+            ("company_id", "=", self.company_id),
+            ("state", "=", "open"),
+            ("residual", "!=", 0),
+            ("type", "in", invoice_types),
+            ("journal_id", "in", journal_ids),
+        ]) if journal_ids else []
+        invoices = self.read_invoices(invoice_ids)
+        diagnostics = []
+        for inv in invoices:
+            if (relation_id(inv["company_id"]) != self.company_id
+                    or inv["state"] != "open" or inv["type"] not in invoice_types
+                    or relation_id(inv["journal_id"]) not in journal_ids
+                    or amount(inv["residual"]) == 0):
+                raise ValueError("La factura {} no compleix la selecció; revisa la còpia ERP"
+                                 .format(inv["id"]))
+            amount(inv["amount_total"])
+            if not inv["date_invoice"]:
+                diagnostics.append({"code": "missing_invoice_date", "invoice_id": inv["id"]})
+        logger.info("Identificació completada: %s factures; %s diagnòstics",
+                    len(invoices), len(diagnostics))
+        return {"invoices": invoices, "journal_ids": journal_ids, "diagnostics": diagnostics}
 
 
 def invoice_rows(data):
-    """Construeix el control de residuals sense agregar deutes de fraccionaments."""
-    accounts = {row["id"]: row for row in data["accounts"]}
-    active_ids = {
-        relation_id(row["invoice_id"])
-        for row in data["agreements"]
-        if row["state"] in ACTIVE_AGREEMENTS
-    }
-    rows = []
-    for invoice in data["invoices"]:
-        account_id = relation_id(invoice["account_id"])
-        rows.append(
-            {
-                "erp_invoice_id": invoice["id"],
-                "number": invoice["number"],
-                "type": invoice["type"],
-                "state": invoice["state"],
-                "partner_id": relation_id(invoice["partner_id"]),
-                "account_id": account_id,
-                "account_code": accounts.get(account_id, {}).get("code", ""),
-                "currency_id": relation_id(invoice["currency_id"]),
-                "date_invoice": invoice["date_invoice"],
-                "date_due": invoice["date_due"],
-                "original_total": str(amount(invoice["amount_total"])),
-                "invoice_residual": str(amount(invoice["residual"])),
-                "has_active_installments": invoice["id"] in active_ids,
-            }
-        )
-    return rows
+    """Una fila de control per factura, amb imports decimals com a text."""
+    return [{
+        "erp_invoice_id": inv["id"], "number": inv["number"], "type": inv["type"],
+        "state": inv["state"], "partner_id": relation_id(inv["partner_id"]),
+        "currency_id": relation_id(inv["currency_id"]),
+        "journal_id": relation_id(inv["journal_id"]),
+        "date_invoice": inv["date_invoice"], "date_due": inv["date_due"],
+        "original_total": str(amount(inv["amount_total"])),
+        "invoice_residual": str(amount(inv["residual"])),
+    } for inv in sorted(data["invoices"], key=lambda row: row["id"])]
+
+
+def control_totals(rows):
+    """Agrupa recomptes i imports sense barrejar tipus ni monedes."""
+    totals = {}
+    for row in rows:
+        key = (row["type"], row["currency_id"])
+        group = totals.setdefault(key, {"invoice_count": 0, "original_total": Decimal(0),
+                                        "residual": Decimal(0)})
+        group["invoice_count"] += 1
+        group["original_total"] += amount(row["original_total"])
+        group["residual"] += amount(row["invoice_residual"])
+    return [{
+        "type": group_key[0], "currency_id": group_key[1],
+        "invoice_count": values["invoice_count"],
+        "original_total": str(values["original_total"]), "residual": str(values["residual"]),
+    } for group_key, values in sorted(totals.items(), key=lambda item: str(item[0]))]
 
 
 def write_export(output, data, metadata):
-    """Crea una extracció nova; mai sobreescriu una foto anterior."""
+    """Genera els dos fitxers de la fase 1 en un directori nou."""
     rows = invoice_rows(data)
-    totals = defaultdict(Decimal)
-    for row in rows:
-        key = (row["type"], row["currency_id"], row["account_id"], row["partner_id"])
-        totals[key] += amount(row["invoice_residual"])
-    data = dict(data)
-    data["metadata"] = metadata
-    data["invoice_residual_totals"] = [
-        {
-            "type": total_key[0],
-            "currency_id": total_key[1],
-            "account_id": total_key[2],
-            "partner_id": total_key[3],
-            "residual": str(value),
-        }
-        for total_key, value in sorted(totals.items(), key=lambda item: str(item[0]))
-    ]
-    content = json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    ids = [row["erp_invoice_id"] for row in rows]
+    if len(ids) != len(set(ids)):
+        raise ValueError("La selecció conté IDs de factura duplicats")
+    export_metadata = dict(metadata)
+    export_metadata.update({"format_version": 1, "phase": "identify_invoice_ids",
+                            "model": INVOICE, "invoice_count": len(ids),
+                            "journal_ids": data["journal_ids"]})
+    totals = control_totals(rows)
+    payload = {"metadata": export_metadata, "invoice_ids": ids,
+               "control_totals": totals, "diagnostics": data["diagnostics"]}
+    content = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+    logger.info("Creant el directori de sortida %s", output)
     output.mkdir()
-    (output / "opening_invoices.json").write_text(content, encoding="utf-8")
-    (output / "opening_invoices.sha256").write_text(
-        hashlib.sha256(content.encode("utf-8")).hexdigest()
-        + "  opening_invoices.json\n",
-        encoding="utf-8",
-    )
-    fieldnames = list(rows[0]) if rows else ["erp_invoice_id", "invoice_residual"]
+    logger.info("Escrivint %s (%s IDs)", output / "invoice_ids.json", len(ids))
+    (output / "invoice_ids.json").write_text(content, encoding="utf-8")
+    logger.info("Escrivint %s (%s factures)", output / "invoices.csv", len(rows))
     with (output / "invoices.csv").open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=fieldnames, delimiter=";")
+        writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS, delimiter=";")
         writer.writeheader()
         writer.writerows(rows)
+    for total in totals:
+        logger.info("Control %s, moneda %s: %s factures; total original %s; pendent %s",
+                    total["type"], total["currency_id"], total["invoice_count"],
+                    total["original_total"], total["residual"])
+    logger.info("Fitxers de la fase 1 generats a %s", output)
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cutoff", required=True, type=date.fromisoformat)
+    parser.add_argument(
+        "--reference-date", "--cutoff", dest="reference_date", required=True,
+        type=date.fromisoformat,
+        help="Data de referència de l'assaig (YYYY-MM-DD); no filtra ni calcula històrics",
+    )
     parser.add_argument("--company-id", required=True, type=int)
     parser.add_argument(
-        "--snapshot-reference",
-        required=True,
-        help="Identificador de la còpia consistent de l'ERP",
+        "--invoice-scope", choices=["customers", "suppliers", "all"], default="all",
+        help="Abast: customers (clients), suppliers (proveïdors), all (tots, per defecte)",
     )
-    parser.add_argument(
-        "--output",
-        required=True,
-        type=Path,
-        help="Directori nou, amb el directori pare ja existent",
-    )
+    parser.add_argument("--snapshot-reference", required=True,
+                        help="Identificador de la còpia consistent de l'ERP")
+    parser.add_argument("--output", required=True, type=Path,
+                        help="Directori nou, amb el directori pare ja existent")
     parser.add_argument("--batch-size", type=int, default=200)
     args = parser.parse_args(argv)
     if args.company_id <= 0 or args.batch_size <= 0:
@@ -324,41 +200,37 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
+                        datefmt="%H:%M:%S")
     try:
         import dbconfig
         from erppeek import Client
 
         started = datetime.now(timezone.utc).isoformat()
+        logger.info("Connectant a l'ERP amb erppeek...")
         client = Client(**dbconfig.erppeek)
-        data = Extractor(client, args.company_id, args.batch_size).extract(
-            args.cutoff.isoformat()
-        )
-        write_export(
-            args.output,
-            data,
-            {
-                "format_version": 1,
-                "cutoff": args.cutoff.isoformat(),
-                "snapshot_reference": args.snapshot_reference,
-                "company_id": args.company_id,
-                "source_database": dbconfig.erppeek["db"],
-                "extraction_started_at": started,
-                "extraction_finished_at": datetime.now(timezone.utc).isoformat(),
-                "scope": "invoice_residuals_and_related_installments",
-                "ready_for_import": False,
-            },
-        )
+        logger.info("Connexió amb l'ERP establerta")
+        data = Extractor(client, args.company_id, args.batch_size,
+                         invoice_scope=args.invoice_scope).extract(args.reference_date.isoformat())
+        write_export(args.output, data, {
+            "reference_date": args.reference_date.isoformat(),
+            "cutoff": args.reference_date.isoformat(), "residual_basis": "current_erp_state",
+            "snapshot_reference": args.snapshot_reference, "company_id": args.company_id,
+            "invoice_scope": args.invoice_scope,
+            "invoice_types": INVOICE_SCOPE_TYPES[args.invoice_scope],
+            "selection": {"state": "open", "residual_nonzero": True,
+                          "only_sync_enabled_journals": True},
+            "source_database": dbconfig.erppeek["db"],
+            "extraction_started_at": started,
+            "extraction_finished_at": datetime.now(timezone.utc).isoformat(),
+        })
     except KeyError as exc:
-        print("Falta la clau de configuració {}".format(exc.args[0]), file=sys.stderr)
+        print("Falta la clau de dades o configuració {}".format(exc.args[0]), file=sys.stderr)
         return 1
     except (ImportError, ValueError, OSError, RuntimeError, Error) as exc:
-        print("No s'ha pogut completar l'extracció: {}".format(exc), file=sys.stderr)
+        print("No s'ha pogut completar la identificació: {}".format(exc), file=sys.stderr)
         return 1
-    print(
-        "Extracció: {}; factures: {}; diagnòstics: {}".format(
-            args.output, len(data["invoices"]), len(data["diagnostics"])
-        )
-    )
+    print("Fase 1 completada: {}; {} IDs de factura".format(args.output, len(data["invoices"])))
     return 0
 
 

@@ -1,105 +1,120 @@
-# Assajos del traspàs de factures obertes
+# Traspàs de factures: simple i per fases
 
-Seguiment: [issue ERP #77](https://github.com/Som-Energia/som_sync_openerp_modules/issues/77).
+Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules/issues/77).
 
-## Primera peça: extracció i diagnòstic
+1. **Identificar IDs i revisar el control de factures**: implementat en aquest script.
+2. **Sincronitzar els IDs** amb `O.OdooSync.common_sync_model_create_update('account.invoice', 'sync', id)`:
+   el futur `sync_opening_invoices.py` està pendent d'implementar.
+3. **Tractar les liquidacions parcials prèvies i els fraccionaments**, incloses
+   les factures originals addicionals necessàries; després quadrar el pendent.
+4. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
+   remeses, cobraments, devolucions i seqüències completes.
 
-`export_opening_invoices.py` és un script independent (Python 3.7 o superior),
-que utilitza `erppeek`, igual que els altres scripts del repositori, sense
-necessitat d'arrencar Odoo. La connexió es crea amb
-`Client(**dbconfig.erppeek)` i les consultes amb `client.execute(...)`.
-S'executa fora del procés de l'ERP i no s'importa des de `__init__.py`.
+## Fase 1 — Identificar les factures
 
-L'objectiu és obtenir el punt de partida reproduïble per a les proves
-d'integració: carregar les factures obertes i després generar cobraments,
-remeses, devolucions i fraccionaments a l'ERP de proves, comprovant que la
-sincronització real els aplica correctament a Odoo.
+`scripts/export_opening_invoices.py` consulta únicament `account.journal` i
+capçaleres d'`account.invoice`. Usa `erppeek` i `Client(**dbconfig.erppeek)` com
+els altres scripts. No modifica dades de l'ERP ni d'Odoo.
 
-### Preparació
+La selecció exigeix empresa indicada, estat `open`, `residual != 0`, tipus dins
+de l'abast i diari amb **`som_sync_odoo_invoices = True`**. Els diaris es consulten
+una sola vegada i les factures es filtren amb `journal_id in [...]`, evitant els
+dominis relacionats que poden provocar cerques massives en l'ORM antic.
 
-Treballa contra una **còpia consistent i sense moviments durant l'extracció** de
-l'ERP. Un conjunt de consultes XML-RPC no proporciona una transacció comuna;
-l'script no congela una base de dades viva. La data de tall ha de correspondre a
-aquesta còpia: no es reconstrueix un pendent històric ni es prediu el desembre.
+L'abast és explícit:
 
-La selecció inclou:
+- `--invoice-scope customers`: `out_invoice` i `out_refund`, per al primer assaig.
+- `--invoice-scope suppliers`: `in_invoice` i `in_refund`.
+- `--invoice-scope all`: tots quatre tipus; és el valor per defecte.
 
-- Factures `open` o `paid` amb `residual != 0`, de l'empresa indicada.
-- Factures referenciades per acords de fraccionament actius, encara que tinguin
-  residual zero: el deute pot estar traspassat a quotes amb apunts propis.
-- Acords i quotes relacionats, incloses les parts ja liquidades.
-- Apunts de les factures, acords, liquidacions i cancel·lacions referenciades.
-- Comptes dels apunts recollits per facilitar la revisió.
+Les factures parcialment liquidades amb pendent s'inclouen. Les originals pagades
+o amb residual zero vinculades a fraccionaments es buscaran en la **fase 3**.
+La fase 1 no consulta acords, quotes, apunts, comptes comptables ni `payment_ids`.
 
-L'script rebutja còpies amb assentaments comptabilitzats posteriors al tall,
-factures seleccionades amb data absent o posterior, acords posteriors i lectures
-incompletes. Aquestes comprovacions **no substitueixen la còpia consistent**.
-Si no existeix el model de fraccionaments, ho indica al JSON; si existeix però no
-es pot consultar, l'extracció falla.
+## Preparació i execució
 
-### Execució
+Configura `scripts/dbconfig.py`, diccionari `erppeek`, amb `server`, `db`, `user`
+i `password` de la còpia ERP de proves. Cal tenir `erppeek` instal·lat i utilitzar
+Python 3.7 o superior. La sintaxi respecta els hooks Python 2.7 del repositori,
+però l'execució de l'script requereix Python 3.
 
-Configura `scripts/dbconfig.py`, diccionari `erppeek`, amb les dades de la còpia
-de proves (`server`, `db`, `user` i `password`), igual que per als altres scripts.
-Cal tenir `erppeek` instal·lat en l'entorn Python utilitzat.
+Treballa sobre una còpia consistent sense moviments durant les consultes i
+conserva-la per comparar. Les consultes RPC no comparteixen una transacció comuna.
+S'obté el **pendent actual**, no una reconstrucció històrica. `--reference-date`
+identifica l'assaig i no filtra registres ni recalcula imports; `--cutoff` es
+manté com a àlies compatible. Les dates de les factures no bloquegen l'extracció.
 
-Des de l'arrel del repositori, amb un directori pare de sortida ja existent:
+Des de l'arrel del repositori, amb el directori pare de sortida ja existent:
 
 ```bash
 python3 scripts/export_opening_invoices.py \
-  --cutoff 2026-10-14 \
+  --cutoff 2026-10-15 \
   --company-id 1 \
-  --snapshot-reference copia-erp-2026-10-14 \
-  --output /tmp/obertura-2026-10-14
+  --invoice-scope customers \
+  --snapshot-reference copia-erp-2026-10-15 \
+  --output /tmp/ids-clients-2026-10-15
 ```
 
-Substitueix la data d'exemple per la data de la còpia utilitzada. Per al traspàs
-definitiu, el tall serà `2026-12-31`. Es pot ajustar `--batch-size` (200 per defecte).
+El directori de sortida ha de ser **nou**. Els fitxers de les extraccions anteriors
+es conserven; no se sobreescriuen. Per a l'arrencada definitiva, la referència
+serà `2026-12-31` i l'execució es farà quan s'hagen acabat els moviments.
+Es pot ajustar `--batch-size` (200 per defecte). Amb `pyenv`, substitueix
+`python3` per `PYENV_VERSION=3.10.20 python` si cal seleccionar l'intèrpret.
 
-Selecciona un intèrpret Python 3.7 o superior, encara que l'ERP utilitzi una
-versió antiga. Amb `pyenv`, pots substituir `python3` per
-`PYENV_VERSION=3.10.20 python`; aquesta és la versió emprada per verificar l'script.
-La sintaxi respecta els hooks de validació amb Python 2.7 del repositori, però
-l'execució de l'script requereix Python 3.
+Els logs en català mostren connexió, abast, cerques, cada lot de capçaleres,
+recomptes, totals de control i fitxers generats. Van a `stderr` amb hora i nivell
+`INFO` i es mostren immediatament. No mostren contrasenyes ni payloads complets.
 
-### Resultat
+## Resultats: dos fitxers
 
-- `opening_invoices.json`: registres originals, metadades d'origen i del tall,
-  disponibilitat dels fraccionaments, diagnòstics i totals de residual per tipus,
-  moneda, compte i tercer. Els registres conserven els identificadors **ERP**;
-  encara no són un payload de la API d'Odoo.
-- `invoices.csv`: número, tercer, compte, moneda, dates, total original, residual
-  i indicador d'acords actius. Utilitza el mòdul CSV per conservar correctament
-  separadors, salts de línia i accents.
-- `opening_invoices.sha256`: empremta del JSON per identificar-ne el contingut.
+### `invoice_ids.json`
 
-Els totals es calculen amb `Decimal` i es guarden com a text. Els imports dels
-registres originals es conserven tal com els retorna l'ERP. El residual manté el
-signe de l'ERP i els totals separen tipus i monedes: no són un saldo net de major.
-**No se sumen residuals i quotes**: pot haver-hi imports traspassats o superposats
-que cal analitzar. El JSON queda marcat `ready_for_import: false`.
+És el manifest d'IDs per a la futura fase 2, no un payload de factura d'Odoo.
+Conté:
 
-Cada execució exigeix un directori nou per no sobreescriure una foto anterior.
-Conserva la mateixa còpia de l'ERP per al quadrament inicial. Quan després generis
-esdeveniments a l'ERP de proves, compara Odoo amb l'estat evolucionat d'aquella
-còpia un cop processades les cues.
+- `invoice_ids`: IDs ERP únics i ordenats d'`account.invoice`.
+- `metadata`: versió del format, fase `identify_invoice_ids`, model, recompte,
+  base de dades d'origen, empresa, abast, diaris habilitats, criteris de selecció,
+  identificador de còpia i hores reals d'inici i final de l'extracció.
+- `control_totals`: recompte, total original i residual per tipus i moneda,
+  calculats amb `Decimal` i guardats com a text.
+- `diagnostics`: dates de factura absents que cal revisar; no impedeixen identificar l'ID.
 
-## Peces següents
+`metadata.residual_basis` és `current_erp_state`. `reference_date` i el camp
+compatible `cutoff` són la mateixa referència d'assaig, no un saldo històric.
+Les dades completes de factures es llegiran a l'ERP quan se sincronitzen en la
+fase 2; no es dupliquen en aquest JSON.
 
-1. Analitzar aquesta extracció amb casos reals de fraccionaments i conciliar-la
-   amb els saldos globals, incloent-hi les partides sense factura.
-2. Acordar el diari, la data comptable i la contrapartida d'obertura.
-3. Implementar la càrrega a Odoo, la resolució de dades mestres i els mapatges
-   `odoo.sync`, amb represa i sense duplicats.
-4. Preservar les dependències necessàries per a devolucions de moviments previs
-   al tall i definir la frontera amb les cues històriques.
-5. Afegir el comparador ERP/Odoo i executar els casos d'integració de punta a punta.
+### `invoices.csv`
 
-La primera peça encara no importa ni compara dades amb Odoo, ni exporta tot el
-major o totes les remeses històriques. No modifica els dos sistemes.
+Una fila per ID, amb les columnes `erp_invoice_id`, `number`, `type`, `state`,
+`partner_id`, `currency_id`, `journal_id`, `date_invoice`, `date_due`,
+`original_total` i `invoice_residual`. El format és UTF-8 amb separador `;` i
+escapat CSV per conservar accents, separadors i salts de línia.
+La capçalera és estable també quan no s'ha seleccionat cap factura.
 
-## Verificació local
+El nou format de fase 1 substitueix el JSON comptable detallat i el checksum del
+prototip anterior. Només es generen `invoice_ids.json` i `invoices.csv`.
+
+## Comprovar la selecció
+
+La consulta SQL facilitada per al primer assaig de clients en diaris habilitats
+retornava 44.747 factures i 270 rectificatives: **45.017 registres de referència**.
+El recompte pot variar segons la còpia i els permisos de l'usuari ERP.
+
+Contrasta els IDs, recomptes i imports amb la mateixa còpia de l'ERP. Els totals
+es mantenen separats per tipus i moneda, respectant els signes. L'script rebutja
+imports invàlids, lectures incompletes o duplicades i registres que ja no
+compleixen la selecció quan es llegeixen.
+
+El pendent d'Odoo es quadrarà **després de la fase 3**: la sincronització existent
+crea la factura pel total original. Una factura de 100 amb 40 ja cobrats es
+sincronitza inicialment pel total de 100; les liquidacions prèvies han de deixar
+el pendent de 60. Una crida asíncrona programada tampoc confirma la creació:
+la fase 2 haurà de comprovar els resultats a `odoo.sync`.
+
+## Proves locals
 
 ```bash
-python3 -m unittest discover -s scripts/tests -v
+PYENV_VERSION=3.10.20 python -m unittest discover -s scripts/tests -v
 ```
