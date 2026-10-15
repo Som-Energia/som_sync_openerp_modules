@@ -4,7 +4,7 @@ Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules
 
 1. **Identificar IDs i revisar el control de factures**: implementat en aquest script.
 2. **Sincronitzar els IDs** amb `O.OdooSync.common_sync_model_create_update('account.invoice', 'sync', id)`:
-   el futur `sync_opening_invoices.py` està pendent d'implementar.
+   el futur `opening_02_sync_invoices.py` està pendent d'implementar.
 3. **Tractar les liquidacions parcials prèvies i els fraccionaments**, incloses
    les factures originals addicionals necessàries; després quadrar el pendent.
 4. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
@@ -12,7 +12,7 @@ Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules
 
 ## Fase 1 — Identificar les factures
 
-`scripts/export_opening_invoices.py` consulta únicament `account.journal` i
+`scripts/opening_01_export_invoices.py` consulta únicament `account.journal` i
 capçaleres d'`account.invoice`. Usa `erppeek` i `Client(**dbconfig.erppeek)` com
 els altres scripts. No modifica dades de l'ERP ni d'Odoo.
 
@@ -47,7 +47,7 @@ manté com a àlies compatible. Les dates de les factures no bloquegen l'extracc
 Des de l'arrel del repositori, amb el directori pare de sortida ja existent:
 
 ```bash
-python3 scripts/export_opening_invoices.py \
+python3 scripts/opening_01_export_invoices.py \
   --cutoff 2026-10-15 \
   --company-id 1 \
   --invoice-scope customers \
@@ -97,6 +97,11 @@ El nou format de fase 1 substitueix el JSON comptable detallat i el checksum del
 prototip anterior. Només es generen `invoice_ids.json` i `invoices.csv`.
 
 ## Comprovar la selecció
+
+`scripts/opening_01.sql` conté la consulta equivalent per a `--company-id 1`
+i `--invoice-scope customers`. Si canvies aquests paràmetres, adapta els filtres
+`company_id` i `type` de la SQL. No aplica filtres de data ni les regles de
+permisos de l'ORM.
 
 La consulta SQL facilitada per al primer assaig de clients en diaris habilitats
 retornava 44.747 factures i 270 rectificatives: **45.017 registres de referència**.

@@ -14,8 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-SCRIPT = Path(__file__).resolve().parents[1] / "export_opening_invoices.py"
-SPEC = importlib.util.spec_from_file_location("export_opening_invoices", SCRIPT)
+SCRIPT = Path(__file__).resolve().parents[1] / "opening_01_export_invoices.py"
+SPEC = importlib.util.spec_from_file_location("opening_01_export_invoices", SCRIPT)
 exporter = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(exporter)
 
