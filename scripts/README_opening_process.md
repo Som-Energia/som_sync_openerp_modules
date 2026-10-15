@@ -6,7 +6,9 @@ Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules
 2. **Sincronitzar els IDs** amb `O.OdooSync.common_sync_model_create_update('account.invoice', 'sync', id)`:
    implementat en `opening_02_sync_invoices.py`, amb control de les crides RPC.
 3. **Tractar les liquidacions parcials prèvies i els fraccionaments**, incloses
-   les factures originals addicionals necessàries; després quadrar el pendent.
+   les factures originals addicionals necessàries: extracció d'acords i quotes
+   implementada en `opening_03_export_fraccionaments.py`. Sincronització i
+   tractament dels cobraments previs pendents; després quadrar el pendent.
 4. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
    remeses, cobraments, devolucions i seqüències completes.
 
@@ -146,6 +148,75 @@ El retorn async `(None, None)` tampoc confirma l'execució del treball. El segui
 es fa amb els logs, `odoo.sync` i RQ; l'script no consulta estats ni espera resultats.
 No genera fitxers addicionals ni modifica el manifest. Tornar-lo a executar envia
 novament les peticions per a tots els IDs del manifest.
+
+## Fase 3 — Obtenir els fraccionaments
+
+`scripts/opening_03_export_fraccionaments.py` identifica els acords
+`account.invoice.fraccionament` en estat **`no_cobrat` o `parcialment_cobrat`**
+de l'empresa indicada. Manté l'abast `customers`, `suppliers` o `all` (per defecte)
+i exigeix que la factura associada siga de la mateixa empresa i d'un diari amb
+`som_sync_odoo_invoices = True`.
+
+La cerca és independent del manifest de fase 1: **no filtra l'estat ni el residual
+de la factura original**. Així inclou factures pagades o amb pendent zero quan
+encara tenen acords pendents. Parteix dels acords, llegeix només les factures
+referenciades i cerca les quotes per lots d'IDs d'acord, sense dominis relacionats
+ni cerques globals sobre l'històric de factures. Reutilitza les utilitats de lectura
+de `opening_01_export_invoices.py`, que ha d'estar en el mateix directori.
+
+```bash
+python3 scripts/opening_03_export_fraccionaments.py \
+  --cutoff 2026-10-15 \
+  --company-id 1 \
+  --invoice-scope customers \
+  --snapshot-reference copia-erp-2026-10-15 \
+  --output /tmp/fraccionaments-clients-2026-10-15
+```
+
+Usa `Client(**dbconfig.erppeek)` i els mateixos requisits de Python i còpia
+consistent que la fase 1. `--cutoff`/`--reference-date` és només metadada i
+`--batch-size` té valor 200 per defecte. El directori de sortida ha de ser nou.
+Només fa lectures: no sincronitza ni marca cobraments.
+
+Genera tres fitxers:
+
+- **`fraccionament_ids.json`**: IDs d'acord únics i ordenats en `fraccionament_ids`,
+  IDs de les factures originals en `invoice_ids`, metadades (format 1, fase
+  `identify_fraccionament_ids`, model, empresa, abast, origen, diaris i recomptes),
+  diagnòstics i totals de quotes per tipus de factura, moneda i estat.
+  `metadata.invoices_outside_phase_one_count` informa del nombre de factures
+  úniques que no compleixen els filtres d'estat/residual de fase 1; també es
+  mostra al resum. No compara amb el manifest de fase 1 ni genera diagnòstics
+  individuals: és una situació esperable, amb el detall a `fraccionaments.csv`.
+- **`fraccionaments.csv`**: una fila per acord, amb ID, codi, estat, import a
+  fraccionar i dades de la factura original (ID, número, tipus, estat, tercer,
+  moneda, diari, total original i residual actual).
+- **`fraccionament_lines.csv`**: totes les quotes dels acords seleccionats,
+  incloses les `cobrat`, `remesat`, `cancelat` i `dividit`. Conserva ID de quota,
+  acord i factura, tipus, moneda, import, estat, venciment, data d'aplicació i
+  referències `move_line_id`, `invoice_desti_id`, `remesa_desti_id`,
+  `applied_move_id`, `applied_move_line_id`, `canceled_move_id` i `agrupacio_move_id`.
+
+Els CSV són UTF-8 amb separador `;` i capçaleres estables també en seleccions buides.
+Els imports es controlen amb `Decimal`. Els totals per estat són controls de
+les quotes extretes, **no un càlcul del saldo pendent**: no s'han de sumar quotes
+cancel·lades o dividides com si foren deute actiu, ni repetir el total de la factura
+quan té més d'un acord. Es rebutgen lectures incompletes/duplicades, imports
+invàlids i canvis d'empresa/acord detectats durant la lectura. S'informen com a
+diagnòstics els acords sense quotes, els venciments absents i les quotes cobrades
+sense data d'aplicació.
+
+`scripts/opening_03.sql` proporciona la selecció equivalent per a empresa 1 i
+clients. Retorna una fila per quota i conserva acords sense quotes amb `LEFT JOIN`.
+Per comptar acords o factures cal usar IDs diferents; les columnes de capçalera
+es repeteixen per quota. Adapta empresa i tipus si canvies els arguments, i
+contrasta sobre la mateixa còpia: la SQL no aplica els permisos de l'ORM.
+
+El sincronitzador actual de fraccionaments intenta sincronitzar primer la factura
+original i envia totes les quotes amb import i venciment, però **no envia l'estat
+de cobrament**. El pas posterior haurà de resoldre com reflectir a Odoo les quotes
+ja cobrades, utilitzant la traçabilitat conservada, i quadrar el pendent. Aquesta
+extracció no implementa encara ni aquest tractament ni la sincronització d'acords.
 
 ## Proves locals
 
