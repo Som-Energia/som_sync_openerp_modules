@@ -1,3 +1,4 @@
+// Factures obertes amb residu diferent de zero
 SELECT
     ai.id           AS erp_invoice_id,
     ai.number,
@@ -18,3 +19,18 @@ WHERE ai.company_id = 1
   AND ai.type IN ('out_invoice', 'out_refund')
   AND aj.som_sync_odoo_invoices = TRUE
 ORDER BY ai.id;
+
+
+// Factures obertes amb residu diferent de zero agrupades per any
+SELECT
+    EXTRACT(YEAR FROM ai.date_invoice)::integer AS any_factura,
+    COUNT(*) AS total_factures
+FROM account_invoice ai
+JOIN account_journal aj ON aj.id = ai.journal_id
+WHERE ai.company_id = 1
+  AND ai.state = 'open'
+  AND ai.residual <> 0
+  AND ai.type IN ('out_invoice', 'out_refund')
+  AND aj.som_sync_odoo_invoices = TRUE
+GROUP BY EXTRACT(YEAR FROM ai.date_invoice)
+ORDER BY any_factura NULLS LAST;

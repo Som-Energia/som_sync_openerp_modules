@@ -40,3 +40,14 @@ WHERE aif.company_id = 1
   AND ai.type IN ('out_invoice', 'out_refund')
   AND aj.som_sync_odoo_invoices = TRUE
 ORDER BY aif.id, line.id;
+
+
+// Comptar acords per estat
+SELECT
+    state,
+    COUNT(*) AS total_acords
+FROM account_invoice_fraccionament aif
+WHERE aif.company_id = 1
+  AND aif.state IN ('no_cobrat', 'parcialment_cobrat')
+GROUP BY state
+ORDER BY total_acords DESC;
