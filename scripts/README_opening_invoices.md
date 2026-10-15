@@ -4,7 +4,7 @@ Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules
 
 1. **Identificar IDs i revisar el control de factures**: implementat en aquest script.
 2. **Sincronitzar els IDs** amb `O.OdooSync.common_sync_model_create_update('account.invoice', 'sync', id)`:
-   el futur `opening_02_sync_invoices.py` està pendent d'implementar.
+   implementat en `opening_02_sync_invoices.py`, amb control de les crides RPC.
 3. **Tractar les liquidacions parcials prèvies i els fraccionaments**, incloses
    les factures originals addicionals necessàries; després quadrar el pendent.
 4. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
@@ -69,7 +69,7 @@ recomptes, totals de control i fitxers generats. Van a `stderr` amb hora i nivel
 
 ### `invoice_ids.json`
 
-És el manifest d'IDs per a la futura fase 2, no un payload de factura d'Odoo.
+És el manifest d'IDs per a la fase 2, no un payload de factura d'Odoo.
 Conté:
 
 - `invoice_ids`: IDs ERP únics i ordenats d'`account.invoice`.
@@ -115,8 +115,37 @@ compleixen la selecció quan es llegeixen.
 El pendent d'Odoo es quadrarà **després de la fase 3**: la sincronització existent
 crea la factura pel total original. Una factura de 100 amb 40 ja cobrats es
 sincronitza inicialment pel total de 100; les liquidacions prèvies han de deixar
-el pendent de 60. Una crida asíncrona programada tampoc confirma la creació:
-la fase 2 haurà de comprovar els resultats a `odoo.sync`.
+el pendent de 60. El seguiment dels resultats asíncrons es farà manualment amb
+els logs, `odoo.sync` i RQ.
+
+## Fase 2 — Sol·licitar la sincronització async
+
+`scripts/opening_02_sync_invoices.py` llegeix `invoice_ids.json`, valida el
+format de fase 1, el model, el recompte i que els IDs siguen positius i únics.
+Connecta amb `Client(**dbconfig.erppeek)` a la mateixa còpia ERP de la fase 1 i
+comprova que `account.invoice` tinga la sincronització habilitada en **async**.
+`auto_sync` pot estar desactivat: l'acció explícita `sync` força la petició.
+
+```bash
+python3 scripts/opening_02_sync_invoices.py \
+  --input /tmp/ids-clients-2026-10-15/invoice_ids.json
+```
+
+Per cada ID fa una única crida a
+`O.OdooSync.common_sync_model_create_update('account.invoice', 'sync', invoice_id)`.
+Mostra progrés cada 200 crides i al final, registra cada error RPC amb l'ID i
+continua amb les altres factures. No fa reintents automàtics. El resum final
+mostra el nombre de crides sense error RPC i amb error RPC, i els IDs fallits.
+El codi d'eixida és `0` si totes les crides acaben sense error RPC, i `1` si
+alguna falla o no es pot validar l'entrada, connectar o confirmar el mode async.
+Un manifest buit acaba amb recompte zero i sense connectar a l'ERP.
+
+**Una crida sense error RPC no confirma que la factura s'haja encuat.** El mètode
+existent pot ometre registres per restriccions i captura errors interns al log.
+El retorn async `(None, None)` tampoc confirma l'execució del treball. El seguiment
+es fa amb els logs, `odoo.sync` i RQ; l'script no consulta estats ni espera resultats.
+No genera fitxers addicionals ni modifica el manifest. Tornar-lo a executar envia
+novament les peticions per a tots els IDs del manifest.
 
 ## Proves locals
 
