@@ -1,4 +1,6 @@
-// Factures obertes amb residu diferent de zero
+-- Filtre opcional --date-from: descomenteu la condició de data de cada consulta
+-- i substituïu 2020-01-01 per la data mínima inclosa.
+-- Factures obertes amb residu diferent de zero
 SELECT
     ai.id           AS erp_invoice_id,
     ai.number,
@@ -18,10 +20,11 @@ WHERE ai.company_id = 1
   AND ai.residual <> 0
   AND ai.type IN ('out_invoice', 'out_refund')
   AND aj.som_sync_odoo_invoices = TRUE
+  -- AND ai.date_invoice >= '2020-01-01'
 ORDER BY ai.id;
 
 
-// Factures obertes amb residu diferent de zero agrupades per any
+-- Factures obertes amb residu diferent de zero agrupades per any
 SELECT
     EXTRACT(YEAR FROM ai.date_invoice)::integer AS any_factura,
     COUNT(*) AS total_factures
@@ -32,5 +35,6 @@ WHERE ai.company_id = 1
   AND ai.residual <> 0
   AND ai.type IN ('out_invoice', 'out_refund')
   AND aj.som_sync_odoo_invoices = TRUE
+  -- AND ai.date_invoice >= '2020-01-01'
 GROUP BY EXTRACT(YEAR FROM ai.date_invoice)
 ORDER BY any_factura NULLS LAST;

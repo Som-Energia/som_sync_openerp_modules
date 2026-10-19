@@ -58,7 +58,7 @@ def amount(value):
 class Extractor(object):
     """Consulta únicament diaris i capçaleres de factures per identificar IDs."""
 
-    def __init__(self, client, company_id, batch_size=200, invoice_scope="all"):
+    def __init__(self, client, company_id, batch_size=200, invoice_scope="all", date_from=None):
         if invoice_scope not in INVOICE_SCOPE_TYPES:
             raise ValueError("Abast de factures desconegut: {}".format(invoice_scope))
         if company_id <= 0 or batch_size <= 0:
@@ -67,6 +67,7 @@ class Extractor(object):
         self.company_id = company_id
         self.batch_size = batch_size
         self.invoice_scope = invoice_scope
+        self.date_from = date_from.isoformat() if date_from is not None else None
 
     def search(self, model, domain):
         logger.info("Cercant registres de %s...", model)
@@ -93,20 +94,26 @@ class Extractor(object):
                     self.company_id, reference_date, self.invoice_scope)
         journal_ids = self.search("account.journal", [("som_sync_odoo_invoices", "=", True)])
         invoice_types = INVOICE_SCOPE_TYPES[self.invoice_scope]
-        invoice_ids = self.search(INVOICE, [
+        domain = [
             ("company_id", "=", self.company_id),
             ("state", "=", "open"),
             ("residual", "!=", 0),
             ("type", "in", invoice_types),
             ("journal_id", "in", journal_ids),
-        ]) if journal_ids else []
+        ]
+        if self.date_from is not None:
+            domain.append(("date_invoice", ">=", self.date_from))
+            logger.info("Filtre de data de factura: des de %s (inclòs)", self.date_from)
+        invoice_ids = self.search(INVOICE, domain) if journal_ids else []
         invoices = self.read_invoices(invoice_ids)
         diagnostics = []
         for inv in invoices:
             if (relation_id(inv["company_id"]) != self.company_id
                     or inv["state"] != "open" or inv["type"] not in invoice_types
                     or relation_id(inv["journal_id"]) not in journal_ids
-                    or amount(inv["residual"]) == 0):
+                    or amount(inv["residual"]) == 0
+                    or (self.date_from is not None and (
+                        not inv["date_invoice"] or inv["date_invoice"] < self.date_from))):
                 raise ValueError("La factura {} no compleix la selecció; revisa la còpia ERP"
                                  .format(inv["id"]))
             amount(inv["amount_total"])
@@ -183,6 +190,8 @@ def parse_args(argv=None):
         help="Data de referència de l'assaig (YYYY-MM-DD); no filtra ni calcula històrics",
     )
     parser.add_argument("--company-id", required=True, type=int)
+    parser.add_argument("--date-from", type=parse_date,
+                        help="Data de factura mínima inclosa (YYYY-MM-DD); opcional")
     parser.add_argument(
         "--invoice-scope", choices=["customers", "suppliers", "all"], default="all",
         help="Abast: customers (clients), suppliers (proveïdors), all (tots, per defecte)",
@@ -213,8 +222,9 @@ def main(argv=None):
         logger.info("Connectant a l'ERP amb erppeek...")
         client = Client(**dbconfig.erppeek)
         logger.info("Connexió amb l'ERP establerta")
-        data = Extractor(client, args.company_id, args.batch_size,
-                         invoice_scope=args.invoice_scope).extract(args.reference_date.isoformat())
+        extractor = Extractor(client, args.company_id, args.batch_size,
+                              invoice_scope=args.invoice_scope, date_from=args.date_from)
+        data = extractor.extract(args.reference_date.isoformat())
         write_export(args.output, data, {
             "reference_date": args.reference_date.isoformat(),
             "cutoff": args.reference_date.isoformat(), "residual_basis": "current_erp_state",
@@ -222,6 +232,7 @@ def main(argv=None):
             "invoice_scope": args.invoice_scope,
             "invoice_types": INVOICE_SCOPE_TYPES[args.invoice_scope],
             "selection": {"state": "open", "residual_nonzero": True,
+                          "date_invoice_from": extractor.date_from,
                           "only_sync_enabled_journals": True},
             "source_database": dbconfig.erppeek["db"],
             "extraction_started_at": started,

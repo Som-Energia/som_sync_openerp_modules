@@ -23,6 +23,14 @@ de l'abast i diari amb **`som_sync_odoo_invoices = True`**. Els diaris es consul
 una sola vegada i les factures es filtren amb `journal_id in [...]`, evitant els
 dominis relacionats que poden provocar cerques massives en l'ORM antic.
 
+El filtre opcional **`--date-from YYYY-MM-DD`** afegeix
+`date_invoice >= data` (dia inclòs). Sense aquest argument es conserva la selecció
+sense límit de data. Amb el filtre, les factures sense data queden excloses.
+El criteri es guarda en `metadata.selection.date_invoice_from` del manifest
+(`null` si no s'ha indicat). La fase 2 sincronitza només els IDs d'aquest manifest;
+no cal repetir-hi la data. Aquest filtre no s'aplica a l'extracció independent
+d'acords de la fase 3.
+
 L'abast és explícit:
 
 - `--invoice-scope customers`: `out_invoice` i `out_refund`, per al primer assaig.
@@ -45,7 +53,12 @@ Treballa sobre una còpia consistent sense moviments durant les consultes i
 conserva-la per comparar. Les consultes RPC no comparteixen una transacció comuna.
 S'obté el **pendent actual**, no una reconstrucció històrica. `--reference-date`
 identifica l'assaig i no filtra registres ni recalcula imports; `--cutoff` es
-manté com a àlies compatible. Les dates de les factures no bloquegen l'extracció.
+manté com a àlies compatible. Sense `--date-from`, les dates de les factures
+no bloquegen l'extracció.
+
+`--date-from` és el filtre real de data de factura; és independent de
+`--reference-date`/`--cutoff`. Filtra documents, sense reconstruir el seu pendent
+a una data històrica.
 
 Des de l'arrel del repositori, amb el directori pare de sortida ja existent:
 
@@ -54,6 +67,7 @@ python scripts/opening_01_export_invoices.py \
   --cutoff 2026-10-15 \
   --company-id 1 \
   --invoice-scope customers \
+  --date-from 2020-01-01 \
   --snapshot-reference copia-erp-2026-10-15 \
   --output /tmp/ids-clients-2026-10-15
 ```
@@ -104,8 +118,10 @@ prototip anterior. Només es generen `invoice_ids.json` i `invoices.csv`.
 
 `scripts/opening_01.sql` conté la consulta equivalent per a `--company-id 1`
 i `--invoice-scope customers`. Si canvies aquests paràmetres, adapta els filtres
-`company_id` i `type` de la SQL. No aplica filtres de data ni les regles de
-permisos de l'ORM.
+`company_id` i `type` de la SQL. Per defecte no aplica filtres de data ni les regles de
+permisos de l'ORM. Inclou la condició opcional de `--date-from`, comentada tant
+en la consulta de detall com en l'agrupació anual: descomenta-la i adapta la data
+en ambdues consultes per contrastar una exportació filtrada.
 
 La consulta SQL facilitada per al primer assaig de clients en diaris habilitats
 retornava 44.747 factures i 270 rectificatives: **45.017 registres de referència**.

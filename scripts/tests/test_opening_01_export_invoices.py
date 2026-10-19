@@ -15,6 +15,7 @@ from opening_test_support import (
 
 with patch.object(sys, "path", [SCRIPTS] + sys.path):
     import opening_01_export_invoices as exporter
+    import opening_02_sync_invoices as syncer
 
 
 def invoice(invoice_id, residual=60, state="open", invoice_type="out_invoice"):
@@ -60,6 +61,8 @@ class FakeReader:
                         return actual != value
                     if operator == "in":
                         return actual in value
+                    if operator == ">=":
+                        return bool(actual) and actual >= value
                     raise AssertionError("Operador inesperat: {}".format(operator))
 
                 records = [row for row in records if matches(row)]
@@ -104,6 +107,52 @@ class OpeningIdentificationTest(TestCase):
         reader = FakeReader([invoice(1)])
         extractor = exporter.Extractor(reader, 1)
         self.assertEqual(extractor.extract("2026-10-14"), extractor.extract("2026-12-31"))
+
+    def test_date_from_is_inclusive_excludes_missing_dates_and_is_optional(self):
+        rows = [invoice(1), invoice(2), invoice(3), invoice(4)]
+        for row, invoice_date in zip(rows, ["2026-10-14", "2026-10-15", "2026-10-16", False]):
+            row["date_invoice"] = invoice_date
+        reader = FakeReader(rows)
+        data = exporter.Extractor(reader, 1, date_from=exporter.parse_date("2026-10-15")).extract(
+            "2020-01-01")
+        self.assertEqual([row["id"] for row in data["invoices"]], [2, 3])
+        domain = next(args[0] for model, method, args in reader.calls
+                      if model == exporter.INVOICE and method == "search")
+        self.assertIn(("date_invoice", ">=", "2026-10-15"), domain)
+        unfiltered = exporter.Extractor(FakeReader(rows), 1).extract("2020-01-01")
+        self.assertEqual([row["id"] for row in unfiltered["invoices"]], [1, 2, 3, 4])
+        self.assertEqual(unfiltered["diagnostics"], [
+            {"code": "missing_invoice_date", "invoice_id": 4}])
+
+    def test_date_from_is_revalidated_after_search(self):
+        for invoice_date in ("2026-10-14", False):
+            changed = invoice(1)
+            changed["date_invoice"] = invoice_date
+            client = Mock()
+            client.execute.side_effect = [[7], [1], [changed]]
+            extractor = exporter.Extractor(client, 1, date_from=exporter.parse_date("2026-10-15"))
+            with self.assertRaisesRegex(ValueError, "no compleix la selecció"):
+                extractor.extract("2026-10-19")
+
+    def test_filtered_manifest_syncs_only_selected_ids(self):
+        older, included = invoice(1), invoice(2)
+        older["date_invoice"] = "2026-10-14"
+        data = exporter.Extractor(FakeReader([older, included]), 1,
+                                  date_from=exporter.parse_date("2026-10-15")).extract("2026-10-19")
+        client = Mock()
+        client.execute.side_effect = [(True, False, True), (None, None)]
+        modules = {"dbconfig": Namespace(erppeek={"db": "copia-proves"}),
+                   "erppeek": Namespace(Client=Mock(return_value=client))}
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "export")
+            exporter.write_export(output, data, {})
+            with patch.dict(sys.modules, modules), redirect_stdout(StringIO()), \
+                    patch.object(syncer.logging, "basicConfig"):
+                result = syncer.main(["--input", os.path.join(output, "invoice_ids.json")])
+        self.assertEqual(result, 0)
+        self.assertEqual(client.execute.call_count, 2)
+        self.assertEqual(client.execute.call_args[0], (
+            "odoo.sync", "common_sync_model_create_update", "account.invoice", "sync", 2))
 
     def test_no_enabled_journals_skips_invoice_history(self):
         reader = FakeReader([invoice(1)])
@@ -202,6 +251,7 @@ class OpeningIdentificationTest(TestCase):
                 result = exporter.main([
                     "--cutoff", "2026-10-14", "--company-id", "1",
                     "--invoice-scope", "customers", "--snapshot-reference", "copia-proves",
+                    "--date-from", "2026-10-15",
                     "--output", str(output),
                 ])
             self.assertEqual(result, 0)
@@ -213,6 +263,7 @@ class OpeningIdentificationTest(TestCase):
             self.assertEqual(metadata["residual_basis"], "current_erp_state")
             self.assertEqual(metadata["invoice_scope"], "customers")
             self.assertTrue(metadata["selection"]["only_sync_enabled_journals"])
+            self.assertEqual(metadata["selection"]["date_invoice_from"], "2026-10-15")
             self.assertNotIn(config["password"], json.dumps(payload))
 
     def test_cutoff_alias_and_all_scope_default_are_preserved(self):
@@ -223,6 +274,17 @@ class OpeningIdentificationTest(TestCase):
             legacy = exporter.parse_args(["--cutoff", "2026-10-14"] + common)
             self.assertEqual(current, legacy)
             self.assertEqual(current.invoice_scope, "all")
+            self.assertIsNone(current.date_from)
+
+    def test_invalid_date_from_is_rejected_before_connecting(self):
+        with temporary_directory() as parent:
+            args = ["--cutoff", "2026-10-19", "--company-id", "1",
+                    "--snapshot-reference", "copia", "--output", os.path.join(parent, "export")]
+            for invalid_date in ("2026-02-30", "19/10/2026"):
+                with patch.object(sys, "stderr", StringIO()), \
+                        self.assertRaises(SystemExit) as caught:
+                    exporter.parse_args(args + ["--date-from", invalid_date])
+                self.assertEqual(caught.exception.code, 2)
 
     def test_rejects_invalid_amounts(self):
         for value in (False, None, "incorrecte", float("nan"), float("inf")):
