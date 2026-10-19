@@ -3,22 +3,18 @@
 
 from __future__ import print_function, unicode_literals
 
-import csv
-import importlib.util
 import json
+import os
 import sqlite3
 import sys
-import tempfile
 import unittest
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from opening_test_support import (
+    Mock, Namespace, SCRIPTS, StringIO, TestCase, patch, read_bytes, read_csv,
+    read_text, redirect_stdout, temporary_directory,
+)
 
-SCRIPT = Path(__file__).resolve().parents[1] / "opening_03_export_fraccionaments.py"
-SPEC = importlib.util.spec_from_file_location("opening_03_export_fraccionaments", SCRIPT)
-exporter = importlib.util.module_from_spec(SPEC)
-with patch.object(sys, "path", [str(SCRIPT.parent)] + sys.path):
-    SPEC.loader.exec_module(exporter)
+with patch.object(sys, "path", [SCRIPTS] + sys.path):
+    import opening_03_export_fraccionaments as exporter
 
 
 def invoice(record_id, invoice_type="out_invoice", state="paid", residual=0, journal=7, company=1):
@@ -85,7 +81,7 @@ class FakeReader:
         return rows
 
 
-class OpeningFraccionamentsTest(unittest.TestCase):
+class OpeningFraccionamentsTest(TestCase):
     def extract(self, reader=None, scope="customers", batch_size=200):
         extractor = exporter.Extractor(reader or FakeReader(), 1, batch_size, scope)
         return extractor.extract("2026-10-15")
@@ -111,9 +107,8 @@ class OpeningFraccionamentsTest(unittest.TestCase):
         agreements = [agreement(index + 10, index) for index in range(1, 7)]
         for scope, expected in [("customers", [11, 12]), ("suppliers", [13, 14]),
                                 ("all", [11, 12, 13, 14])]:
-            with self.subTest(scope=scope):
-                data = self.extract(FakeReader(agreements, invoices, []), scope)
-                self.assertEqual([row["id"] for row in data["agreements"]], expected)
+            data = self.extract(FakeReader(agreements, invoices, []), scope)
+            self.assertEqual([row["id"] for row in data["agreements"]], expected)
 
     def test_preserves_every_line_state_and_payment_references(self):
         lines = [line(index, 10, state) for index, state in enumerate(
@@ -144,11 +139,10 @@ class OpeningFraccionamentsTest(unittest.TestCase):
     def test_rejects_incomplete_or_duplicate_reads_for_each_model(self):
         for model in (exporter.AGREEMENT, "account.invoice", exporter.LINE):
             for duplicate in (False, True):
-                with self.subTest(model=model, duplicate=duplicate):
-                    reader = FakeReader()
-                    reader.bad_model, reader.duplicate = model, duplicate
-                    with self.assertRaisesRegex(ValueError, "incompleta o duplicada"):
-                        self.extract(reader)
+                reader = FakeReader()
+                reader.bad_model, reader.duplicate = model, duplicate
+                with self.assertRaisesRegex(ValueError, "incompleta o duplicada"):
+                    self.extract(reader)
 
     def test_rejects_missing_invoice_and_changed_parent_or_company(self):
         for field, value in [("invoice_id", False), ("state", "cobrat")]:
@@ -156,7 +150,7 @@ class OpeningFraccionamentsTest(unittest.TestCase):
             row[field] = value
             client = Mock()
             client.execute.side_effect = [[7], [10], [row]]
-            with self.subTest(field=field), self.assertRaises(ValueError):
+            with self.assertRaises(ValueError):
                 self.extract(client)
         for field, value in [("invoice_fraccionament_id", [99, "Altre acord"]),
                              ("company_id", [2, "Altra empresa"])]:
@@ -164,13 +158,13 @@ class OpeningFraccionamentsTest(unittest.TestCase):
             row[field] = value
             client = Mock()
             client.execute.side_effect = [[7], [10], [agreement(10, 1)], [invoice(1)], [100], [row]]
-            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "ha canviat"):
+            with self.assertRaisesRegex(ValueError, "ha canviat"):
                 self.extract(client)
 
     def test_invalid_amounts_rejected_and_missing_dates_are_diagnostics(self):
         for value in (False, None, "incorrecte", float("nan"), float("inf")):
             row = line(100, 10, value=value)
-            with self.subTest(value=value), self.assertRaises(ValueError):
+            with self.assertRaises(ValueError):
                 self.extract(FakeReader(lines=[row]))
         row = line(100, 10, "cobrat")
         row["data_venciment"] = False
@@ -192,28 +186,26 @@ class OpeningFraccionamentsTest(unittest.TestCase):
     def test_manifest_csv_totals_and_no_overwrite(self):
         data = self.extract(FakeReader(lines=[line(100, 10, "cobrat", 0.1),
                                               line(101, 10, "cobrat", 0.2)]))
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "export"
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "export")
             exporter.write_export(output, data, {"company_id": 1})
-            payload = json.loads((output / "fraccionament_ids.json").read_text(encoding="utf-8"))
+            payload = json.loads(read_text(os.path.join(output, "fraccionament_ids.json")))
             self.assertEqual(payload["fraccionament_ids"], [10])
             self.assertEqual(payload["invoice_ids"], [1])
             self.assertEqual(payload["metadata"]["model"], exporter.AGREEMENT)
             self.assertEqual(payload["metadata"]["line_count"], 2)
             self.assertEqual(payload["metadata"]["invoices_outside_phase_one_count"], 1)
             self.assertEqual(payload["control_totals"][0]["amount"], "0.3")
-            with (output / "fraccionaments.csv").open(encoding="utf-8", newline="") as stream:
-                rows = list(csv.DictReader(stream, delimiter=";"))
+            _, rows = read_csv(os.path.join(output, "fraccionaments.csv"))
             self.assertEqual(rows[0]["codi"], "A;10\nCatalà")
             self.assertEqual(rows[0]["invoice_state"], "paid")
-            with (output / "fraccionament_lines.csv").open(encoding="utf-8", newline="") as stream:
-                rows = list(csv.DictReader(stream, delimiter=";"))
+            _, rows = read_csv(os.path.join(output, "fraccionament_lines.csv"))
             self.assertEqual([row["erp_line_id"] for row in rows], ["100", "101"])
             self.assertEqual(rows[0]["application_date"], "")
-            original = (output / "fraccionament_ids.json").read_bytes()
+            original = read_bytes(os.path.join(output, "fraccionament_ids.json"))
             with self.assertRaises(OSError):
                 exporter.write_export(output, data, {})
-            self.assertEqual((output / "fraccionament_ids.json").read_bytes(), original)
+            self.assertEqual(read_bytes(os.path.join(output, "fraccionament_ids.json")), original)
 
     def test_totals_keep_states_types_and_currencies_separate(self):
         rows = [{"invoice_type": kind, "currency_id": currency, "state": state, "amount": "10"}
@@ -226,25 +218,24 @@ class OpeningFraccionamentsTest(unittest.TestCase):
     def test_empty_export_has_stable_headers(self):
         data = self.extract(FakeReader(agreements=[]))
         self.assertEqual(data["invoices_outside_phase_one_count"], 0)
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "empty"
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "empty")
             exporter.write_export(output, data, {})
             for filename, fields in [("fraccionaments.csv", exporter.AGREEMENT_CSV_FIELDS),
                                      ("fraccionament_lines.csv", exporter.LINE_CSV_FIELDS)]:
-                with (output / filename).open(encoding="utf-8", newline="") as stream:
-                    reader = csv.DictReader(stream, delimiter=";")
-                    self.assertEqual(reader.fieldnames, fields)
-                    self.assertEqual(list(reader), [])
+                actual_fields, rows = read_csv(os.path.join(output, filename))
+                self.assertEqual(actual_fields, fields)
+                self.assertEqual(rows, [])
 
     def test_main_uses_dbconfig_and_reference_is_metadata_only(self):
         config = {"server": "http://erp-proves:8069", "db": "copia-proves",
                   "user": "proves", "password": "secret-proves"}
         factory = Mock(return_value=FakeReader())
-        modules = {"dbconfig": SimpleNamespace(erppeek=config),
-                   "erppeek": SimpleNamespace(Client=factory)}
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "export"
-            with patch.dict(sys.modules, modules), patch("builtins.print"), \
+        modules = {"dbconfig": Namespace(erppeek=config),
+                   "erppeek": Namespace(Client=factory)}
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "export")
+            with patch.dict(sys.modules, modules), redirect_stdout(StringIO()), \
                     patch.object(exporter.logging, "basicConfig"):
                 result = exporter.main(["--cutoff", "2020-01-01", "--company-id", "1",
                                         "--invoice-scope", "customers",
@@ -252,7 +243,7 @@ class OpeningFraccionamentsTest(unittest.TestCase):
                                         "--output", str(output)])
             self.assertEqual(result, 0)
             factory.assert_called_once_with(**config)
-            raw = (output / "fraccionament_ids.json").read_text(encoding="utf-8")
+            raw = read_text(os.path.join(output, "fraccionament_ids.json"))
             metadata = json.loads(raw)["metadata"]
             self.assertEqual(metadata["source_database"], config["db"])
             self.assertEqual(metadata["reference_date"], "2020-01-01")
@@ -280,7 +271,10 @@ class OpeningFraccionamentsTest(unittest.TestCase):
                     table, ", ".join("?" for field in fields)),
                     [[exporter.relation_id(row[field]) if isinstance(row[field], list)
                       else row[field] for field in fields] for row in records])
-            rows = connection.execute((SCRIPT.parent / "opening_03.sql").read_text()).fetchall()
+            # Les consultes de control posteriors no formen part de la selecció.
+            sql = read_text(os.path.join(SCRIPTS, "opening_03.sql"))
+            query = sql[sql.index("SELECT\n"):].split(";", 1)[0]
+            rows = connection.execute(query).fetchall()
         self.assertEqual(sorted({row[0] for row in rows}), [row["id"]
                          for row in data["agreements"]])
         self.assertEqual([row[13] for row in rows], [100, 101, 102, None])

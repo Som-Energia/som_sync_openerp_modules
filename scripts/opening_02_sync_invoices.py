@@ -4,12 +4,16 @@
 from __future__ import print_function, unicode_literals
 
 import argparse
-import json
 import logging
 import sys
-from http.client import HTTPException
-from pathlib import Path
-from xmlrpc.client import Error
+try:
+    from http.client import HTTPException
+    from xmlrpc.client import Error
+except ImportError:
+    from httplib import HTTPException
+    from xmlrpclib import Error
+
+from opening_common import is_integer, print_message, read_json, text
 
 logger = logging.getLogger(__name__)
 
@@ -19,21 +23,21 @@ SYNC = "odoo.sync"
 
 def load_invoice_ids(path):
     """Valida el manifest complet abans d'enviar cap petició a l'ERP."""
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = read_json(path)
     if not isinstance(payload, dict) or not isinstance(payload.get("metadata"), dict):
         raise ValueError("El manifest ha de contenir metadata i invoice_ids de la fase 1")
     metadata = payload["metadata"]
-    if (type(metadata.get("format_version")) is not int
+    if (not is_integer(metadata.get("format_version"))
             or metadata["format_version"] != 1
             or metadata.get("phase") != "identify_invoice_ids"
             or metadata.get("model") != INVOICE):
         raise ValueError("Format, fase o model del manifest no compatible amb la fase 1")
     ids = payload.get("invoice_ids")
-    if not isinstance(ids, list) or any(type(item) is not int or item <= 0 for item in ids):
+    if not isinstance(ids, list) or any(not is_integer(item) or item <= 0 for item in ids):
         raise ValueError("invoice_ids ha de ser una llista d'enters positius")
     if len(ids) != len(set(ids)):
         raise ValueError("El manifest conté IDs de factura duplicats")
-    if (type(metadata.get("invoice_count")) is not int
+    if (not is_integer(metadata.get("invoice_count"))
             or metadata["invoice_count"] != len(ids)):
         raise ValueError("invoice_count no coincideix amb els IDs del manifest")
     return ids
@@ -58,7 +62,7 @@ def submit_invoices(client, invoice_ids):
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=Path,
+    parser.add_argument("--input", required=True, type=text,
                         help="Fitxer invoice_ids.json generat en la fase 1")
     return parser.parse_args(argv)
 
@@ -83,16 +87,16 @@ def main(argv=None):
                 raise ValueError("account.invoice ha d'estar habilitat per sincronitzar en async")
             logger.info("Sincronització async habilitada; iniciant les crides per factura")
             failed_ids = submit_invoices(client, invoice_ids)
-    except (ImportError, KeyError, ValueError, OSError, Error, HTTPException) as exc:
-        print("No s'ha pogut completar la fase 2: {}".format(exc), file=sys.stderr)
+    except (ImportError, KeyError, ValueError, IOError, OSError, Error, HTTPException) as exc:
+        print_message("No s'ha pogut completar la fase 2: {}".format(exc), file=sys.stderr)
         return 1
-    print("Fase 2: {} IDs; {} crides sense error RPC; {} crides amb error RPC".format(
+    print_message("Fase 2: {} IDs; {} crides sense error RPC; {} crides amb error RPC".format(
         len(invoice_ids), len(invoice_ids) - len(failed_ids), len(failed_ids)))
     if failed_ids:
-        print("IDs amb error RPC: {}".format(
+        print_message("IDs amb error RPC: {}".format(
             ", ".join(str(invoice_id) for invoice_id in failed_ids)), file=sys.stderr)
-    print("Crides completades no implica encuaments confirmats. "
-          "Comproveu els resultats amb els logs, odoo.sync i RQ.")
+    print_message("Crides completades no implica encuaments confirmats. "
+                  "Comproveu els resultats amb els logs, odoo.sync i RQ.")
     return 1 if failed_ids else 0
 
 

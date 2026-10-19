@@ -4,14 +4,16 @@
 from __future__ import print_function, unicode_literals
 
 import argparse
-import csv
-import json
 import logging
+import os
 import sys
-from datetime import date, datetime, timezone
 from decimal import Decimal
-from pathlib import Path
-from xmlrpc.client import Error
+try:
+    from xmlrpc.client import Error
+except ImportError:
+    from xmlrpclib import Error
+
+from opening_common import parse_date, print_message, text, utc_now, write_csv, write_json
 
 from opening_01_export_invoices import (
     Extractor as InvoiceExtractor, INVOICE_SCOPE_TYPES, amount, relation_id,
@@ -176,32 +178,30 @@ def write_export(output, data, metadata):
                "fraccionament_ids": [row["erp_fraccionament_id"] for row in agreements],
                "invoice_ids": sorted(data["invoices"]),
                "control_totals": control_totals(lines), "diagnostics": data["diagnostics"]}
-    content = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
-    output.mkdir()
-    (output / "fraccionament_ids.json").write_text(content, encoding="utf-8")
+    os.mkdir(output)
+    write_json(os.path.join(output, "fraccionament_ids.json"), payload)
     for filename, fields, rows in [("fraccionaments.csv", AGREEMENT_CSV_FIELDS, agreements),
                                    ("fraccionament_lines.csv", LINE_CSV_FIELDS, lines)]:
-        logger.info("Escrivint %s (%s registres)", output / filename, len(rows))
-        with (output / filename).open("w", encoding="utf-8", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=fields, delimiter=";")
-            writer.writeheader()
-            writer.writerows(rows)
+        path = os.path.join(output, filename)
+        logger.info("Escrivint %s (%s registres)", path, len(rows))
+        write_csv(path, fields, rows)
     logger.info("Manifest i CSV de control generats a %s", output)
 
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-date", "--cutoff", dest="reference_date", required=True,
-                        type=date.fromisoformat, help="Referència de l'assaig; no filtra dates")
+                        type=parse_date, help="Referència de l'assaig; no filtra dates")
     parser.add_argument("--company-id", required=True, type=int)
     parser.add_argument("--invoice-scope", choices=["customers", "suppliers", "all"], default="all")
     parser.add_argument("--snapshot-reference", required=True)
-    parser.add_argument("--output", required=True, type=Path, help="Directori de sortida nou")
+    parser.add_argument("--output", required=True, type=text, help="Directori de sortida nou")
     parser.add_argument("--batch-size", type=int, default=200)
     args = parser.parse_args(argv)
     if args.company_id <= 0 or args.batch_size <= 0:
         parser.error("company-id i batch-size han de ser positius")
-    if args.output.exists() or not args.output.parent.is_dir():
+    parent = os.path.dirname(os.path.abspath(args.output))
+    if os.path.exists(args.output) or not os.path.isdir(parent):
         parser.error("output ha de ser un directori nou amb un pare existent")
     return args
 
@@ -214,7 +214,7 @@ def main(argv=None):
         import dbconfig
         from erppeek import Client
 
-        started = datetime.now(timezone.utc).isoformat()
+        started = utc_now()
         logger.info("Connectant a l'ERP amb erppeek...")
         client = Client(**dbconfig.erppeek)
         data = Extractor(client, args.company_id, args.batch_size, args.invoice_scope).extract(
@@ -229,15 +229,15 @@ def main(argv=None):
                           "invoice_state_filter": None, "invoice_residual_filter": None,
                           "all_line_states": True},
             "extraction_started_at": started,
-            "extraction_finished_at": datetime.now(timezone.utc).isoformat(),
+            "extraction_finished_at": utc_now(),
         })
-    except (ImportError, KeyError, ValueError, OSError, RuntimeError, Error) as exc:
-        print("No s'ha pogut completar l'extracció de fraccionaments: {}".format(exc),
-              file=sys.stderr)
+    except (ImportError, KeyError, ValueError, IOError, OSError, RuntimeError, Error) as exc:
+        print_message("No s'ha pogut completar l'extracció de fraccionaments: {}".format(exc),
+                      file=sys.stderr)
         return 1
-    print("Fase 3 completada: {}; {} acords; {} quotes".format(
+    print_message("Fase 3 completada: {}; {} acords; {} quotes".format(
         args.output, len(data["agreements"]), len(data["lines"])))
-    print("Informatiu: {} factures fora dels filtres d'estat/residual de fase 1".format(
+    print_message("Informatiu: {} factures fora dels filtres d'estat/residual de fase 1".format(
         data["invoices_outside_phase_one_count"]))
     return 0
 

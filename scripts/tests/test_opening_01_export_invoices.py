@@ -3,21 +3,18 @@
 
 from __future__ import print_function, unicode_literals
 
-import csv
 import errno
-import importlib.util
 import json
+import os
 import sys
-import tempfile
 import unittest
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from opening_test_support import (
+    Mock, Namespace, SCRIPTS, StringIO, TestCase, patch, read_bytes, read_csv,
+    read_text, redirect_stdout, temporary_directory,
+)
 
-SCRIPT = Path(__file__).resolve().parents[1] / "opening_01_export_invoices.py"
-SPEC = importlib.util.spec_from_file_location("opening_01_export_invoices", SCRIPT)
-exporter = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(exporter)
+with patch.object(sys, "path", [SCRIPTS] + sys.path):
+    import opening_01_export_invoices as exporter
 
 
 def invoice(invoice_id, residual=60, state="open", invoice_type="out_invoice"):
@@ -75,7 +72,7 @@ class FakeReader:
                 for row in records if row["id"] in args[0]]
 
 
-class OpeningIdentificationTest(unittest.TestCase):
+class OpeningIdentificationTest(TestCase):
     def test_scopes_company_journals_open_state_and_nonzero_residual(self):
         disabled = invoice(5)
         disabled["journal_id"] = [8, "No habilitat"]
@@ -87,13 +84,12 @@ class OpeningIdentificationTest(unittest.TestCase):
                 invoice(9, state="draft"), invoice(10, state="cancel")]
         for scope, expected in [("customers", [1, 2]), ("suppliers", [3, 4]),
                                 ("all", [1, 2, 3, 4])]:
-            with self.subTest(scope=scope):
-                reader = FakeReader(rows)
-                data = exporter.Extractor(reader, 1, invoice_scope=scope).extract("2026-10-14")
-                self.assertEqual([item["id"] for item in data["invoices"]], expected)
-                journal_searches = [args for model, method, args in reader.calls
-                                    if model == "account.journal" and method == "search"]
-                self.assertEqual(len(journal_searches), 1)
+            reader = FakeReader(rows)
+            data = exporter.Extractor(reader, 1, invoice_scope=scope).extract("2026-10-14")
+            self.assertEqual([item["id"] for item in data["invoices"]], expected)
+            journal_searches = [args for model, method, args in reader.calls
+                                if model == "account.journal" and method == "search"]
+            self.assertEqual(len(journal_searches), 1)
 
     def test_reads_only_invoice_headers_in_batches_and_defers_installments(self):
         reader = FakeReader([invoice(1), invoice(2), invoice(3), invoice(4, 0, state="paid")])
@@ -130,11 +126,10 @@ class OpeningIdentificationTest(unittest.TestCase):
         changed_records = [invoice(1, state="paid"), invoice(1, 0), invoice(1)]
         changed_records[2]["company_id"] = [2, "Altra empresa"]
         for changed in changed_records:
-            with self.subTest(record=changed):
-                client = Mock()
-                client.execute.side_effect = [[7], [1], [changed]]
-                with self.assertRaisesRegex(ValueError, "no compleix la selecció"):
-                    exporter.Extractor(client, 1).extract("2026-10-14")
+            client = Mock()
+            client.execute.side_effect = [[7], [1], [changed]]
+            with self.assertRaisesRegex(ValueError, "no compleix la selecció"):
+                exporter.Extractor(client, 1).extract("2026-10-14")
 
     def test_normalizes_search_ids_and_orders_control_rows(self):
         client = Mock()
@@ -153,10 +148,10 @@ class OpeningIdentificationTest(unittest.TestCase):
     def test_id_manifest_csv_decimal_totals_and_no_overwrite(self):
         data = exporter.Extractor(FakeReader([invoice(2, 0.2), invoice(1, 0.1)]), 1).extract(
             "2026-10-14")
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "snapshot"
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "snapshot")
             exporter.write_export(output, data, {"company_id": 1})
-            raw = (output / "invoice_ids.json").read_bytes()
+            raw = read_bytes(os.path.join(output, "invoice_ids.json"))
             payload = json.loads(raw)
             self.assertEqual(payload["invoice_ids"], [1, 2])
             self.assertEqual(payload["metadata"]["model"], "account.invoice")
@@ -164,29 +159,27 @@ class OpeningIdentificationTest(unittest.TestCase):
             self.assertEqual(payload["metadata"]["invoice_count"], 2)
             self.assertEqual(payload["control_totals"][0]["residual"], "0.3")
             self.assertNotIn("invoices", payload)
-            self.assertEqual({path.name for path in output.iterdir()},
+            self.assertEqual(set(os.listdir(output)),
                              {"invoice_ids.json", "invoices.csv"})
-            with (output / "invoices.csv").open(encoding="utf-8", newline="") as stream:
-                rows = list(csv.DictReader(stream, delimiter=";"))
+            _, rows = read_csv(os.path.join(output, "invoices.csv"))
             self.assertEqual([row["erp_invoice_id"] for row in rows], ["1", "2"])
             self.assertEqual(rows[0]["number"], "F;1\nCatalà")
             with self.assertRaises(OSError) as caught:
                 exporter.write_export(output, data, {})
             self.assertEqual(caught.exception.errno, errno.EEXIST)
-            self.assertEqual((output / "invoice_ids.json").read_bytes(), raw)
+            self.assertEqual(read_bytes(os.path.join(output, "invoice_ids.json")), raw)
 
     def test_empty_export_keeps_full_csv_header(self):
         data = exporter.Extractor(FakeReader([]), 1).extract("2026-10-14")
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "snapshot"
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "snapshot")
             exporter.write_export(output, data, {})
-            payload = json.loads((output / "invoice_ids.json").read_text())
+            payload = json.loads(read_text(os.path.join(output, "invoice_ids.json")))
             self.assertEqual(payload["invoice_ids"], [])
             self.assertEqual(payload["control_totals"], [])
-            with (output / "invoices.csv").open(encoding="utf-8", newline="") as stream:
-                reader = csv.DictReader(stream, delimiter=";")
-                self.assertEqual(reader.fieldnames, exporter.CSV_FIELDS)
-                self.assertEqual(list(reader), [])
+            fields, rows = read_csv(os.path.join(output, "invoices.csv"))
+            self.assertEqual(fields, exporter.CSV_FIELDS)
+            self.assertEqual(rows, [])
 
     def test_control_totals_do_not_mix_types_or_currencies(self):
         rows = [invoice(1, 10), invoice(2, 20, invoice_type="out_refund"), invoice(3, 30)]
@@ -200,11 +193,11 @@ class OpeningIdentificationTest(unittest.TestCase):
         config = {"server": "http://erp-proves:8069", "db": "erp_copia_assaig",
                   "user": "proves", "password": "contrasenya-de-prova"}
         factory = Mock(return_value=FakeReader([invoice(1)]))
-        modules = {"dbconfig": SimpleNamespace(erppeek=config),
-                   "erppeek": SimpleNamespace(Client=factory)}
-        with tempfile.TemporaryDirectory() as parent:
-            output = Path(parent) / "snapshot"
-            with patch.dict(sys.modules, modules), patch("builtins.print"), \
+        modules = {"dbconfig": Namespace(erppeek=config),
+                   "erppeek": Namespace(Client=factory)}
+        with temporary_directory() as parent:
+            output = os.path.join(parent, "snapshot")
+            with patch.dict(sys.modules, modules), redirect_stdout(StringIO()), \
                     patch.object(exporter.logging, "basicConfig"):
                 result = exporter.main([
                     "--cutoff", "2026-10-14", "--company-id", "1",
@@ -213,7 +206,7 @@ class OpeningIdentificationTest(unittest.TestCase):
                 ])
             self.assertEqual(result, 0)
             factory.assert_called_once_with(**config)
-            payload = json.loads((output / "invoice_ids.json").read_text())
+            payload = json.loads(read_text(os.path.join(output, "invoice_ids.json")))
             metadata = payload["metadata"]
             self.assertEqual(metadata["source_database"], config["db"])
             self.assertEqual(metadata["reference_date"], metadata["cutoff"])
@@ -223,9 +216,9 @@ class OpeningIdentificationTest(unittest.TestCase):
             self.assertNotIn(config["password"], json.dumps(payload))
 
     def test_cutoff_alias_and_all_scope_default_are_preserved(self):
-        with tempfile.TemporaryDirectory() as parent:
+        with temporary_directory() as parent:
             common = ["--company-id", "1", "--snapshot-reference", "copia",
-                      "--output", str(Path(parent) / "snapshot")]
+                      "--output", os.path.join(parent, "snapshot")]
             current = exporter.parse_args(["--reference-date", "2026-10-14"] + common)
             legacy = exporter.parse_args(["--cutoff", "2026-10-14"] + common)
             self.assertEqual(current, legacy)
@@ -233,8 +226,11 @@ class OpeningIdentificationTest(unittest.TestCase):
 
     def test_rejects_invalid_amounts(self):
         for value in (False, None, "incorrecte", float("nan"), float("inf")):
-            with self.subTest(value=value), self.assertRaises(ValueError):
+            with self.assertRaises(ValueError):
                 exporter.amount(value)
+
+    def test_large_float_amount_does_not_lose_cents_on_python_two(self):
+        self.assertEqual(str(exporter.amount(123456789012.12)), "123456789012.12")
 
 
 if __name__ == "__main__":

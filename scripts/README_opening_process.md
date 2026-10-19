@@ -37,8 +37,9 @@ La fase 1 no consulta acords, quotes, apunts, comptes comptables ni `payment_ids
 
 Configura `scripts/dbconfig.py`, diccionari `erppeek`, amb `server`, `db`, `user`
 i `password` de la còpia ERP de proves. Cal tenir `erppeek` instal·lat i utilitzar
-Python 3.7 o superior. La sintaxi respecta els hooks Python 2.7 del repositori,
-però l'execució de l'script requereix Python 3.
+Python 2.7 o Python 3. Els tres scripts comparteixen `opening_common.py`, que
+ha d'estar en el mateix directori. Aquesta compatibilitat només usa la biblioteca
+estàndard: JSON i CSV continuen en UTF-8, també amb accents i salts de línia.
 
 Treballa sobre una còpia consistent sense moviments durant les consultes i
 conserva-la per comparar. Les consultes RPC no comparteixen una transacció comuna.
@@ -49,7 +50,7 @@ manté com a àlies compatible. Les dates de les factures no bloquegen l'extracc
 Des de l'arrel del repositori, amb el directori pare de sortida ja existent:
 
 ```bash
-python3 scripts/opening_01_export_invoices.py \
+python scripts/opening_01_export_invoices.py \
   --cutoff 2026-10-15 \
   --company-id 1 \
   --invoice-scope customers \
@@ -61,7 +62,8 @@ El directori de sortida ha de ser **nou**. Els fitxers de les extraccions anteri
 es conserven; no se sobreescriuen. Per a l'arrencada definitiva, la referència
 serà `2026-12-31` i l'execució es farà quan s'hagen acabat els moviments.
 Es pot ajustar `--batch-size` (200 per defecte). Amb `pyenv`, substitueix
-`python3` per `PYENV_VERSION=3.10.20 python` si cal seleccionar l'intèrpret.
+`python` per `PYENV_VERSION=2.7.18 python` o `PYENV_VERSION=3.10.20 python`
+si cal seleccionar l'intèrpret.
 
 Els logs en català mostren connexió, abast, cerques, cada lot de capçaleres,
 recomptes, totals de control i fitxers generats. Van a `stderr` amb hora i nivell
@@ -129,7 +131,7 @@ comprova que `account.invoice` tinga la sincronització habilitada en **async**.
 `auto_sync` pot estar desactivat: l'acció explícita `sync` força la petició.
 
 ```bash
-python3 scripts/opening_02_sync_invoices.py \
+python scripts/opening_02_sync_invoices.py \
   --input /tmp/ids-clients-2026-10-15/invoice_ids.json
 ```
 
@@ -165,7 +167,7 @@ ni cerques globals sobre l'històric de factures. Reutilitza les utilitats de le
 de `opening_01_export_invoices.py`, que ha d'estar en el mateix directori.
 
 ```bash
-python3 scripts/opening_03_export_fraccionaments.py \
+python scripts/opening_03_export_fraccionaments.py \
   --cutoff 2026-10-15 \
   --company-id 1 \
   --invoice-scope customers \
@@ -220,6 +222,11 @@ extracció no implementa encara ni aquest tractament ni la sincronització d'aco
 
 ## Proves locals
 
+La mateixa suite es pot executar amb Python 2.7 i 3. En Python 2.7 cal el
+backport de proves `mock==3.0.5`; en Python 3 s'utilitza `unittest.mock`.
+`mock` no és necessari per executar els scripts contra l'ERP.
+
 ```bash
+PYENV_VERSION=2.7.18 python -m unittest discover -s scripts/tests -v
 PYENV_VERSION=3.10.20 python -m unittest discover -s scripts/tests -v
 ```

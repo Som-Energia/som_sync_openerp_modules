@@ -4,22 +4,21 @@
 from __future__ import print_function, unicode_literals
 
 import copy
-import importlib.util
-import io
 import json
+import os
 import sys
-import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock, call, patch
-from xmlrpc.client import Fault
+try:
+    from xmlrpc.client import Fault
+except ImportError:
+    from xmlrpclib import Fault
+from opening_test_support import (
+    Mock, Namespace, SCRIPTS, StringIO, TestCase, call, patch, read_text,
+    redirect_stderr, redirect_stdout, temporary_directory, write_text,
+)
 
-SCRIPT = Path(__file__).resolve().parents[1] / "opening_02_sync_invoices.py"
-SPEC = importlib.util.spec_from_file_location("opening_02_sync_invoices", SCRIPT)
-syncer = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(syncer)
+with patch.object(sys, "path", [SCRIPTS] + sys.path):
+    import opening_02_sync_invoices as syncer
 
 
 def manifest(ids):
@@ -28,24 +27,24 @@ def manifest(ids):
             "invoice_ids": ids}
 
 
-class OpeningSyncTest(unittest.TestCase):
+class OpeningSyncTest(TestCase):
     def run_main(self, payload, responses):
         client = Mock()
         client.execute.side_effect = responses
         config = {"server": "http://erp-proves:8069", "db": "copia-proves",
                   "user": "proves", "password": "secret-proves"}
         factory = Mock(return_value=client)
-        modules = {"dbconfig": SimpleNamespace(erppeek=config),
-                   "erppeek": SimpleNamespace(Client=factory)}
-        stdout, stderr = io.StringIO(), io.StringIO()
-        with tempfile.TemporaryDirectory() as parent:
-            source = Path(parent) / "invoice_ids.json"
-            source.write_text(json.dumps(payload), encoding="utf-8")
+        modules = {"dbconfig": Namespace(erppeek=config),
+                   "erppeek": Namespace(Client=factory)}
+        stdout, stderr = StringIO(), StringIO()
+        with temporary_directory() as parent:
+            source = os.path.join(parent, "invoice_ids.json")
+            write_text(source, json.dumps(payload))
             with patch.dict(sys.modules, modules), redirect_stdout(stdout), \
                     redirect_stderr(stderr), patch.object(syncer.logging, "basicConfig"):
                 result = syncer.main(["--input", str(source)])
-            self.assertEqual(json.loads(source.read_text(encoding="utf-8")), payload)
-            self.assertEqual([path.name for path in Path(parent).iterdir()], [source.name])
+            self.assertEqual(json.loads(read_text(source)), payload)
+            self.assertEqual(os.listdir(parent), [os.path.basename(source)])
         return result, client, factory, config, stdout.getvalue(), stderr.getvalue()
 
     def test_async_none_results_are_completed_calls_not_confirmed_jobs(self):
@@ -76,11 +75,10 @@ class OpeningSyncTest(unittest.TestCase):
 
     def test_disabled_or_synchronous_configuration_stops_before_submitting(self):
         for config in [(False, False, False), (True, True, False)]:
-            with self.subTest(config=config):
-                result, client, _, _, _, stderr = self.run_main(manifest([1]), [config])
-                self.assertEqual(result, 1)
-                self.assertIn("habilitat per sincronitzar en async", stderr)
-                self.assertEqual(client.execute.call_count, 1)
+            result, client, _, _, _, stderr = self.run_main(manifest([1]), [config])
+            self.assertEqual(result, 1)
+            self.assertIn("habilitat per sincronitzar en async", stderr)
+            self.assertEqual(client.execute.call_count, 1)
 
     def test_preflight_rpc_error_stops_before_submitting(self):
         result, client, _, _, _, stderr = self.run_main(
@@ -109,20 +107,19 @@ class OpeningSyncTest(unittest.TestCase):
             payload["metadata"][key] = value
             invalid.append(payload)
         for payload in invalid:
-            with self.subTest(payload=payload):
-                result, client, factory, _, _, stderr = self.run_main(payload, [])
-                self.assertEqual(result, 1)
-                factory.assert_not_called()
-                client.execute.assert_not_called()
-                self.assertIn("No s'ha pogut completar la fase 2", stderr)
+            result, client, factory, _, _, stderr = self.run_main(payload, [])
+            self.assertEqual(result, 1)
+            factory.assert_not_called()
+            client.execute.assert_not_called()
+            self.assertIn("No s'ha pogut completar la fase 2", stderr)
 
     def test_missing_or_malformed_input_is_reported(self):
-        with tempfile.TemporaryDirectory() as parent:
-            source = Path(parent) / "invoice_ids.json"
+        with temporary_directory() as parent:
+            source = os.path.join(parent, "invoice_ids.json")
             for content in (None, "{JSON incorrecte"):
                 if content is not None:
-                    source.write_text(content, encoding="utf-8")
-                with redirect_stderr(io.StringIO()) as stderr:
+                    write_text(source, content)
+                with redirect_stderr(StringIO()) as stderr:
                     result = syncer.main(["--input", str(source)])
                 self.assertEqual(result, 1)
                 self.assertIn("No s'ha pogut completar la fase 2", stderr.getvalue())

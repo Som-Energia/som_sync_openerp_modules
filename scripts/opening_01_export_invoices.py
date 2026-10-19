@@ -4,14 +4,18 @@
 from __future__ import print_function, unicode_literals
 
 import argparse
-import csv
-import json
 import logging
+import os
 import sys
-from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
-from xmlrpc.client import Error
+try:
+    from xmlrpc.client import Error
+except ImportError:
+    from xmlrpclib import Error
+
+from opening_common import (
+    is_integer, parse_date, print_message, text, utc_now, write_csv, write_json,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ def relation_id(value):
     """Normalitza un many2one retornat per erppeek."""
     if isinstance(value, (list, tuple)):
         return value[0] if value else None
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
+    return value if is_integer(value) else None
 
 
 def amount(value):
@@ -43,7 +47,7 @@ def amount(value):
     if value is False or value is None:
         raise ValueError("Import absent en un registre de l'ERP")
     try:
-        result = Decimal(str(value))
+        result = Decimal(repr(value) if isinstance(value, float) else str(value))
     except InvalidOperation:
         raise ValueError("Import invàlid: {!r}".format(value))
     if not result.is_finite():
@@ -51,7 +55,7 @@ def amount(value):
     return result
 
 
-class Extractor:
+class Extractor(object):
     """Consulta únicament diaris i capçaleres de factures per identificar IDs."""
 
     def __init__(self, client, company_id, batch_size=200, invoice_scope="all"):
@@ -156,16 +160,14 @@ def write_export(output, data, metadata):
     totals = control_totals(rows)
     payload = {"metadata": export_metadata, "invoice_ids": ids,
                "control_totals": totals, "diagnostics": data["diagnostics"]}
-    content = json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     logger.info("Creant el directori de sortida %s", output)
-    output.mkdir()
-    logger.info("Escrivint %s (%s IDs)", output / "invoice_ids.json", len(ids))
-    (output / "invoice_ids.json").write_text(content, encoding="utf-8")
-    logger.info("Escrivint %s (%s factures)", output / "invoices.csv", len(rows))
-    with (output / "invoices.csv").open("w", encoding="utf-8", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS, delimiter=";")
-        writer.writeheader()
-        writer.writerows(rows)
+    os.mkdir(output)
+    json_path = os.path.join(output, "invoice_ids.json")
+    csv_path = os.path.join(output, "invoices.csv")
+    logger.info("Escrivint %s (%s IDs)", json_path, len(ids))
+    write_json(json_path, payload)
+    logger.info("Escrivint %s (%s factures)", csv_path, len(rows))
+    write_csv(csv_path, CSV_FIELDS, rows)
     for total in totals:
         logger.info("Control %s, moneda %s: %s factures; total original %s; pendent %s",
                     total["type"], total["currency_id"], total["invoice_count"],
@@ -177,7 +179,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--reference-date", "--cutoff", dest="reference_date", required=True,
-        type=date.fromisoformat,
+        type=parse_date,
         help="Data de referència de l'assaig (YYYY-MM-DD); no filtra ni calcula històrics",
     )
     parser.add_argument("--company-id", required=True, type=int)
@@ -187,13 +189,14 @@ def parse_args(argv=None):
     )
     parser.add_argument("--snapshot-reference", required=True,
                         help="Identificador de la còpia consistent de l'ERP")
-    parser.add_argument("--output", required=True, type=Path,
+    parser.add_argument("--output", required=True, type=text,
                         help="Directori nou, amb el directori pare ja existent")
     parser.add_argument("--batch-size", type=int, default=200)
     args = parser.parse_args(argv)
     if args.company_id <= 0 or args.batch_size <= 0:
         parser.error("company-id i batch-size han de ser positius")
-    if args.output.exists() or not args.output.parent.is_dir():
+    parent = os.path.dirname(os.path.abspath(args.output))
+    if os.path.exists(args.output) or not os.path.isdir(parent):
         parser.error("output ha de ser un directori nou amb un pare existent")
     return args
 
@@ -206,7 +209,7 @@ def main(argv=None):
         import dbconfig
         from erppeek import Client
 
-        started = datetime.now(timezone.utc).isoformat()
+        started = utc_now()
         logger.info("Connectant a l'ERP amb erppeek...")
         client = Client(**dbconfig.erppeek)
         logger.info("Connexió amb l'ERP establerta")
@@ -222,15 +225,17 @@ def main(argv=None):
                           "only_sync_enabled_journals": True},
             "source_database": dbconfig.erppeek["db"],
             "extraction_started_at": started,
-            "extraction_finished_at": datetime.now(timezone.utc).isoformat(),
+            "extraction_finished_at": utc_now(),
         })
     except KeyError as exc:
-        print("Falta la clau de dades o configuració {}".format(exc.args[0]), file=sys.stderr)
+        print_message("Falta la clau de dades o configuració {}".format(
+            exc.args[0]), file=sys.stderr)
         return 1
-    except (ImportError, ValueError, OSError, RuntimeError, Error) as exc:
-        print("No s'ha pogut completar la identificació: {}".format(exc), file=sys.stderr)
+    except (ImportError, ValueError, IOError, OSError, RuntimeError, Error) as exc:
+        print_message("No s'ha pogut completar la identificació: {}".format(exc), file=sys.stderr)
         return 1
-    print("Fase 1 completada: {}; {} IDs de factura".format(args.output, len(data["invoices"])))
+    print_message("Fase 1 completada: {}; {} IDs de factura".format(
+        args.output, len(data["invoices"])))
     return 0
 
 
