@@ -7,9 +7,10 @@ Pla acordat: [issue #77](https://github.com/Som-Energia/som_sync_openerp_modules
    implementat en `opening_02_sync_invoices.py`, amb control de les crides RPC.
 3. **Tractar les liquidacions parcials prèvies i els fraccionaments**, incloses
    les factures originals addicionals necessàries: extracció d'acords i quotes
-   implementada en `opening_03_export_fraccionaments.py`. Sincronització i
-   tractament dels cobraments previs pendents; després quadrar el pendent.
-4. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
+   implementada en `opening_03_export_fraccionaments.py`.
+4. **Sincronitzar els acords**: implementat en `opening_04_sync_fraccionaments.py`,
+   amb control de crides RPC. Després queda tractar els cobraments previs i quadrar el pendent.
+5. **Provar la integració dels esdeveniments posteriors** generats a l'ERP:
    remeses, cobraments, devolucions i seqüències completes.
 
 ## Fase 1 — Identificar les factures
@@ -45,7 +46,7 @@ La fase 1 no consulta acords, quotes, apunts, comptes comptables ni `payment_ids
 
 Configura `scripts/dbconfig.py`, diccionari `erppeek`, amb `server`, `db`, `user`
 i `password` de la còpia ERP de proves. Cal tenir `erppeek` instal·lat i utilitzar
-Python 2.7 o Python 3. Els tres scripts comparteixen `opening_common.py`, que
+Python 2.7 o Python 3. Els quatre scripts comparteixen `opening_common.py`, que
 ha d'estar en el mateix directori. Aquesta compatibilitat només usa la biblioteca
 estàndard: JSON i CSV continuen en UTF-8, també amb accents i salts de línia.
 
@@ -132,8 +133,8 @@ es mantenen separats per tipus i moneda, respectant els signes. L'script rebutja
 imports invàlids, lectures incompletes o duplicades i registres que ja no
 compleixen la selecció quan es llegeixen.
 
-El pendent d'Odoo es quadrarà **després de la fase 3**: la sincronització existent
-crea la factura pel total original. Una factura de 100 amb 40 ja cobrats es
+El pendent d'Odoo es quadrarà **després de tractar els cobraments previs**:
+la sincronització existent crea la factura pel total original. Una factura de 100 amb 40 ja cobrats es
 sincronitza inicialment pel total de 100; les liquidacions prèvies han de deixar
 el pendent de 60. El seguiment dels resultats asíncrons es farà manualment amb
 els logs, `odoo.sync` i RQ.
@@ -234,7 +235,47 @@ El sincronitzador actual de fraccionaments intenta sincronitzar primer la factur
 original i envia totes les quotes amb import i venciment, però **no envia l'estat
 de cobrament**. El pas posterior haurà de resoldre com reflectir a Odoo les quotes
 ja cobrades, utilitzant la traçabilitat conservada, i quadrar el pendent. Aquesta
-extracció no implementa encara ni aquest tractament ni la sincronització d'acords.
+extracció no implementa aquest tractament; les peticions de sincronització es fan
+amb l'script de fase 4.
+
+## Fase 4 — Sol·licitar la sincronització async dels acords
+
+`scripts/opening_04_sync_fraccionaments.py` llegeix `fraccionament_ids.json` de la
+fase 3. Valida format 1, fase `identify_fraccionament_ids`, model
+`account.invoice.fraccionament`, recompte i IDs positius i únics. Usa els IDs de
+**`fraccionament_ids`**, no els de `invoice_ids` ni els IDs de quotes.
+
+```bash
+python scripts/opening_04_sync_fraccionaments.py \
+  --input /tmp/fraccionaments-clients-2026-10-15/fraccionament_ids.json
+```
+
+Connecta amb `Client(**dbconfig.erppeek)` a la còpia ERP de l'extracció. Comprova
+que `account.invoice.fraccionament` estiga habilitat en **async** i que
+`account.invoice` estiga habilitat. `auto_sync` pot estar desactivat: s'utilitza
+l'acció explícita `sync`. Per cada acord fa una única crida a
+`O.OdooSync.common_sync_model_create_update('account.invoice.fraccionament', 'sync', id)`.
+
+El treball existent intenta sincronitzar primer la factura original amb
+`from_fk_sync=True`, de manera síncrona dins del treball async, encara que la
+factura no estiga al manifest de fase 1 o quede fora del seu filtre `--date-from`.
+El model de factures pot tenir async activat o desactivat: el context intern
+força la dependència síncrona. L'script no envia peticions individuals per factura
+ni per quota; el sincronitzador existent llegeix les dades actuals de l'ERP.
+
+Mostra progrés cada 200 crides i al final, registra cada error RPC amb l'ID d'acord
+i continua amb els altres, sense reintents automàtics. El resum indica crides
+sense error RPC, crides amb error i IDs afectats. Retorna `0` si totes les crides
+acaben sense error RPC, i `1` si alguna falla o no es pot validar l'entrada,
+connectar o confirmar la configuració requerida. Un manifest buit acaba sense
+connectar. No modifica el manifest ni genera fitxers addicionals. Reexecutar-lo
+torna a sol·licitar tots els acords del manifest.
+
+Com en fase 2, una crida sense error RPC **no confirma l'encuament ni l'execució**:
+el mètode existent pot capturar errors interns. El seguiment es fa manualment
+amb els logs, `odoo.sync` i RQ, sense consultar estats ni esperar els treballs.
+Aquest pas envia totes les quotes amb import i venciment; el tractament de les
+quotes ja cobrades continua pendent.
 
 ## Proves locals
 
