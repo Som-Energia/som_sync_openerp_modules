@@ -1,4 +1,6 @@
 #  -*- coding: utf-8 -*-
+import json
+
 from osv import osv
 
 
@@ -100,6 +102,28 @@ class AccountInvoiceFraccionament(osv.osv):
             'lines': lines,
         }
         return res
+
+    def hook_after_odoo_creation(self, cr, uid, response, sync_vals):
+        if not response:
+            return
+        if not isinstance(response, dict):
+            response = json.loads(response)
+
+        metadata = response.get('data', {}).get('metadata', [])
+        if not metadata:
+            return
+
+        sync_obj = self.pool.get('odoo.sync')
+        for payment_metadata in metadata:
+            erp_id = payment_metadata.get('erp_id')
+            odoo_id = payment_metadata.get('odoo_id')
+            if not erp_id or not odoo_id:
+                continue
+            sync_obj.update_odoo_id(
+                cr, uid, 'account.invoice.fraccionament.fraccionaments',
+                erp_id, odoo_id,
+                context={'sync_state': 'synced', 'update_last_sync': True}
+            )
 
 
 AccountInvoiceFraccionament()
