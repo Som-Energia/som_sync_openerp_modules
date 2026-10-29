@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from destral import testing
+from osv import osv
 from osv.orm import FieldsValidationException
 import mock
 
@@ -18,6 +19,52 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         return self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'account', 'account_unpaid'
         )[1]
+
+    def _link_account_to_odoo(self, account_id):
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.account')], limit=1
+        )[0]
+        self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id,
+            'res_id': account_id,
+            'sync_state': 'synced',
+        })
+
+    def test_write__odoo_account_code_cannot_change_when_linked(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'odoo_account_code': '700000001',
+        })
+        self._link_account_to_odoo(account_id)
+
+        self.assertRaises(
+            osv.except_osv, self.account_obj.write,
+            self.cursor, self.uid, [account_id], {
+                'odoo_account_code': '700000002',
+            }
+        )
+
+    def test_write__same_odoo_account_code_is_allowed_when_linked(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'odoo_account_code': '700000001',
+        })
+        self._link_account_to_odoo(account_id)
+
+        result = self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'odoo_account_code': '700000001',
+        })
+
+        self.assertTrue(result)
+
+    def test_write__odoo_account_code_can_change_when_not_linked(self):
+        account_id = self._account_id()
+
+        result = self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'odoo_account_code': '700000001',
+        })
+
+        self.assertTrue(result)
 
     def test_get_endpoint_suffix__uses_explicit_odoo_account_code(self):
         account_id = self._account_id()
