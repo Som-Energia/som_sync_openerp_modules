@@ -3,12 +3,14 @@
 
 The CSV can contain codes with or without three-digit separators (for example
 ``100.000.000`` or ``100000000``). Blank rows and ``N/A`` values are ignored.
-The default mode only reports differences. Deletion requires both ``--apply``
-and ``--confirm-delete`` and is limited to accounts without journal items.
+The default mode only reports differences. Use ``--output`` to write a CSV
+report. Deletion requires both ``--apply`` and ``--confirm-delete`` and is
+limited to accounts without journal items.
 
 Example:
     python scripts/check_odoo_accounts.py --input /path/accounts.csv \\
-        --url https://odoo.example.com --db production --username user@example.com
+        --output /path/report.csv --url https://odoo.example.com \\
+        --db production --username user@example.com
     python scripts/check_odoo_accounts.py --input /path/accounts.csv \\
         --url https://odoo.example.com --db production --username user@example.com \\
         --apply --confirm-delete
@@ -120,15 +122,48 @@ def matching_codes(csv_codes, accounts):
     return rows, accounts_by_code, invalid_accounts
 
 
-def audit_accounts(call, csv_codes, company_id, company_field, apply=False):
+REPORT_FIELDS = ("id_odoo", "compte_comptable", "action", "notes")
+
+
+def write_report(path, rows):
+    """Write report rows using the agreed CSV column names."""
+    with open(path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=REPORT_FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def audit_accounts(call, csv_codes, company_id, company_field, apply=False,
+                   output_path=None):
     accounts = fetch_company_accounts(call, company_id, company_field)
     csv_rows, accounts_by_code, invalid_accounts = matching_codes(csv_codes, accounts)
+    report_rows = []
     print("CSV codes present in Odoo:")
     for code, state, matches in csv_rows:
         print("  {} {}".format(state, code))
         if state == "AMBIGUOUS":
             for account in matches:
                 print("    account ID {} ({})".format(account["id"], account.get("code")))
+                report_rows.append({
+                    "id_odoo": account["id"],
+                    "compte_comptable": code,
+                    "action": "AMBIGUOUS",
+                    "notes": "Multiple Odoo accounts match this normalized code",
+                })
+        elif state == "EXISTS":
+            report_rows.append({
+                "id_odoo": matches[0]["id"],
+                "compte_comptable": code,
+                "action": "EXISTS",
+                "notes": "",
+            })
+        else:
+            report_rows.append({
+                "id_odoo": "",
+                "compte_comptable": code,
+                "action": "MISSING",
+                "notes": "CSV code not found in Odoo",
+            })
 
     extras = []
     for account in accounts:
@@ -156,6 +191,12 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False):
         if reason:
             totals["skipped"] += 1
             print("  SKIPPED {} (ID {}): {}".format(raw_code, account_id, reason))
+            report_rows.append({
+                "id_odoo": account_id,
+                "compte_comptable": normalized or raw_code,
+                "action": "SKIPPED",
+                "notes": reason,
+            })
             continue
 
         move_line_ids = call(
@@ -166,6 +207,12 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False):
         if move_line_ids:
             totals["has_moves"] += 1
             print("  PROTECTED {} (ID {}): has journal items".format(raw_code, account_id))
+            report_rows.append({
+                "id_odoo": account_id,
+                "compte_comptable": normalized,
+                "action": "PROTECTED",
+                "notes": "Has journal items",
+            })
             continue
 
         if apply:
@@ -174,13 +221,28 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False):
                 raise RuntimeError("Odoo did not confirm deletion of account {}".format(raw_code))
             totals["deleted"] += 1
             print("  DELETED {} (ID {})".format(raw_code, account_id))
+            action = "DELETED"
         else:
             totals["would_delete"] += 1
             print("  WOULD DELETE {} (ID {})".format(raw_code, account_id))
+            action = "WOULD DELETE"
+        report_rows.append({
+            "id_odoo": account_id,
+            "compte_comptable": normalized,
+            "action": action,
+            "notes": "No journal items",
+        })
 
     if invalid_accounts:
         totals["skipped"] += len(invalid_accounts)
         print("\nSkipped {} Odoo accounts with non-numeric codes.".format(len(invalid_accounts)))
+        for account in invalid_accounts:
+            report_rows.append({
+                "id_odoo": account["id"],
+                "compte_comptable": account.get("code") or "",
+                "action": "SKIPPED",
+                "notes": "Odoo account has a non-numeric code",
+            })
     present = sum(state == "EXISTS" for _, state, _ in csv_rows)
     missing = sum(state == "MISSING" for _, state, _ in csv_rows)
     ambiguous = sum(state == "AMBIGUOUS" for _, state, _ in csv_rows)
@@ -193,6 +255,9 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False):
             totals["has_moves"], totals["skipped"],
         )
     )
+    if output_path is not None:
+        write_report(output_path, report_rows)
+        print("CSV report written to {}".format(output_path))
     return totals
 
 
@@ -215,6 +280,8 @@ def connect_odoo(url, database, username):
 def main(arguments=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path, help="One-column account-code CSV")
+    parser.add_argument("--output", type=Path,
+                        help="Write the account audit report to this CSV file")
     parser.add_argument("--url", required=True, help="Odoo server URL")
     parser.add_argument("--db", required=True, help="Odoo database name")
     parser.add_argument("--username", required=True, help="Odoo user login")
@@ -235,7 +302,10 @@ def main(arguments=None):
     call = connect_odoo(args.url, args.db, args.username)
     company_id, company_field = find_company_and_field(call, args.company)
     print("Company: {} (ID {})".format(args.company, company_id))
-    audit_accounts(call, csv_codes, company_id, company_field, apply=args.apply)
+    audit_accounts(
+        call, csv_codes, company_id, company_field,
+        apply=args.apply, output_path=args.output,
+    )
     return 0
 
 
