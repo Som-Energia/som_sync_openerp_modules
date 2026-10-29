@@ -174,7 +174,13 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False,
     if not extras:
         print("  None")
 
-    totals = {"deleted": 0, "would_delete": 0, "has_moves": 0, "skipped": 0}
+    totals = {
+        "deleted": 0,
+        "failed": 0,
+        "would_delete": 0,
+        "has_moves": 0,
+        "skipped": 0,
+    }
     for account in extras:
         account_id = account["id"]
         raw_code = account.get("code") or "<empty>"
@@ -216,9 +222,35 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False,
             continue
 
         if apply:
-            result = call("account.account", "unlink", [[account_id]], {})
+            try:
+                result = call("account.account", "unlink", [[account_id]], {})
+            except (xmlrpc.client.Error, OSError) as exc:
+                if isinstance(exc, xmlrpc.client.Fault):
+                    reason = "Odoo fault {}: {}".format(
+                        exc.faultCode, exc.faultString,
+                    )
+                else:
+                    reason = "Odoo communication error: {}".format(exc)
+                totals["failed"] += 1
+                print("  FAILED {} (ID {}): {}".format(raw_code, account_id, reason))
+                report_rows.append({
+                    "id_odoo": account_id,
+                    "compte_comptable": normalized,
+                    "action": "FAILED",
+                    "notes": reason,
+                })
+                continue
             if not result:
-                raise RuntimeError("Odoo did not confirm deletion of account {}".format(raw_code))
+                reason = "Odoo did not confirm deletion"
+                totals["failed"] += 1
+                print("  FAILED {} (ID {}): {}".format(raw_code, account_id, reason))
+                report_rows.append({
+                    "id_odoo": account_id,
+                    "compte_comptable": normalized,
+                    "action": "FAILED",
+                    "notes": reason,
+                })
+                continue
             totals["deleted"] += 1
             print("  DELETED {} (ID {})".format(raw_code, account_id))
             action = "DELETED"
@@ -248,10 +280,10 @@ def audit_accounts(call, csv_codes, company_id, company_field, apply=False,
     ambiguous = sum(state == "AMBIGUOUS" for _, state, _ in csv_rows)
     print(
         "\nSummary: {} present, {} missing, {} ambiguous; "
-        "{} {}, {} protected by journal items, {} skipped.".format(
+        "{} deleted, {} failed, {} eligible for deletion, "
+        "{} protected by journal items, {} skipped.".format(
             present, missing, ambiguous,
-            totals["deleted"] if apply else totals["would_delete"],
-            "deleted" if apply else "eligible for deletion",
+            totals["deleted"], totals["failed"], totals["would_delete"],
             totals["has_moves"], totals["skipped"],
         )
     )
