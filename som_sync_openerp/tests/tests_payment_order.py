@@ -1079,7 +1079,10 @@ class TestPaymentOrder(testing.OOTestCaseWithCursor):
         result = self.po_obj.get_mapping_model_post(self.cursor, self.uid, remesa_id)
         self.assertEqual(result, 'payment_orders/batches')
 
-    def test__get_mapping_model_post_returns_payment_order_batches_when_refund(self):
+    # This test checks endpoint selection, not invoice synchronization with Odoo.
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    def test__get_mapping_model_post_returns_payment_order_batches_when_refund(
+            self, mock_sync_create_update):
         invoice_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "invoice_0003"
         )[1]

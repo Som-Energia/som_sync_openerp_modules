@@ -62,6 +62,31 @@ class AccountAccount(osv.osv):
         account = self.browse(cr, uid, id, context=context)
         return len(account.code or '') != 12 or bool(account.odoo_account_code)
 
+    def write(self, cr, uid, ids, vals, context=None):
+        if context is None:
+            context = {}
+        if 'odoo_account_code' in vals:
+            if not isinstance(ids, list):
+                ids = [ids]
+            new_odoo_account_code = vals['odoo_account_code'] or False
+            sync_obj = self.pool.get('odoo.sync')
+            for account in self.browse(cr, uid, ids, context=context):
+                if account.odoo_account_code == new_odoo_account_code:
+                    continue
+                sync_ids = sync_obj.search(cr, uid, [
+                    ('model.model', '=', self._name),
+                    ('res_id', '=', account.id),
+                ], limit=1, context=context)
+                if sync_ids:
+                    raise osv.except_osv(
+                        'Error',
+                        'The Odoo account code cannot be changed once the account '
+                        'is linked to Odoo.',
+                    )
+        return super(AccountAccount, self).write(
+            cr, uid, ids, vals, context=context
+        )
+
     def create(self, cr, uid, vals, context=None):
         if context is None:
             context = {}
