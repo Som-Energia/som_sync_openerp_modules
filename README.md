@@ -20,6 +20,26 @@ odoo_api_key
 *  The worker try to create, write or unlink the object in Odoo.
 
 
+## Duplicating accounts safely
+
+For accounts with a 12-character code or an explicit `odoo_account_code`, use
+**Actions → Duplicate account...** instead of the standard Duplicate command.
+Enter the final account code and confirm the Odoo mapping before creating the
+account. Neither code is prefilled from the source. A 12-character account code
+requires an Odoo code of exactly 9 digits, as with normal account creation.
+
+The wizard uses the standard `copy()` chain, preserving configuration, child
+account and consolidation behavior, translations, and installed copy extensions.
+If child accounts are included by the standard copy, enter their final codes
+and mappings in the child table too. Each account uses its own confirmed values;
+children do not inherit the new parent's mapping or name. All code confirmations
+are checked before copying starts.
+
+Canceling creates no account and starts no synchronization. The source accounts
+and their Odoo links remain unchanged. Accounts without a mapping and with a code
+length other than 12 retain their standard duplication behavior. During copying,
+the confirmed codes are applied before `create()`, not corrected afterwards.
+
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
 
