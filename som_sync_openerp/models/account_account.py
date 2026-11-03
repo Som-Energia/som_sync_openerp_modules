@@ -61,11 +61,24 @@ class AccountAccount(osv.osv):
         return data
 
     def check_special_restrictions(self, cr, uid, id, context=None):
-        account = self.browse(cr, uid, id, context=context)
-        has_twelve_digit_code = bool(
-            re.match(r'^[0-9]{12}\Z', account.code or '')
+        return self.check_special_restrictions_with_values(
+            cr, uid, id, {}, context=context
         )
-        return has_twelve_digit_code and bool(account.odoo_account_code)
+
+    def check_special_restrictions_with_values(
+            self, cr, uid, id, vals, context=None):
+        """Check sync eligibility using pending values over stored values."""
+        account = self.browse(cr, uid, id, context=context)
+        vals = vals or {}
+        code = vals['code'] if 'code' in vals else account.code
+        odoo_account_code = (
+            vals['odoo_account_code']
+            if 'odoo_account_code' in vals else account.odoo_account_code
+        )
+        has_twelve_digit_code = bool(
+            re.match(r'^[0-9]{12}\Z', code or '')
+        )
+        return has_twelve_digit_code and bool(odoo_account_code)
 
     def copy_data(self, cr, uid, id, default=None, context=None):
         account = self.browse(cr, uid, id, context=context)

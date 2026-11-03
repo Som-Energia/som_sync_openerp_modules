@@ -176,6 +176,49 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
             context={},
         )
 
+    @mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_patch_uses_incoming_account_code_for_sync_restrictions(
+            self, mock_enabled, mock_patch):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000001',
+            'odoo_account_code': False,
+        })
+        mock_enabled.return_value = (True, True, False)
+        vals = {
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
+        }
+
+        self.sync_obj.common_patch_odoo_record(
+            self.cursor, self.uid, 'account.account', account_id, vals, context={}
+        )
+
+        mock_patch.assert_called_once_with(
+            self.cursor, self.uid, 'account.account', account_id, vals, context={}
+        )
+
+    @mock.patch.object(odoo_sync.OdooSync, 'patch_odoo_record_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_patch_rejects_incoming_invalid_code_even_if_stored_code_is_valid(
+            self, mock_enabled, mock_patch):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
+        })
+        mock_enabled.return_value = (True, True, False)
+
+        self.sync_obj.common_patch_odoo_record(
+            self.cursor, self.uid, 'account.account', account_id, {
+                'code': '700000001',
+                'odoo_account_code': False,
+            }, context={}
+        )
+
+        mock_patch.assert_not_called()
+
     def test_copy_appends_COPY_clears_mapping_and_skips_sync_for_parent_and_child(self):
         source_id = self._account_id()
         user_type_id = self.account_obj.browse(

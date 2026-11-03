@@ -185,12 +185,21 @@ class OdooSync(osv.osv):
                 self.sync_model_enabled_amplified(cursor, uid, model))
             if not (sync_enabled and auto_sync):
                 return None, None
+            model_obj = self.pool.get(model)
             has_special_restrictions = hasattr(
-                self.pool.get(model), 'check_special_restrictions')
+                model_obj, 'check_special_restrictions')
+            check_restrictions_with_values = getattr(
+                model_obj, 'check_special_restrictions_with_values', None)
             for openerp_id in ids:
-                if has_special_restrictions and not \
-                        self.pool.get(model).check_special_restrictions(
-                            cursor, uid, openerp_id, context=context):
+                if check_restrictions_with_values:
+                    can_sync = check_restrictions_with_values(
+                        cursor, uid, openerp_id, vals, context=context)
+                elif has_special_restrictions:
+                    can_sync = model_obj.check_special_restrictions(
+                        cursor, uid, openerp_id, context=context)
+                else:
+                    can_sync = True
+                if not can_sync:
                     logger = logging.getLogger('openerp.odoo.sync')
                     logger.info(
                         "Special restrictions not passed for record {} of model {}, "
