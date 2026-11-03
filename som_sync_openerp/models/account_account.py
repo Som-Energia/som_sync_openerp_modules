@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from osv import osv, fields
 from service.security import Sudo
+from tools.translate import _
 
 
 class AccountAccount(osv.osv):
@@ -72,6 +73,47 @@ class AccountAccount(osv.osv):
         account_group = (account.code or '')[:1]
         return bool(account_group and account_group in excluded_groups)
 
+    def copy(self, cr, uid, id, default=None, context=None,
+             done_list=None, local=False):
+        context = context or {}
+        confirmed = context.get('account_copy_defaults', {}).get(str(id))
+        account = self.browse(cr, uid, id, context=context)
+        requires_confirmation = len(account.code or '') == 12 or account.odoo_account_code
+        if requires_confirmation and (
+                not confirmed or not confirmed.get('code')
+                or 'odoo_account_code' not in confirmed):
+            raise osv.except_osv(
+                _('Error'),
+                _('Use the "Duplicate account..." action to confirm the new '
+                  'account codes before creating and synchronizing the account.'),
+            )
+        if confirmed is not None:
+            default = (default or {}).copy()
+            # Legacy recursion passes the parent's defaults to every child.
+            # Use this account's codes. Apply wizard name changes only in
+            # copy_data(), after the children have been copied, so the name
+            # cannot leak to children or replace other extensions' defaults.
+            for field in ('code', 'odoo_account_code'):
+                if field in confirmed:
+                    default[field] = confirmed[field]
+        return super(AccountAccount, self).copy(
+            cr, uid, id, default=default, context=context,
+            done_list=done_list if done_list is not None else [], local=local,
+        )
+
+    def copy_data(self, cr, uid, id, default=None, context=None):
+        confirmed = (context or {}).get('account_copy_defaults', {}).get(str(id))
+        if confirmed is not None:
+            if default is None:
+                default = {}
+            # account.copy() replaces code with '(copy)' before calling this hook.
+            # Update this same dict so ORM.copy() also excludes these overrides
+            # when copying translations, just as for ordinary copy defaults.
+            default.update(confirmed)
+        return super(AccountAccount, self).copy_data(
+            cr, uid, id, default=default, context=context
+        )
+
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}
@@ -89,9 +131,9 @@ class AccountAccount(osv.osv):
                 ], limit=1, context=context)
                 if sync_ids:
                     raise osv.except_osv(
-                        'Error',
-                        'The Odoo account code cannot be changed once the account '
-                        'is linked to Odoo.',
+                        _('Error'),
+                        _('The Odoo account code cannot be changed once the account '
+                          'is linked to Odoo.'),
                     )
         return super(AccountAccount, self).write(
             cr, uid, ids, vals, context=context
@@ -100,6 +142,9 @@ class AccountAccount(osv.osv):
     def create(self, cr, uid, vals, context=None):
         if context is None:
             context = {}
+        if 'account_copy_defaults' in context:
+            context = context.copy()
+            del context['account_copy_defaults']
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
 
         with Sudo(uid=1, gid=0):

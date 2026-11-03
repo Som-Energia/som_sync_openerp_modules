@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <record id="view_wizard_duplicate_account" model="ir.ui.view">
+            <field name="name">wizard.duplicate.account.form</field>
+            <field name="model">wizard.duplicate.account</field>
+            <field name="type">form</field>
+            <field name="arch" type="xml">
+                <form string="Duplicate account">
+                    <label string="Confirm the final codes before duplicating and synchronizing the account." colspan="4"/>
+                    <field name="account_id" colspan="4"/>
+                    <field name="name" colspan="4"/>
+                    <field name="code"/>
+                    <field name="odoo_account_code"/>
+                    <label string="An Odoo account code of exactly 9 digits is required when the new account code has 12 characters." colspan="4"/>
+                    <field name="has_children" invisible="1"/>
+                    <group colspan="4" attrs="{'invisible': [('has_children', '=', False)]}">
+                        <label string="The standard copy also duplicates these child accounts. Confirm their final codes before continuing." colspan="4"/>
+                        <field name="line_ids" colspan="4" nolabel="1">
+                            <tree string="Child accounts" editable="bottom">
+                                <field name="account_id"/>
+                                <field name="code"/>
+                                <field name="odoo_account_code"/>
+                            </tree>
+                            <form string="Child account codes">
+                                <field name="account_id"/>
+                                <field name="code"/>
+                                <field name="odoo_account_code"/>
+                            </form>
+                        </field>
+                    </group>
+                    <group colspan="4" col="2">
+                        <button special="cancel" string="Cancel" icon="gtk-cancel"/>
+                        <button name="action_duplicate" string="Create account" type="object" icon="gtk-execute"/>
+                    </group>
+                </form>
+            </field>
+        </record>
+        <record id="action_wizard_duplicate_account" model="ir.actions.act_window">
+            <field name="name">Duplicate account...</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">wizard.duplicate.account</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+        <record id="value_wizard_duplicate_account" model="ir.values">
+            <field name="object" eval="1"/>
+            <field name="name">Duplicate account...</field>
+            <field name="key2">client_action_multi</field>
+            <field name="key">action</field>
+            <field name="model">account.account</field>
+            <field name="value" eval="'ir.actions.act_window,'+str(ref('action_wizard_duplicate_account'))"/>
+        </record>
+    </data>
+</openerp>

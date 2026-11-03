@@ -1,0 +1,165 @@
+# Catalan translations for the account duplication workflow.
+# Copyright (C) Som Energia
+# This file is distributed under the same license as the som_sync_openerp module.
+msgid ""
+msgstr ""
+"Project-Id-Version: som_sync_openerp\n"
+"PO-Revision-Date: 2026-11-03 00:00+0000\n"
+"Language: ca_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: som_sync_openerp
+#: model:ir.model,name:som_sync_openerp.model_wizard_duplicate_account
+msgid "Duplicate an account with confirmed Odoo mapping"
+msgstr "Duplicació d'un compte amb la correspondència amb Odoo confirmada"
+
+#. module: som_sync_openerp
+#: model:ir.model,name:som_sync_openerp.model_wizard_duplicate_account_line
+msgid "Confirmed codes for a child account copy"
+msgstr "Codis confirmats per a la còpia d'un compte fill"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account.line,wizard_id:0
+msgid "Wizard"
+msgstr "Assistent"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account,account_id:0
+msgid "Source account"
+msgstr "Compte d'origen"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account.line,account_id:0
+msgid "Source child account"
+msgstr "Compte fill d'origen"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account,name:0
+msgid "New account name"
+msgstr "Nom del compte nou"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account,code:0
+#: field:wizard.duplicate.account.line,code:0
+msgid "New account code"
+msgstr "Codi del compte nou"
+
+#. module: som_sync_openerp
+#: field:account.account,odoo_account_code:0
+#: field:wizard.duplicate.account,odoo_account_code:0
+#: field:wizard.duplicate.account.line,odoo_account_code:0
+msgid "Odoo account code"
+msgstr "Codi del compte d'Odoo"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account,has_children:0
+msgid "Has child accounts"
+msgstr "Té comptes fills"
+
+#. module: som_sync_openerp
+#: field:wizard.duplicate.account,line_ids:0
+#: view:wizard.duplicate.account:0
+msgid "Child accounts"
+msgstr "Comptes fills"
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "Child account codes"
+msgstr "Codis dels comptes fills"
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "Duplicate account"
+msgstr "Duplica un compte"
+
+#. module: som_sync_openerp
+#: model:ir.actions.act_window,name:som_sync_openerp.action_wizard_duplicate_account
+msgid "Duplicate account..."
+msgstr "Duplica un compte..."
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "Confirm the final codes before duplicating and synchronizing the account."
+msgstr "Confirmeu els codis definitius abans de duplicar i sincronitzar el compte."
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "An Odoo account code of exactly 9 digits is required when the new account code has 12 characters."
+msgstr "Cal indicar un codi de compte d'Odoo d'exactament 9 dígits quan el codi del compte nou té 12 caràcters."
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "The standard copy also duplicates these child accounts. Confirm their final codes before continuing."
+msgstr "La còpia estàndard també duplica aquests comptes fills. Confirmeu-ne els codis definitius abans de continuar."
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "Cancel"
+msgstr "Cancel·la"
+
+#. module: som_sync_openerp
+#: view:wizard.duplicate.account:0
+msgid "Create account"
+msgstr "Crea el compte"
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/models/account_account.py:0
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "Error"
+msgstr "Error"
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/models/account_account.py:0
+msgid "Use the \"Duplicate account...\" action to confirm the new account codes before creating and synchronizing the account."
+msgstr "Utilitzeu l'acció \"Duplica un compte...\" per confirmar els codis del compte nou abans de crear-lo i sincronitzar-lo."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/models/account_account.py:0
+msgid "The Odoo account code cannot be changed once the account is linked to Odoo."
+msgstr "El codi del compte d'Odoo no es pot modificar un cop el compte està vinculat amb Odoo."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+#: constraint:account.account:0
+msgid "Accounts with a 12-digit code require an Odoo account code."
+msgstr "Els comptes amb un codi de 12 dígits han de tenir informat el codi del compte d'Odoo."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+#: sql_constraint:account.account:0
+msgid "The Odoo account code must contain exactly 9 digits."
+msgstr "El codi del compte d'Odoo ha de contenir exactament 9 dígits."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "Select exactly one account to duplicate."
+msgstr "Seleccioneu exactament un compte per duplicar-lo."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+#, python-format
+msgid "Specify a new code for account %s."
+msgstr "Indiqueu un codi nou per al compte %s."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "Confirm exactly one duplication at a time."
+msgstr "Confirmeu només una duplicació cada vegada."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "Specify the source account, name and new account code."
+msgstr "Indiqueu el compte d'origen, el nom i el codi del compte nou."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "The child accounts have changed. Reopen the duplication wizard."
+msgstr "Els comptes fills han canviat. Torneu a obrir l'assistent de duplicació."
+
+#. module: som_sync_openerp
+#: code:addons/som_sync_openerp/wizard/wizard_duplicate_account.py:0
+msgid "Duplicated account"
+msgstr "Compte duplicat"
