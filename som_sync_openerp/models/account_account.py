@@ -1,6 +1,7 @@
 #  -*- coding: utf-8 -*-
 from osv import osv, fields
 from service.security import Sudo
+from tools.translate import _
 
 
 class AccountAccount(osv.osv):
@@ -72,9 +73,9 @@ class AccountAccount(osv.osv):
                 not confirmed or not confirmed.get('code')
                 or 'odoo_account_code' not in confirmed):
             raise osv.except_osv(
-                'Error',
-                'Use the "Duplicate account..." action to confirm the new '
-                'account codes before creating and synchronizing the account.',
+                _('Error'),
+                _('Use the "Duplicate account..." action to confirm the new '
+                  'account codes before creating and synchronizing the account.'),
             )
         if confirmed is not None:
             default = (default or {}).copy()
@@ -120,9 +121,9 @@ class AccountAccount(osv.osv):
                 ], limit=1, context=context)
                 if sync_ids:
                     raise osv.except_osv(
-                        'Error',
-                        'The Odoo account code cannot be changed once the account '
-                        'is linked to Odoo.',
+                        _('Error'),
+                        _('The Odoo account code cannot be changed once the account '
+                          'is linked to Odoo.'),
                     )
         return super(AccountAccount, self).write(
             cr, uid, ids, vals, context=context

@@ -2,6 +2,7 @@
 import re
 
 from osv import osv, fields
+from tools.translate import _
 
 
 class WizardDuplicateAccountLine(osv.osv_memory):
@@ -47,7 +48,7 @@ class WizardDuplicateAccount(osv.osv_memory):
             account_ids = [context['active_id']]
         if (context.get('active_model', 'account.account') != 'account.account'
                 or len(account_ids) != 1):
-            raise osv.except_osv('Error', 'Select exactly one account to duplicate.')
+            raise osv.except_osv(_('Error'), _('Select exactly one account to duplicate.'))
         account = self.pool.get('account.account').browse(
             cr, uid, account_ids[0], context=context
         )
@@ -72,28 +73,28 @@ class WizardDuplicateAccount(osv.osv_memory):
                       if key in fields_list)
         return values
 
-    def _confirmed_codes(self, account, code, mapping):
+    def _confirmed_codes(self, cr, uid, account, code, mapping, context=None):
         if not code:
             raise osv.except_osv(
-                'Error', 'Specify a new code for account %s.' % account.code
+                _('Error'), _('Specify a new code for account %s.') % account.code
             )
         if len(code) == 12 and not mapping:
             raise osv.except_osv(
-                'Error', 'Accounts with a 12-digit code require an Odoo account code.'
+                _('Error'), _('Accounts with a 12-digit code require an Odoo account code.')
             )
         if mapping and not re.match(r'^[0-9]{9}\Z', mapping):
             raise osv.except_osv(
-                'Error', 'The Odoo account code must contain exactly 9 digits.'
+                _('Error'), _('The Odoo account code must contain exactly 9 digits.')
             )
         return {'code': code, 'odoo_account_code': mapping or False}
 
     def action_duplicate(self, cr, uid, ids, context=None):
         if len(ids) != 1:
-            raise osv.except_osv('Error', 'Confirm exactly one duplication at a time.')
+            raise osv.except_osv(_('Error'), _('Confirm exactly one duplication at a time.'))
         wizard = self.browse(cr, uid, ids[0], context=context)
         if not wizard.account_id or not wizard.name or not wizard.code:
             raise osv.except_osv(
-                'Error', 'Specify the source account, name and new account code.'
+                _('Error'), _('Specify the source account, name and new account code.')
             )
         account_obj = self.pool.get('account.account')
         sources = self._get_copy_accounts(
@@ -103,16 +104,16 @@ class WizardDuplicateAccount(osv.osv_memory):
         provided_ids = [line.account_id.id for line in wizard.line_ids]
         if set(provided_ids) != expected_ids or len(provided_ids) != len(expected_ids):
             raise osv.except_osv(
-                'Error', 'The child accounts have changed. Reopen the duplication wizard.'
+                _('Error'), _('The child accounts have changed. Reopen the duplication wizard.')
             )
         overrides = {str(wizard.account_id.id): self._confirmed_codes(
-            wizard.account_id, wizard.code, wizard.odoo_account_code
+            cr, uid, wizard.account_id, wizard.code, wizard.odoo_account_code, context=context
         )}
         if wizard.name != wizard.account_id.name:
             overrides[str(wizard.account_id.id)]['name'] = wizard.name
         for line in wizard.line_ids:
             overrides[str(line.account_id.id)] = self._confirmed_codes(
-                line.account_id, line.code, line.odoo_account_code
+                cr, uid, line.account_id, line.code, line.odoo_account_code, context=context
             )
         copy_context = dict(context or {})
         copy_context['account_copy_defaults'] = overrides
@@ -124,7 +125,7 @@ class WizardDuplicateAccount(osv.osv_memory):
             default=root_defaults, context=copy_context,
         )
         return {
-            'name': 'Duplicated account',
+            'name': _('Duplicated account'),
             'type': 'ir.actions.act_window',
             'res_model': 'account.account',
             'res_id': account_id,
