@@ -67,6 +67,17 @@ class AccountAccount(osv.osv):
         )
         return has_twelve_digit_code and bool(account.odoo_account_code)
 
+    def copy_data(self, cr, uid, id, default=None, context=None):
+        account = self.browse(cr, uid, id, context=context)
+        default = (default or {}).copy()
+        default.update({
+            'code': (account.code or '') + 'COPY',
+            'odoo_account_code': False,
+        })
+        return super(AccountAccount, self).copy_data(
+            cr, uid, id, default=default, context=context
+        )
+
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}

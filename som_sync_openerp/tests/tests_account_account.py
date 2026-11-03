@@ -176,6 +176,55 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
             context={},
         )
 
+    def test_copy_appends_COPY_clears_mapping_and_skips_sync_for_parent_and_child(self):
+        source_id = self._account_id()
+        user_type_id = self.account_obj.browse(
+            self.cursor, self.uid, source_id
+        ).user_type.id
+        with mock.patch.object(
+                odoo_sync.OdooSync, 'common_sync_model_create_update'):
+            parent_id = self.account_obj.create(self.cursor, self.uid, {
+                'name': 'Source parent',
+                'code': '700000000004',
+                'odoo_account_code': '700000004',
+                'type': 'view',
+                'user_type': user_type_id,
+            })
+            child_id = self.account_obj.create(self.cursor, self.uid, {
+                'name': 'Source child',
+                'code': '700000005',
+                'odoo_account_code': '700000005',
+                'type': 'other',
+                'user_type': user_type_id,
+                'parent_id': parent_id,
+            })
+
+        with mock.patch.object(
+                odoo_sync.OdooSync, 'sync_model_enabled_amplified') as mock_enabled:
+            with mock.patch.object(
+                    odoo_sync.OdooSync, 'syncronize_sync') as mock_syncronize_sync:
+                mock_enabled.return_value = (True, True, False)
+                copied_parent_id = self.account_obj.copy(
+                    self.cursor, self.uid, parent_id
+                )
+
+        copied_parent = self.account_obj.browse(
+            self.cursor, self.uid, copied_parent_id
+        )
+        self.assertEqual(copied_parent.code, '700000000004COPY')
+        self.assertFalse(copied_parent.odoo_account_code)
+        self.assertEqual(len(copied_parent.child_parent_ids), 1)
+        copied_child = copied_parent.child_parent_ids[0]
+        self.assertEqual(copied_child.code, '700000005COPY')
+        self.assertFalse(copied_child.odoo_account_code)
+        self.assertEqual(self.account_obj.browse(
+            self.cursor, self.uid, parent_id
+        ).odoo_account_code, '700000004')
+        self.assertEqual(self.account_obj.browse(
+            self.cursor, self.uid, child_id
+        ).odoo_account_code, '700000005')
+        mock_syncronize_sync.assert_not_called()
+
     def test_create_with_twelve_digit_code_without_mapping__is_rejected(self):
         account_type_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'financieras'
