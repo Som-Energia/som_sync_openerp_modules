@@ -1,4 +1,6 @@
 #  -*- coding: utf-8 -*-
+import re
+
 from osv import osv, fields
 from service.security import Sudo
 
@@ -60,7 +62,10 @@ class AccountAccount(osv.osv):
 
     def check_special_restrictions(self, cr, uid, id, context=None):
         account = self.browse(cr, uid, id, context=context)
-        return len(account.code or '') != 12 or bool(account.odoo_account_code)
+        has_twelve_digit_code = bool(
+            re.match(r'^[0-9]{12}\Z', account.code or '')
+        )
+        return has_twelve_digit_code and bool(account.odoo_account_code)
 
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:

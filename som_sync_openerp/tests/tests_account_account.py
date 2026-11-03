@@ -138,6 +138,44 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertEqual(result, (None, None))
         mock_syncronize_sync.assert_not_called()
 
+    @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_sync_with_nine_digit_code_without_mapping__is_not_started(
+            self, mock_enabled, mock_syncronize_sync):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000001',
+            'odoo_account_code': False,
+        })
+        mock_enabled.return_value = (True, False, False)
+
+        result = self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.account', 'sync', account_id
+        )
+
+        self.assertEqual(result, (None, None))
+        mock_syncronize_sync.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'syncronize_sync')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified')
+    def test_sync_with_twelve_digit_code_and_mapping__is_started(
+            self, mock_enabled, mock_syncronize_sync):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000000001',
+            'odoo_account_code': '700000001',
+        })
+        mock_enabled.return_value = (True, False, False)
+
+        self.sync_obj.common_sync_model_create_update(
+            self.cursor, self.uid, 'account.account', 'sync', account_id
+        )
+
+        mock_syncronize_sync.assert_called_once_with(
+            self.cursor, self.uid, 'account.account', 'sync', account_id,
+            context={},
+        )
+
     def test_create_with_twelve_digit_code_without_mapping__is_rejected(self):
         account_type_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'financieras'
@@ -160,7 +198,7 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
                               'odoo_account_code': False,
                           })
 
-    def test_check_special_restrictions__allows_nine_digit_account_without_mapping(self):
+    def test_check_special_restrictions__rejects_nine_digit_account_without_mapping(self):
         account_id = self._account_id()
         self.account_obj.write(self.cursor, self.uid, [account_id], {
             'code': '700000001',
@@ -171,7 +209,46 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, account_id
         )
 
-        self.assertTrue(result)
+        self.assertFalse(result)
+
+    def test_check_special_restrictions__rejects_nine_digit_account_with_mapping(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '700000001',
+            'odoo_account_code': '700000001',
+        })
+
+        result = self.account_obj.check_special_restrictions(
+            self.cursor, self.uid, account_id
+        )
+
+        self.assertFalse(result)
+
+    def test_check_special_restrictions__rejects_blank_code(self):
+        account_id = self._account_id()
+        self.cursor.execute(
+            'UPDATE account_account SET code = %s, odoo_account_code = NULL WHERE id = %s',
+            ('', account_id),
+        )
+
+        result = self.account_obj.check_special_restrictions(
+            self.cursor, self.uid, account_id
+        )
+
+        self.assertFalse(result)
+
+    def test_check_special_restrictions__rejects_non_digit_twelve_character_code(self):
+        account_id = self._account_id()
+        self.cursor.execute(
+            'UPDATE account_account SET code = %s, odoo_account_code = %s WHERE id = %s',
+            ('70000000000A', '700000001', account_id),
+        )
+
+        result = self.account_obj.check_special_restrictions(
+            self.cursor, self.uid, account_id
+        )
+
+        self.assertFalse(result)
 
     def test_check_special_restrictions__allows_twelve_digit_account_with_mapping(self):
         account_id = self._account_id()
