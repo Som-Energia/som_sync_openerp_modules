@@ -1326,7 +1326,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         update_odoo_id.assert_called_once()
         sync_context = update_odoo_id.call_args[1]['context']
         self.assertEqual(sync_context['sync_state'], 'error')
-        self.assertIn('create it manually in Odoo', sync_context['odoo_last_update_result'])
+        self.assertIn('Create it manually in Odoo', sync_context['odoo_last_update_result'])
 
     @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.get_sync_state_on_creation')
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
