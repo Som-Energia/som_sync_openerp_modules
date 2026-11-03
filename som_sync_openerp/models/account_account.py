@@ -62,6 +62,16 @@ class AccountAccount(osv.osv):
         account = self.browse(cr, uid, id, context=context)
         return len(account.code or '') != 12 or bool(account.odoo_account_code)
 
+    def is_sync_mapping_only(self, cr, uid, id, context=None):
+        """Return whether an account must only be mapped, never written to Odoo."""
+        account = self.browse(cr, uid, id, context=context)
+        excluded_groups = self.pool.get('res.config').get(
+            cr, uid, 'odoo_sync_excluded_account_groups', '2,5'
+        ) or ''
+        excluded_groups = [group.strip() for group in excluded_groups.split(',')]
+        account_group = (account.code or '')[:1]
+        return bool(account_group and account_group in excluded_groups)
+
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}

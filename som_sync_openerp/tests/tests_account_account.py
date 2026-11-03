@@ -186,6 +186,45 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
         self.assertTrue(result)
 
+    def test_is_sync_mapping_only__uses_default_excluded_groups(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '200000001',
+            'odoo_account_code': False,
+        })
+
+        self.assertTrue(self.account_obj.is_sync_mapping_only(
+            self.cursor, self.uid, account_id
+        ))
+
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '500000001',
+        })
+        self.assertTrue(self.account_obj.is_sync_mapping_only(
+            self.cursor, self.uid, account_id
+        ))
+
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '400000001',
+        })
+        self.assertFalse(self.account_obj.is_sync_mapping_only(
+            self.cursor, self.uid, account_id
+        ))
+
+    def test_is_sync_mapping_only__uses_configured_groups(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '400000001',
+            'odoo_account_code': False,
+        })
+        self.openerp.pool.get('res.config').set(
+            self.cursor, self.uid, 'odoo_sync_excluded_account_groups', '4,7'
+        )
+
+        self.assertTrue(self.account_obj.is_sync_mapping_only(
+            self.cursor, self.uid, account_id
+        ))
+
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):
         before_count = len(self.account_obj.search(

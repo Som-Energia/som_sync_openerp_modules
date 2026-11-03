@@ -515,6 +515,7 @@ class OdooSync(osv.osv):
             return False, False
 
         rp_obj = self.pool.get(model)
+        mapping_only = False
 
         # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
@@ -549,6 +550,9 @@ class OdooSync(osv.osv):
         try:
             # Verify record existence in the local ERP database
             self.check_erp_record_exist(cursor, uid, model, openerp_id)
+            mapping_only = hasattr(rp_obj, 'is_sync_mapping_only') and \
+                rp_obj.is_sync_mapping_only(
+                    cursor, uid, openerp_id, context=context)
 
             # If the sync is triggered from a FK sync and the model is not in the patch list,
             # we can directly get the odoo_id by erp_id without checking endpoint suffix.
@@ -556,7 +560,8 @@ class OdooSync(osv.osv):
             # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
             # Models in MAPPING_MODELS_CHECK_LOCAL always use this shortcut, regardless of context.
             if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL) \
-                    and not MAPPING_MODELS_PATCH.get(model, False):
+                    and not MAPPING_MODELS_PATCH.get(model, False) \
+                    and not mapping_only:
                 erp_id = openerp_id
                 odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
                 if odoo_id:
@@ -592,8 +597,8 @@ class OdooSync(osv.osv):
                     if model == 'account.account':
                         account = rp_obj.browse(
                             cursor, uid, openerp_id, context=context)
-                    if account and len(account.code or '') == 12 and \
-                            account.odoo_account_code:
+                    if mapping_only or (account and len(account.code or '') == 12
+                                        and account.odoo_account_code):
                         # Several ERP accounts can share the same Odoo account code.
                         erp_id = openerp_id
                         sync_vals.update({
@@ -626,32 +631,46 @@ class OdooSync(osv.osv):
 
             else:
                 # Case: Record does not exist in Odoo, proceed to create it
-                odoo_id, msg, endpoint = self.create_odoo_record(
-                    cursor, uid, model, erp_data, context=context)
-                if odoo_id:
-                    erp_id = openerp_id
-                # msg is false when account.invoice already exist in Odoo
-                if msg:
-                    msg_formated = self.format_response(msg)
-                    sync_vals.update({
-                        'odoo_last_update_result': msg_formated,
-                        'update_odoo_created_sync': True,
-                    })
-                sync_state = 'synced' if odoo_id else 'error'
-                if odoo_id and hasattr(rp_obj, 'get_sync_state_on_creation') and (
-                        not sync_id or sync_state_before_retry == 'error'):
-                    sync_state = rp_obj.get_sync_state_on_creation(
+                if mapping_only:
+                    account_code = rp_obj.get_endpoint_suffix(
                         cursor, uid, openerp_id, context=context)
+                    sync_vals.update({
+                        'sync_state': 'error',
+                        'odoo_last_update_result': self.format_response(
+                            'Account with Odoo code {} does not exist in Odoo. '
+                            'Create it manually in Odoo before syncing.'.format(
+                                account_code)
+                        ),
+                        'odoo_last_sync_request': self.format_response(erp_data),
+                        'update_last_sync': True,
+                    })
+                else:
+                    odoo_id, msg, endpoint = self.create_odoo_record(
+                        cursor, uid, model, erp_data, context=context)
+                    if odoo_id:
+                        erp_id = openerp_id
+                    # msg is false when account.invoice already exist in Odoo
+                    if msg:
+                        msg_formated = self.format_response(msg)
+                        sync_vals.update({
+                            'odoo_last_update_result': msg_formated,
+                            'update_odoo_created_sync': True,
+                        })
+                    sync_state = 'synced' if odoo_id else 'error'
+                    if odoo_id and hasattr(rp_obj, 'get_sync_state_on_creation') and (
+                            not sync_id or sync_state_before_retry == 'error'):
+                        sync_state = rp_obj.get_sync_state_on_creation(
+                            cursor, uid, openerp_id, context=context)
 
-                sync_vals.update({
-                    'odoo_last_sync_request': self.format_response(erp_data),
-                    'odoo_last_sync_endpoint': endpoint,
-                    'sync_state': sync_state,
-                })
+                    sync_vals.update({
+                        'odoo_last_sync_request': self.format_response(erp_data),
+                        'odoo_last_sync_endpoint': endpoint,
+                        'sync_state': sync_state,
+                    })
 
-                has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
-                if has_hook_after_odoo_creation:
-                    rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
+                    has_hook_after_odoo_creation = hasattr(rp_obj, 'hook_after_odoo_creation')
+                    if has_hook_after_odoo_creation:
+                        rp_obj.hook_after_odoo_creation(cursor, uid, msg, sync_vals)
 
         except (
             CreationNotSupportedException,
