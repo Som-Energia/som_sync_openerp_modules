@@ -188,6 +188,9 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_create__excluded_groups_do_not_start_sync(self, mock_sync):
+        self.openerp.pool.get('res.config').set(
+            self.cursor, self.uid, 'odoo_sync_excluded_account_groups', '2,5'
+        )
         account_type_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'financieras'
         )[1]
@@ -208,6 +211,9 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_create__non_excluded_group_starts_sync(self, mock_sync):
+        self.openerp.pool.get('res.config').set(
+            self.cursor, self.uid, 'odoo_sync_excluded_account_groups', '2,5'
+        )
         account_type_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'som_sync_openerp', 'financieras'
         )[1]
@@ -231,7 +237,7 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, config_id, ['name', 'value']
         )
         self.assertEqual(config['name'], 'odoo_sync_excluded_account_groups')
-        self.assertEqual(config['value'], '2,5')
+        self.assertFalse(config['value'])
 
     def test_is_sync_excluded__uses_erp_group_and_configured_groups(self):
         account_id = self._account_id()
@@ -251,6 +257,50 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertFalse(self.account_obj.is_sync_excluded(
             self.cursor, self.uid, account_id
         ))
+
+    def test_is_sync_excluded__disabled_flag_excludes_no_groups(self):
+        account_id = self._account_id()
+        config_obj = self.openerp.pool.get('res.config')
+        for value in ('', False, 'False', '   '):
+            config_obj.set(self.cursor, self.uid, 'odoo_sync_excluded_account_groups', value)
+            for code in ('200000001', '500000001', '400000001'):
+                self.account_obj.write(self.cursor, self.uid, [account_id], {'code': code})
+                self.assertFalse(self.account_obj.is_sync_excluded(
+                    self.cursor, self.uid, account_id
+                ))
+
+    def test_is_sync_excluded__missing_setting_excludes_no_groups(self):
+        config_obj = self.openerp.pool.get('res.config')
+        config_ids = config_obj.search(self.cursor, self.uid, [
+            ('name', '=', 'odoo_sync_excluded_account_groups'),
+        ])
+        config_obj.unlink(self.cursor, self.uid, config_ids)
+        account_id = self._account_id()
+        for code in ('200000001', '500000001', '400000001'):
+            self.account_obj.write(self.cursor, self.uid, [account_id], {'code': code})
+            self.assertFalse(self.account_obj.is_sync_excluded(
+                self.cursor, self.uid, account_id
+            ))
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    def test_create__disabled_exclusions_still_start_sync(self, mock_sync):
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+        for index, value in enumerate(('', False, 'False')):
+            self.openerp.pool.get('res.config').set(
+                self.cursor, self.uid, 'odoo_sync_excluded_account_groups', value
+            )
+            account_id = self.account_obj.create(self.cursor, self.uid, {
+                'name': 'Account with exclusions disabled',
+                'code': '20000000{}'.format(index),
+                'type': 'other',
+                'user_type': account_type_id,
+            })
+            self.assertEqual(mock_sync.call_count, index + 1)
+            mock_sync.assert_called_with(
+                self.cursor, self.uid, 'account.account', 'create', account_id, context={}
+            )
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):

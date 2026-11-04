@@ -13,10 +13,11 @@
         </record>
         <record id="odoo_sync_excluded_account_groups" model="res.config">
             <field name="name">odoo_sync_excluded_account_groups</field>
-            <field name="value">2,5</field>
+            <field name="value" eval="False"/>
             <field name="description">
                 Comma-separated ERP account groups excluded from Odoo synchronization
-                (first digit of the account code). Leave empty to disable exclusions.
+                (first digit of the account code). Disabled by default; leave empty
+                or set False to disable exclusions.
                 These accounts and their local odoo.sync mappings must be managed manually.
             </field>
         </record>

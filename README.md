@@ -23,8 +23,9 @@ odoo_api_key
 ## Excluding account groups from synchronization
 
 Set `odoo_sync_excluded_account_groups` in `res.config` to a comma-separated
-list of ERP account groups (the first digit of the account code). The default
-is `2,5`; an empty value disables exclusions. Upgrade `som_sync_openerp` to
+list of ERP account groups (the first digit of the account code), for example
+`2,5`. Exclusions are disabled by default: a missing setting, an empty value,
+or `False` excludes no accounts. Upgrade `som_sync_openerp` to
 create this configuration entry in an existing ERP installation. It is declared
 with `noupdate="1"` so subsequent module upgrades preserve your configured value.
 

@@ -68,11 +68,6 @@ class AccountAccount(osv.osv):
         config_obj = self.pool.get('res.config')
         config_key = 'odoo_sync_excluded_account_groups'
         excluded_groups = config_obj.get(cr, uid, config_key, '') or ''
-        # res.config.get() treats an empty value as missing. Keep it distinct
-        # from an absent setting so an explicitly empty list disables exclusion.
-        if not excluded_groups and not config_obj.search(
-                cr, uid, [('name', '=', config_key)], limit=1):
-            excluded_groups = '2,5'
         excluded_groups = [group.strip() for group in excluded_groups.split(',')]
         account_group = (account.code or '')[:1]
         return bool(account_group and account_group in excluded_groups)
