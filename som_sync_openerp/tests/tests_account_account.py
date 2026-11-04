@@ -187,6 +187,72 @@ class TestAccountAccount(testing.OOTestCaseWithCursor):
         self.assertTrue(result)
 
     @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    def test_create__excluded_groups_do_not_start_sync(self, mock_sync):
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+        for code in ('200000001', '500000001'):
+            account_id = self.account_obj.create(self.cursor, self.uid, {
+                'name': 'Excluded account',
+                'code': code,
+                'type': 'other',
+                'user_type': account_type_id,
+            })
+
+            self.assertTrue(account_id)
+            self.assertFalse(self.sync_obj.search(self.cursor, self.uid, [
+                ('model.model', '=', 'account.account'),
+                ('res_id', '=', account_id),
+            ]))
+        mock_sync.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
+    def test_create__non_excluded_group_starts_sync(self, mock_sync):
+        account_type_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras'
+        )[1]
+        account_id = self.account_obj.create(self.cursor, self.uid, {
+            'name': 'Synchronized account',
+            'code': '700000002',
+            'type': 'other',
+            'user_type': account_type_id,
+        })
+
+        mock_sync.assert_called_once_with(
+            self.cursor, self.uid, 'account.account', 'create', account_id, context={}
+        )
+
+    def test_excluded_account_groups__configuration_is_installed(self):
+        model, config_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'odoo_sync_excluded_account_groups'
+        )
+        self.assertEqual(model, 'res.config')
+        config = self.openerp.pool.get(model).read(
+            self.cursor, self.uid, config_id, ['name', 'value']
+        )
+        self.assertEqual(config['name'], 'odoo_sync_excluded_account_groups')
+        self.assertEqual(config['value'], '2,5')
+
+    def test_is_sync_excluded__uses_erp_group_and_configured_groups(self):
+        account_id = self._account_id()
+        self.account_obj.write(self.cursor, self.uid, [account_id], {
+            'code': '400000000001',
+            'odoo_account_code': '200000001',
+        })
+        config_obj = self.openerp.pool.get('res.config')
+        for groups, expected in [('2,5', False), (' 4, 7 ', True), ('', False)]:
+            config_obj.set(self.cursor, self.uid, 'odoo_sync_excluded_account_groups', groups)
+
+            self.assertEqual(self.account_obj.is_sync_excluded(
+                self.cursor, self.uid, account_id
+            ), expected)
+
+        self.account_obj.write(self.cursor, self.uid, [account_id], {'code': '200000001'})
+        self.assertFalse(self.account_obj.is_sync_excluded(
+            self.cursor, self.uid, account_id
+        ))
+
+    @mock.patch.object(odoo_sync.OdooSync, 'common_sync_model_create_update')
     def test_ensure_demo_account_iva__reuses_existing_account(self, mock_sync):
         before_count = len(self.account_obj.search(
             self.cursor, self.uid, [('code', '=', '475600'), ('company_id', '=', 1)]

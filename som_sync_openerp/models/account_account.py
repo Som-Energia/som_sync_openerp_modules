@@ -63,6 +63,20 @@ class AccountAccount(osv.osv):
         account = self.browse(cr, uid, id, context=context)
         return len(account.code or '') != 12 or bool(account.odoo_account_code)
 
+    def is_sync_excluded(self, cr, uid, id, context=None):
+        account = self.browse(cr, uid, id, context=context)
+        config_obj = self.pool.get('res.config')
+        config_key = 'odoo_sync_excluded_account_groups'
+        excluded_groups = config_obj.get(cr, uid, config_key, '') or ''
+        # res.config.get() treats an empty value as missing. Keep it distinct
+        # from an absent setting so an explicitly empty list disables exclusion.
+        if not excluded_groups and not config_obj.search(
+                cr, uid, [('name', '=', config_key)], limit=1):
+            excluded_groups = '2,5'
+        excluded_groups = [group.strip() for group in excluded_groups.split(',')]
+        account_group = (account.code or '')[:1]
+        return bool(account_group and account_group in excluded_groups)
+
     def copy(self, cr, uid, id, default=None, context=None,
              done_list=None, local=False):
         context = context or {}
@@ -136,6 +150,9 @@ class AccountAccount(osv.osv):
             context = context.copy()
             del context['account_copy_defaults']
         ids = super(AccountAccount, self).create(cr, uid, vals, context=context)
+
+        if self.is_sync_excluded(cr, uid, ids, context=context):
+            return ids
 
         with Sudo(uid=1, gid=0):
             sync_obj = self.pool.get('odoo.sync')

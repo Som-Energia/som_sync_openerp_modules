@@ -20,6 +20,21 @@ odoo_api_key
 *  The worker try to create, write or unlink the object in Odoo.
 
 
+## Excluding account groups from synchronization
+
+Set `odoo_sync_excluded_account_groups` in `res.config` to a comma-separated
+list of ERP account groups (the first digit of the account code). The default
+is `2,5`; an empty value disables exclusions. Upgrade `som_sync_openerp` to
+create this configuration entry in an existing ERP installation. It is declared
+with `noupdate="1"` so subsequent module upgrades preserve your configured value.
+
+Creating an excluded account does not start synchronization. Manual and
+dependency synchronization never look it up remotely, create or update it in
+Odoo, or create an `odoo.sync` mapping. Configure the account and its local
+`odoo.sync` mapping manually before synchronizing objects that reference it.
+A missing mapping produces an error on the dependent object's synchronization,
+not on account creation. Existing ERP account validation still applies.
+
 ## Duplicating accounts safely
 
 For accounts with a 12-character code or an explicit `odoo_account_code`, use

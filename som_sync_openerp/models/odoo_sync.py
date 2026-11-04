@@ -516,6 +516,14 @@ class OdooSync(osv.osv):
 
         rp_obj = self.pool.get(model)
 
+        # Excluded accounts are managed manually. Only reuse local FK mappings;
+        # return before the finally block can create or update a sync record.
+        if model == 'account.account' and rp_obj.is_sync_excluded(
+                cursor, uid, openerp_id, context=context):
+            if context.get('from_fk_sync'):
+                return self.get_odoo_id_by_erp_id(cursor, uid, model, openerp_id), openerp_id
+            return False, False
+
         # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
         sync_obj = self.pool.get('odoo.sync')
