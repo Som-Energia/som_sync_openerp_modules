@@ -14,7 +14,6 @@ from .tests_res_partner_address import *
 from .tests_res_partner_bank import *
 from .tests_wizard_sync import *
 from .tests_wizard_duplicate_account import *
-from .tests_account_duplication_translations import *
 from .test_devolucions import *
 from .tests_account_invoice_fraccionament import *
 from .tests_norma57_file import *
