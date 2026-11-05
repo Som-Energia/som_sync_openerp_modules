@@ -606,10 +606,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(self.sync_obj.common_sync_model_create_update.call_count, 0)
         mock_partner_odoo_id.assert_called_once_with(
-            mock.ANY, self.uid, 'res.partner', 3, return_status=True)
+            mock.ANY, self.uid, 'res.partner', 3, return_status=True,
+            context={'from_fk_sync': True})
         mock_update_odoo_id.assert_called_once_with(
             mock.ANY, self.uid, 'res.partner', 3, 3,
-            context={'sync_state': 'synced', 'update_last_sync': True})
+            context={'sync_state': 'synced', 'update_last_sync': True, 'from_fk_sync': True})
         expected_vals = {
             'city': u'Wavre',
             'email': '',
@@ -677,10 +678,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(vals, expected_vals)
         partner_id = self.ai_obj.browse(self.cursor, self.uid, invoice_id).partner_id.id
         mock_partner_odoo_id.assert_called_once_with(
-            mock.ANY, self.uid, 'res.partner', partner_id, return_status=True)
+            mock.ANY, self.uid, 'res.partner', partner_id, return_status=True,
+            context={'from_fk_sync': True})
         mock_update_odoo_id.assert_called_once_with(
             mock.ANY, self.uid, 'res.partner', partner_id, 2,
-            context={'sync_state': 'synced', 'update_last_sync': True})
+            context={'sync_state': 'synced', 'update_last_sync': True, 'from_fk_sync': True})
         partner_sync_call = mock.call(
             mock.ANY, self.uid, 'res.partner', 'sync', partner_id, {'from_fk_sync': True})
         self.assertNotIn(partner_sync_call, mock_syncronize_sync.call_args_list)
@@ -711,7 +713,8 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
         self.assertEqual(vals['partner_id'], 2)
         mock_partner_odoo_id.assert_called_once_with(
-            mock.ANY, self.uid, 'res.partner', partner_id, return_status=True)
+            mock.ANY, self.uid, 'res.partner', partner_id, return_status=True,
+            context={'from_fk_sync': True})
         mock_update_odoo_id.assert_not_called()
         mock_syncronize_sync.assert_any_call(
             mock.ANY, self.uid, 'res.partner', 'sync', partner_id, {'from_fk_sync': True})
@@ -727,9 +730,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         odoo_id = self.sync_obj.get_partner_odoo_id_by_erp_id(self.cursor, self.uid, 1)
 
         self.assertEqual(odoo_id, 2)
-        mock_local_odoo_id.assert_called_once_with(mock.ANY, self.uid, 'res.partner', 1)
+        mock_local_odoo_id.assert_called_once_with(
+            mock.ANY, self.uid, 'res.partner', 1, context=None)
         mock_remote_odoo_id.assert_called_once_with(
-            mock.ANY, self.uid, 'res.partner', 1, return_status=True)
+            mock.ANY, self.uid, 'res.partner', 1, return_status=True, context=None)
         mock_update_odoo_id.assert_not_called()
 
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
@@ -1154,7 +1158,7 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(odoo_id, 555)
         self.assertEqual(erp_id, account_id)
         mock_get_odoo_id_by_erp_id.assert_called_once_with(
-            mock.ANY, self.uid, 'account.account', account_id
+            mock.ANY, self.uid, 'account.account', account_id, context={'from_fk_sync': True}
         )
         mock_exists_in_odoo.assert_not_called()
         mock_get_model_vals_to_sync.assert_not_called()

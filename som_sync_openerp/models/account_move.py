@@ -44,6 +44,9 @@ class AccountMove(osv.osv):
         return {'lines': res}
 
     def is_tpv_payment_move(self, cr, uid, id, context=None):
+        if (context or {}).get('only_moves') or \
+                (context or {}).get('sync_profile') == 'only_moves':
+            return False
         move = self.browse(cr, uid, id, context=context)
         return move.journal_id and \
             move.journal_id.name.strip().lower() == self.TPV_JOURNAL_NAME
@@ -84,9 +87,8 @@ class AccountMove(osv.osv):
         if invoice.currency_id.id != invoice.company_id.currency_id.id:
             raise ValueError('Foreign-currency TPV collections are not supported')
 
-        previous_sync_ids = sync_obj.search(cr, uid, [
-            ('model.model', '=', self._name), ('res_id', '=', move.id),
-        ], limit=1)
+        previous_sync_ids = sync_obj.search(cr, uid, sync_obj._mapping_domain(
+            cr, uid, self._name, move.id, context), limit=1)
         if previous_sync_ids:
             previous = sync_obj.read(cr, uid, previous_sync_ids[0], [
                 'odoo_id', 'odoo_last_sync_endpoint',
@@ -102,8 +104,8 @@ class AccountMove(osv.osv):
         if not odoo_invoice_id:
             raise ValueError('TPV invoice must be synchronized with Odoo first')
         # FK retries can return a saved Odoo ID even when invoice validation failed.
-        accepted_invoice_sync_ids = sync_obj.search(cr, uid, [
-            ('model.model', '=', 'account.invoice'), ('res_id', '=', invoice.id),
+        accepted_invoice_sync_ids = sync_obj.search(cr, uid, sync_obj._mapping_domain(
+            cr, uid, 'account.invoice', invoice.id, context) + [
             ('odoo_id', '=', odoo_invoice_id),
             ('sync_state', 'in', ['synced', 'synced_with_warning', 'static']),
         ], limit=1)
@@ -133,6 +135,10 @@ class AccountMove(osv.osv):
     def check_special_restrictions(self, cr, uid, id, context=None):
         if context is None:
             context = {}
+        if context.get('only_moves') or context.get('sync_profile') == 'only_moves':
+            move = self.browse(cr, uid, id, context=context)
+            return move.state == 'posted' and bool(move.line_id) and all(
+                line.state == 'valid' for line in move.line_id)
         if not self._journal_is_syncrozable(cr, uid, id, context=context):
             return False
         if self.is_tpv_payment_move(cr, uid, id, context=context):

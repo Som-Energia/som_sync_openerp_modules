@@ -59,6 +59,76 @@ the confirmed codes are applied before `create()`, not corrected afterwards.
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
 
+## Sync profiles (review foundation)
+
+`odoo.sync` now scopes identities and diagnostics by `sync_profile`: `all_in`
+retains the original circuit, `only_moves` identifies the proposed journal-entry
+destination, and `shared` is reserved for account mappings outside ERP group 5
+(account codes starting with `5`). The migration retains existing IDs and states,
+shares the other account mappings and leaves group 5 mappings on `all_in`.
+Group 5 accounts use separate mappings per profile at runtime too. Rotating an
+API key does not change these identities.
+
+The `only_moves` context selects `odoo_api_key_only_moves` on the same configured
+Odoo URL. This key is empty by default and never falls back to `odoo_api_key`.
+Only moves, move lines, journals, accounts and minimal partners are allowed.
+Partner payloads exclude fiscal/payment dependencies before FK resolution;
+addresses are not part of this profile. Posted moves follow the ordinary entry
+route, including TPV moves, while retaining posted/valid-line checks.
+
+Use **Sync** from an existing `odoo.sync` record to retry its saved profile.
+Each selected record gets an independent context. This retries creation/linking;
+it does not update an already linked master. PATCH updates and their recovery
+are deferred for `only_moves`. Existing PATCH behavior in the original circuit
+is preserved. Generic document actions remain on `all_in`.
+
+Attempts to synchronize a model forbidden by its profile are recorded in
+`odoo.sync` as errors under the attempted profile, including the rejection reason
+and routing flags. Repeated attempts update the same diagnostic record, preserve
+any existing Odoo ID, and never schedule or send the rejected operation. These
+diagnostics do not authorize mappings or retries for forbidden models. Dry runs
+do not create diagnostics.
+
+This is infrastructure for review, **not a deployable moves-only circuit yet**:
+there is no moves cron, no new event routing and no changes to the Odoo API.
+Do not activate the profile until the receiver has company-scoped identity
+lookups, idempotent entry creation and the agreed shared-account behavior. A
+common local account mapping does not itself make an Odoo account shared; the
+remote account must actually belong to both companies. Account write propagation,
+partner event fan-out, production bulk-loading orchestration and accounting lifecycle policy remain
+separate work. Pause/drain pre-upgrade jobs before migrating and keep the new
+key unset during this first review.
+
+### Manual partner loading with ERPpeek
+
+Use `only_moves_manual_load=True` for an explicit manual load, whether initial
+or subsequent. Do not reuse the cron flag or set `from_fk_sync` to enqueue it.
+Only run this after the receiver prerequisites above have been verified and
+the dedicated API key has been configured.
+
+With `client` connected to the source ERP and `partner_ids` containing the
+selected ERP partner IDs:
+
+```python
+context = {'sync_profile': 'only_moves', 'only_moves_manual_load': True}
+for partner_id in partner_ids:
+    client.execute(
+        'odoo.sync', 'common_sync_model_create_update',
+        'res.partner', 'sync', partner_id, context=context,
+    )
+```
+
+An existing `odoo.sync.model.config` for `res.partner` is required. With
+`async_enabled=True`, each partner is scheduled separately on `sync_odoo`;
+the queue worker must be running. With `async_enabled=False`, loading runs
+synchronously. `auto_sync` need not be enabled for an explicit `sync` action.
+The manual-load flag does not enable automatic events, forbidden models or
+PATCH updates. Already linked partners are not updated.
+
+An asynchronous return value of `(None, None)` is not a success receipt. Inspect
+the jobs and, after execution, `odoo.sync` records filtered by
+`model.model = res.partner`, `res_id` and `sync_profile = only_moves`.
+
 ## TPV Triodos collections
 
 Individual customer invoice collections in the OpenERP journal `TPV Triodos`

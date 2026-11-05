@@ -29,6 +29,11 @@ class ResPartner(osv.osv):
         'payment_type_customer': 'payment.type',  # 'payment.type'
     }
 
+    ONLY_MOVES_FIELDS_TO_SYNC = {
+        'id': 'pnt_erp_id', 'name': 'name', 'lang': 'lang', 'vat': 'vat',
+        'customer': 'is_customer', 'supplier': 'is_supplier',
+    }
+
     MAPPING_CONSTANTS = {
         'type': 'contact',
         'is_company': True,
@@ -51,6 +56,8 @@ class ResPartner(osv.osv):
     def get_related_values(self, cr, uid, id, context=None):
         if context is None:
             context = {}
+        if context.get('only_moves') or context.get('sync_profile') == 'only_moves':
+            return {}
         partner = self.browse(cr, uid, id, context=context)
         sync_obj = self.pool.get('odoo.sync')
         res = {}
