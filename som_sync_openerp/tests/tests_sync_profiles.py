@@ -406,6 +406,92 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
                 self.assertEqual(moves.check_special_restrictions(
                     self.cursor, self.uid, 1, context=context), expected)
 
+    def test_account_scope_uses_fixed_group_5_rule(self):
+        for code, expected in (('299992001', 'shared'), ('799992001', 'shared'),
+                               ('599992001', 'only_moves'), ('499992001', 'shared')):
+            account_id = self.account_id(code)
+            sync_id = self.mapping('only_moves', model='account.account', erp_id=account_id)
+            self.assertEqual(self.sync.browse(self.cursor, self.uid, sync_id).sync_profile,
+                             expected)
+
+    def test_linked_account_cannot_cross_shared_boundary_in_either_direction(self):
+        accounts = self.openerp.pool.get('account.account')
+        for code, new_code, profile in (
+                ('499992002', '599992002', 'shared'),
+                ('599992003', '499992003', 'all_in'),
+                ('599992004', '499992004', 'only_moves')):
+            account_id = self.account_id(code)
+            self.mapping(profile, model='account.account', erp_id=account_id,
+                         odoo_id=False, sync_state='error')
+            with self.assertRaises(osv.except_osv):
+                accounts.write(self.cursor, self.uid, account_id, {'code': new_code})
+            self.assertEqual(accounts.read(
+                self.cursor, self.uid, account_id, ['code'])['code'], code)
+
+    def test_legacy_configuration_cannot_hide_saved_account_mappings(self):
+        shared = self.account_id('499992010')
+        separate = self.account_id('599992011')
+        self.mapping('shared', model='account.account', erp_id=shared, odoo_id=91)
+        self.mapping('all_in', model='account.account', erp_id=separate, odoo_id=92)
+        self.mapping('only_moves', model='account.account', erp_id=separate, odoo_id=93)
+        config = self.openerp.pool.get('res.config')
+        for value in ('4,2', '', False, '5'):
+            config.set(self.cursor, self.uid, 'odoo_sync_excluded_account_groups', value)
+            for profile, remote_id in (('all_in', 92), ('only_moves', 93)):
+                context = {'sync_profile': profile}
+                self.assertEqual(self.sync.get_odoo_id_by_erp_id(
+                    self.cursor, self.uid, 'account.account', shared, context=context), 91)
+                self.assertEqual(self.sync.get_odoo_id_by_erp_id(
+                    self.cursor, self.uid, 'account.account', separate, context=context),
+                    remote_id)
+
+    def test_linked_account_can_change_group_without_changing_scope(self):
+        accounts = self.openerp.pool.get('account.account')
+        for code, new_code, profile in (
+                ('499992005', '699992005', 'shared'),
+                ('599992006', '599992016', 'only_moves')):
+            account_id = self.account_id(code)
+            self.mapping(profile, model='account.account', erp_id=account_id, odoo_id=97)
+            accounts.write(self.cursor, self.uid, [account_id], {'code': new_code})
+            self.assertEqual(self.sync.get_odoo_id_by_erp_id(
+                self.cursor, self.uid, 'account.account', account_id,
+                context={'sync_profile': 'only_moves'}), 97)
+
+    def test_unlinked_account_can_cross_shared_boundary(self):
+        accounts = self.openerp.pool.get('account.account')
+        account_id = self.account_id('499992007')
+        for code in ('599992007', '499992007'):
+            accounts.write(self.cursor, self.uid, [account_id], {'code': code})
+            self.assertEqual(accounts.read(
+                self.cursor, self.uid, account_id, ['code'])['code'], code)
+
+    def test_batch_code_change_is_rejected_before_any_account_is_written(self):
+        accounts = self.openerp.pool.get('account.account')
+        unlinked = self.account_id('499992008')
+        linked = self.account_id('499992009')
+        self.mapping('shared', model='account.account', erp_id=linked)
+        with self.assertRaises(osv.except_osv):
+            accounts.write(self.cursor, self.uid, [unlinked, linked], {'code': '599992008'})
+        self.assertEqual(accounts.read(self.cursor, self.uid, unlinked, ['code'])['code'],
+                         '499992008')
+
+    def test_initial_migration_keeps_fixed_group_5_rule(self):
+        group_2 = self.mapping('all_in', model='account.account',
+                               erp_id=self.account_id('299992014'))
+        group_5 = self.mapping('all_in', model='account.account',
+                               erp_id=self.account_id('599992014'))
+        self.cursor.execute("UPDATE odoo_sync SET sync_profile = 'all_in' WHERE id = %s",
+                            (group_2,))
+        path = os.path.join(os.path.dirname(__file__), '..', 'migrations', '5.0.25.5.0',
+                            'post-0013_add_sync_profiles.py')
+        migration = imp.load_source('sync_profiles_migration', path)
+        with mock.patch.object(migration, 'config', mock.Mock(updating_all=True)):
+            migration.up(self.cursor, '0.1')
+        self.assertEqual(self.sync.browse(self.cursor, self.uid, group_2).sync_profile,
+                         'shared')
+        self.assertEqual(self.sync.browse(self.cursor, self.uid, group_5).sync_profile,
+                         'all_in')
+
     def test_migration_preserves_ids_and_is_repeatable(self):
         account_id = self.account_id('499991003')
         group_5_id = self.account_id('599991003')

@@ -1237,14 +1237,11 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
 
     def _excluded_account_id(self):
-        self.openerp.pool.get('res.config').set(
-            self.cursor, self.uid, 'odoo_sync_excluded_account_groups', '2,5'
-        )
         account_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, 'account', 'account_unpaid'
         )[1]
         self.aa_obj.write(self.cursor, self.uid, account_id, {
-            'code': '200000001',
+            'code': '500000001',
             'odoo_account_code': False,
         })
         return account_id

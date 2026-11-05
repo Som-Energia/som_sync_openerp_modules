@@ -105,9 +105,8 @@ class OdooSync(osv.osv):
     def _mapping_profile(self, cursor, uid, model, erp_id, context=None):
         profile = self._get_profile(context)
         if model == 'account.account':
-            account = self.pool.get(model).read(
-                cursor, uid, erp_id, ['code'], context=context)
-            if not (account['code'] or '').startswith('5'):
+            if not self.pool.get(model).is_sync_excluded(
+                    cursor, uid, erp_id, context=context):
                 return 'shared'
             if profile == 'shared':
                 raise osv.except_osv('Configuration error',

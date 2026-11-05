@@ -20,14 +20,12 @@ odoo_api_key
 *  The worker try to create, write or unlink the object in Odoo.
 
 
-## Excluding account groups from synchronization
+## Group 5 accounts
 
-Set `odoo_sync_excluded_account_groups` in `res.config` to a comma-separated
-list of ERP account groups (the first digit of the account code), for example
-`2,5`. Exclusions are disabled by default: a missing setting, an empty value,
-or `False` excludes no accounts. Upgrade `som_sync_openerp` to
-create this configuration entry in an existing ERP installation. It is declared
-with `noupdate="1"` so subsequent module upgrades preserve your configured value.
+ERP accounts whose `code` starts with `5` are always excluded from remote account
+synchronization. This is a fixed rule, independent of `odoo_account_code` and
+configuration. Any legacy `odoo_sync_excluded_account_groups` setting is ignored;
+existing stored values are not deleted.
 
 Creating an excluded account does not start synchronization. Manual and
 dependency synchronization never look it up remotely, create or update it in
@@ -63,11 +61,17 @@ The API documentation is here https://som-energia.github.io/odoo_api_doc/index_s
 
 `odoo.sync` now scopes identities and diagnostics by `sync_profile`: `all_in`
 retains the original circuit, `only_moves` identifies the proposed journal-entry
-destination, and `shared` is reserved for account mappings outside ERP group 5
-(account codes starting with `5`). The migration retains existing IDs and states,
-shares the other account mappings and leaves group 5 mappings on `all_in`.
-Group 5 accounts use separate mappings per profile at runtime too. Rotating an
-API key does not change these identities.
+destination, and `shared` is reserved for account mappings outside ERP group 5.
+Group 5 accounts use separate mappings per profile. Both runtime classification
+and the initial migration use the fixed ERP `code` prefix `5`, not
+`odoo_account_code`. The migration preserves IDs and states, shares other account
+mappings and leaves group 5 on `all_in`.
+
+Once an account has any saved mapping (in any profile or state, even without an
+Odoo ID), code changes that cross the shared/per-profile boundary are blocked.
+Changes within the same classification remain allowed. Reclassification requires an explicit
+mapping migration; mappings are never moved or merged automatically. Rotating an
+API key does not change mapping identities.
 
 The `only_moves` context selects `odoo_api_key_only_moves` on the same configured
 Odoo URL. This key is empty by default and never falls back to `odoo_api_key`.
