@@ -11,14 +11,11 @@
             <field name="value">###</field>
             <field name="description">API key d'Odoo</field>
         </record>
-        <record id="odoo_sync_excluded_account_groups" model="res.config">
-            <field name="name">odoo_sync_excluded_account_groups</field>
+        <record id="odoo_api_key_only_moves" model="res.config">
+            <field name="name">odoo_api_key_only_moves</field>
             <field name="value" eval="False"/>
             <field name="description">
-                Comma-separated ERP account groups excluded from Odoo synchronization
-                (first digit of the account code). Disabled by default; leave empty
-                or set False to disable exclusions.
-                These accounts and their local odoo.sync mappings must be managed manually.
+                API key for the dedicated journal-entry company. No fallback to the all-in key.
             </field>
         </record>
         <record id="odoo_sync_model_config_account_account" model="odoo.sync.model.config">

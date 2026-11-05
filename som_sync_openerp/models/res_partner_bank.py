@@ -24,7 +24,7 @@ class ResPartnerBank(osv.osv):
         sync_obj = self.pool.get('odoo.sync')
         bank = self.browse(cr, uid, id, context=context)
         sync_obj_id = sync_obj.search(
-            cr, uid, [('model', '=', 'res.partner'), ('res_id', '=', bank.partner_id.id)])
+            cr, uid, sync_obj._mapping_domain(cr, uid, 'res.partner', bank.partner_id.id, context))
         odoo_partner_id = sync_obj.read(cr, uid, sync_obj_id[0], ['odoo_id'])['odoo_id']
         if bank.partner_id:
             res = '{}?acc_number={}'.format(odoo_partner_id, bank.iban)
