@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import imp
+import json
 import os
 
 import mock
@@ -405,6 +406,109 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
             with mock.patch.object(moves, 'browse', return_value=move):
                 self.assertEqual(moves.check_special_restrictions(
                     self.cursor, self.uid, 1, context=context), expected)
+
+    def test_only_moves_tpv_request_uses_real_profile_scoped_dependencies(self):
+        config = self.openerp.pool.get('res.config')
+        config.set(self.cursor, self.uid, 'odoo_url_api', 'http://profile-test.invalid/api/')
+        config.set(self.cursor, self.uid, 'odoo_api_key', 'full-key')
+        config.set(self.cursor, self.uid, 'odoo_api_key_only_moves', 'moves-key')
+        sync_config = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = sync_config.search(self.cursor, self.uid, [
+            ('model_id.model', 'in', ['account.move', 'account.account', 'res.partner'])])
+        sync_config.write(self.cursor, self.uid, config_ids, {
+            'auto_sync': False, 'async_enabled': False,
+        })
+        move_id = self.imd.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_move_001')[1]
+        moves = self.openerp.pool.get('account.move')
+        move = moves.browse(self.cursor, self.uid, move_id)
+        journal_id = move.journal_id.id
+        partner_id = move.partner_id.id
+        self.openerp.pool.get('account.journal').write(
+            self.cursor, self.uid, journal_id, {'name': 'TPV Triodos'})
+        account_type = self.imd.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'financieras')[1]
+        accounts = self.openerp.pool.get('account.account')
+        group_5 = accounts.create(self.cursor, self.uid, {
+            'name': 'Profile-specific TPV account', 'code': '599993001',
+            'type': 'other', 'user_type': account_type,
+        })
+        shared = accounts.create(self.cursor, self.uid, {
+            'name': 'Shared TPV counterpart', 'code': '499993001',
+            'type': 'other', 'user_type': account_type,
+        })
+        lines = self.openerp.pool.get('account.move.line')
+        for line in move.line_id:
+            lines.write(self.cursor, self.uid, [line.id], {
+                'account_id': group_5 if line.debit else shared,
+                'partner_id': partner_id,
+            })
+        dependencies = (
+            ('account.journal', journal_id, 10101, 20101),
+            ('res.partner', partner_id, 10102, 20102),
+            ('account.account', group_5, 10103, 20103),
+        )
+        for model, erp_id, full_id, moves_id in dependencies:
+            for profile, remote_id in (('all_in', full_id), ('only_moves', moves_id)):
+                self.sync.get_or_create_static_odoo_id(
+                    self.cursor, self.uid, model, erp_id, remote_id,
+                    context={'sync_profile': profile})
+        self.mapping('shared', model='account.account', erp_id=shared,
+                     odoo_id=30104, sync_state='static')
+        context = {'sync_profile': 'only_moves', 'only_moves_manual_load': True}
+        moves.post(self.cursor, self.uid, [move_id], context=context)
+        move = moves.browse(self.cursor, self.uid, move_id)
+        self.assertEqual(move.state, 'posted')
+        self.assertEqual(len(move.line_id), 2)
+        self.assertTrue(all(line.state == 'valid' for line in move.line_id))
+        self.assertEqual(sum(line.debit - line.credit for line in move.line_id), 0)
+
+        def partner_response(url, headers):
+            self.assertEqual(url, 'http://profile-test.invalid/api/entities/partner/{}'.format(
+                partner_id))
+            remote_id = {'full-key': 10102, 'moves-key': 20102}[headers['X-API-Key']]
+            body = {'success': True, 'data': {'odoo_id': remote_id}}
+            return mock.Mock(status_code=200, text=json.dumps(body),
+                             json=mock.Mock(return_value=body))
+
+        response = {'success': True, 'data': {'odoo_id': 40105}}
+        with mock.patch('som_sync_openerp.models.odoo_sync.requests.get',
+                        side_effect=partner_response) as get, \
+                mock.patch('som_sync_openerp.models.odoo_sync.requests.post') as post:
+            post.return_value.status_code = 201
+            post.return_value.json.return_value = response
+            post.return_value.text = json.dumps(response)
+            result = self.sync.common_sync_model_create_update(
+                self.cursor, self.uid, 'account.move', 'sync', move_id, context=context)
+
+        self.assertEqual(result, (40105, move_id))
+        post.assert_called_once()
+        self.assertEqual(post.call_args[0][0], 'http://profile-test.invalid/api/entries')
+        self.assertEqual(post.call_args[1]['headers']['X-API-Key'], 'moves-key')
+        payload = post.call_args[1]['json']
+        self.assertEqual(payload['pnt_erp_id'], move_id)
+        self.assertEqual(payload['journal_id'], 20101)
+        self.assertEqual(len(payload['lines']), 2)
+        expected_lines = [
+            {'account_id': 20103, 'partner_id': 20102, 'name': 'Product A', 'debit': 1000.0},
+            {'account_id': 30104, 'partner_id': 20102, 'name': 'Product A', 'credit': 1000.0},
+        ]
+        self.assertEqual(sorted(payload['lines'], key=lambda line: line['account_id']),
+                         expected_lines)
+        self.assertEqual(get.call_count, 2)
+        for call in get.call_args_list:
+            self.assertEqual(call[1]['headers']['X-API-Key'], 'moves-key')
+        record_ids = self.sync.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.move'), ('res_id', '=', move_id),
+            ('sync_profile', '=', 'only_moves')])
+        self.assertEqual(len(record_ids), 1)
+        record = self.sync.browse(self.cursor, self.uid, record_ids[0])
+        self.assertEqual(record.sync_state, 'synced')
+        self.assertEqual(record.odoo_id, 40105)
+        self.assertEqual(json.loads(record.odoo_last_sync_request), payload)
+        for model, erp_id, full_id, unused in dependencies:
+            self.assertEqual(self.sync.get_odoo_id_by_erp_id(
+                self.cursor, self.uid, model, erp_id), full_id)
 
     def test_account_scope_uses_fixed_group_5_rule(self):
         for code, expected in (('299992001', 'shared'), ('799992001', 'shared'),
