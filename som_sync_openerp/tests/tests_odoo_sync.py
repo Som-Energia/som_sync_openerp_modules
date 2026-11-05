@@ -1232,6 +1232,97 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             mock.ANY, self.uid, 'account.account', account_id, 83513, context=mock.ANY
         )
 
+    def _excluded_account_id(self):
+        self.openerp.pool.get('res.config').set(
+            self.cursor, self.uid, 'odoo_sync_excluded_account_groups', '2,5'
+        )
+        account_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'account', 'account_unpaid'
+        )[1]
+        self.aa_obj.write(self.cursor, self.uid, account_id, {
+            'code': '200000001',
+            'odoo_account_code': False,
+        })
+        return account_id
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    @mock.patch.object(odoo_sync.OdooSync, 'get_odoo_id_by_erp_id')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified',
+                       return_value=(True, True, False))
+    def test_excluded_account__direct_sync_has_no_side_effects(
+            self, enabled, local_mapping, update_odoo_id, connection):
+        account_id = self._excluded_account_id()
+
+        for action in ('create', 'sync'):
+            self.assertEqual(self.sync_obj.syncronize_sync(
+                self.cursor, self.uid, 'account.account', action, account_id
+            ), (False, False))
+
+        local_mapping.assert_not_called()
+        update_odoo_id.assert_not_called()
+        connection.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'update_odoo_id')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified',
+                       return_value=(True, True, False))
+    def test_excluded_account__fk_only_reuses_manual_local_mapping(
+            self, enabled, update_odoo_id, connection):
+        account_id = self._excluded_account_id()
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.account')], limit=1
+        )[0]
+        self.assertEqual(self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id,
+            context={'from_fk_sync': True}
+        ), (False, account_id))
+        self.assertFalse(self.sync_obj.search(self.cursor, self.uid, [
+            ('model', '=', model_id), ('res_id', '=', account_id),
+        ]))
+
+        sync_id = self.sync_obj.create(self.cursor, self.uid, {
+            'model': model_id, 'res_id': account_id,
+            'odoo_id': 83513, 'sync_state': 'synced',
+        })
+        fields = ['odoo_id', 'sync_state', 'odoo_last_sync_at', 'odoo_last_update_result']
+        before = self.sync_obj.read(self.cursor, self.uid, sync_id, fields)
+
+        self.assertEqual(self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.account', 'sync', account_id,
+            context={'from_fk_sync': True}
+        ), (83513, account_id))
+        self.assertEqual(self.sync_obj.read(self.cursor, self.uid, sync_id, fields), before)
+        update_odoo_id.assert_not_called()
+        connection.assert_not_called()
+
+    @mock.patch.object(odoo_sync.OdooSync, '_get_conn_params')
+    @mock.patch.object(odoo_sync.OdooSync, 'sync_model_enabled_amplified',
+                       return_value=(True, True, False))
+    def test_excluded_account__missing_mapping_errors_on_dependent_object(
+            self, enabled, connection):
+        account_id = self._excluded_account_id()
+        line_obj = self.openerp.pool.get('account.invoice.line')
+        line_id = line_obj.search(self.cursor, self.uid, [], limit=1)[0]
+        line_obj.write(self.cursor, self.uid, [line_id], {'account_id': account_id})
+
+        self.sync_obj.syncronize_sync(
+            self.cursor, self.uid, 'account.invoice.line', 'sync', line_id
+        )
+
+        sync_id = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.invoice.line'), ('res_id', '=', line_id),
+        ])[0]
+        sync = self.sync_obj.read(
+            self.cursor, self.uid, sync_id, ['sync_state', 'odoo_last_update_result']
+        )
+        self.assertEqual(sync['sync_state'], 'error')
+        self.assertIn('account.account,{}'.format(account_id), sync['odoo_last_update_result'])
+        self.assertFalse(self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.account'), ('res_id', '=', account_id),
+        ]))
+        connection.assert_not_called()
+
     @mock.patch('som_sync_openerp.models.payment_order.PaymentOrder.get_sync_state_on_creation')
     @mock.patch.object(odoo_sync.OdooSync, "update_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "create_odoo_record")
