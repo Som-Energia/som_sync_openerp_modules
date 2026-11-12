@@ -32,6 +32,8 @@ class AccountMove(osv.osv):
         res = []
         sync_obj = self.pool.get('odoo.sync')
         for line in account_move.line_id:
+            if line.debit == 0 and line.credit == 0:
+                continue
             aml_vals = sync_obj.get_model_vals_to_sync(
                 cr, uid, 'account.move.line', line.id, context=context)
             if aml_vals['debit'] == 0:
@@ -41,6 +43,8 @@ class AccountMove(osv.osv):
                 # remove the item from the dictionary
                 aml_vals.pop('credit')
             res.append(aml_vals)
+        if not res:
+            raise ValueError('Cannot synchronize an entry with no nonzero journal lines')
         return {'lines': res}
 
     def is_tpv_payment_move(self, cr, uid, id, context=None):
