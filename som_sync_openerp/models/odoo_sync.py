@@ -689,7 +689,9 @@ class OdooSync(osv.osv):
             # If exists it means that the record in Odoo already exists and is linked with erp_id.
             # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
             # Models in MAPPING_MODELS_CHECK_LOCAL always use this shortcut, regardless of context.
-            if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL) \
+            # only_moves entry jobs also recheck mappings to tolerate duplicate queued jobs.
+            if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL
+                    or (model == 'account.move' and self._get_profile(context) == 'only_moves')) \
                     and not MAPPING_MODELS_PATCH.get(model, False):
                 erp_id = openerp_id
                 odoo_id = self.get_odoo_id_by_erp_id(

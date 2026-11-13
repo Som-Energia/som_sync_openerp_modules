@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import imp
 import json
 import os
+import xmlrpclib
 
 import mock
 from destral import testing
@@ -17,6 +18,7 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         self.sync = self.openerp.pool.get('odoo.sync')
         self.partner = self.openerp.pool.get('res.partner')
         self.imd = self.openerp.pool.get('ir.model.data')
+        self.moves = self.openerp.pool.get('account.move')
 
     def mapping(self, profile, model='res.partner', erp_id=812345, **extra):
         model_id = self.openerp.pool.get('ir.model').search(
@@ -38,6 +40,268 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
                 'name': 'Profile test account', 'code': code,
                 'type': 'other', 'user_type': account_type,
             })
+
+    def cron_move(self, date='2026-01-15', posted=True):
+        source_id = self.imd.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_move_001')[1]
+        source = self.moves.browse(self.cursor, self.uid, source_id)
+        with mock.patch.object(self.sync, 'common_sync_model_create_update'):
+            move_id = self.moves.create(self.cursor, self.uid, {
+                'date': date, 'journal_id': source.journal_id.id,
+                'period_id': source.period_id.id, 'partner_id': source.partner_id.id,
+                'line_id': [(0, 0, {
+                    'name': 'Cron entry', 'account_id': line.account_id.id,
+                    'partner_id': source.partner_id.id,
+                    'journal_id': source.journal_id.id, 'period_id': source.period_id.id,
+                    'date': date, 'debit': line.debit, 'credit': line.credit,
+                }) for line in source.line_id],
+            })
+            if posted:
+                self.moves.post(self.cursor, self.uid, [move_id])
+        return move_id
+
+    def cron_config(self, enabled=True, asynchronous=True):
+        config = self.openerp.pool.get('odoo.sync.model.config')
+        config_ids = config.search(self.cursor, self.uid, [
+            ('model_id.model', '=', 'account.move')])
+        if not enabled:
+            config.unlink(self.cursor, self.uid, config_ids)
+            return
+        if not config_ids:
+            model_id = self.openerp.pool.get('ir.model').search(
+                self.cursor, self.uid, [('model', '=', 'account.move')])[0]
+            config_ids = [config.create(self.cursor, self.uid, {'model_id': model_id})]
+        config.write(self.cursor, self.uid, config_ids, {
+            'auto_sync': False, 'async_enabled': asynchronous,
+        })
+
+    def test_only_moves_cron_inclusive_dates_and_posted_valid_entries(self):
+        self.cron_config()
+        self.cron_move('2026-01-09')
+        start = self.cron_move('2026-01-10')
+        end = self.cron_move('2026-01-15')
+        self.cron_move('2026-01-16')
+        invalid = self.cron_move('2026-01-12')
+        self.cursor.execute(
+            "UPDATE account_move_line SET state = 'draft' WHERE move_id = %s", (invalid,))
+        context = {'sync_profile': 'all_in', 'from_fk_sync': True,
+                   'only_moves_manual_load': True, 'only_moves_retry': True, 'lang': 'ca_ES'}
+        original = context.copy()
+        with mock.patch.object(self.sync, 'syncronize') as queued, \
+                mock.patch.object(self.sync, 'syncronize_sync') as direct:
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-10', '2026-01-15', context=context)
+        self.assertEqual(summary['status'], 'completed')
+        self.assertEqual(summary['scanned'], 3)
+        self.assertEqual(summary['already_linked'], 0)
+        # The invalid entry is submitted to the dispatcher, but is not queued.
+        self.assertEqual(summary['submitted'], 3)
+        self.assertEqual([call[0][4] for call in queued.call_args_list], [start, end])
+        for call in queued.call_args_list:
+            self.assertEqual(call[0][2:4], ('account.move', 'sync'))
+            self.assertEqual(call[1]['context'], {
+                'sync_profile': 'only_moves', 'only_moves_cron': True, 'lang': 'ca_ES'})
+        self.assertEqual(context, original)
+        direct.assert_not_called()
+
+    def test_only_moves_cron_open_end_and_profile_scoped_mapping_filter(self):
+        self.cron_config()
+        full_only = self.cron_move('2026-01-20')
+        linked = self.cron_move('2026-01-21')
+        failed = self.cron_move('2026-01-22')
+        self.mapping('all_in', model='account.move', erp_id=full_only, sync_state='synced')
+        self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
+        self.mapping('only_moves', model='account.move', erp_id=failed, odoo_id=False)
+        with mock.patch.object(self.sync, 'syncronize') as queued:
+            summary = self.moves.cron_sync_only_moves(self.cursor, self.uid, '2026-01-20')
+        self.assertIs(summary['date_to'], False)
+        serialized = xmlrpclib.dumps((summary,), methodresponse=True)
+        self.assertEqual(xmlrpclib.loads(serialized)[0][0], summary)
+        queued_ids = [call[0][4] for call in queued.call_args_list]
+        self.assertIn(full_only, queued_ids)
+        self.assertIn(failed, queued_ids)
+        self.assertNotIn(linked, queued_ids)
+
+    def test_only_moves_cron_pages_past_linked_entries(self):
+        self.cron_config()
+        linked = self.cron_move('2026-01-20')
+        first = self.cron_move('2026-01-21')
+        second = self.cron_move('2026-01-22')
+        self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
+        with mock.patch.object(self.moves, 'ONLY_MOVES_CRON_PAGE_SIZE', 1), \
+                mock.patch.object(self.sync, 'syncronize') as queued:
+            self.moves.cron_sync_only_moves(self.cursor, self.uid, '2026-01-20')
+        queued_ids = [call[0][4] for call in queued.call_args_list]
+        self.assertEqual(queued_ids[-2:], [first, second])
+        self.assertNotIn(linked, queued_ids)
+        self.assertEqual(len(queued_ids), len(set(queued_ids)))
+
+    def test_only_moves_cron_synchronous_and_disabled_configuration(self):
+        move_id = self.cron_move('2026-01-20')
+        for enabled in (False, True):
+            self.cron_config(enabled=enabled, asynchronous=False)
+            with mock.patch.object(self.sync, 'syncronize') as queued, \
+                    mock.patch.object(self.sync, 'syncronize_sync') as direct:
+                summary = self.moves.cron_sync_only_moves(
+                    self.cursor, self.uid, '2026-01-20', '2026-01-20')
+            queued.assert_not_called()
+            if enabled:
+                self.assertEqual(summary['status'], 'completed')
+                self.assertEqual(summary['scanned'], 1)
+                self.assertEqual(summary['submitted'], 1)
+                direct.assert_called_once_with(
+                    self.cursor, self.uid, 'account.move', 'sync', move_id,
+                    context={'sync_profile': 'only_moves', 'only_moves_cron': True})
+            else:
+                self.assertEqual(summary['status'], 'disabled')
+                for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+                    self.assertEqual(summary[counter], 0)
+                direct.assert_not_called()
+
+    def test_only_moves_cron_validates_dates_before_selection(self):
+        with mock.patch.object(self.moves, 'search') as search:
+            with self.assertRaises(TypeError):
+                self.moves.cron_sync_only_moves(self.cursor, self.uid)
+            for date_from, date_to in (
+                    (None, None), ('', None), ('2026-1-01', None),
+                    ('2026-02-30', None), ('2026-01-01', 'invalid'),
+                    ('2026-01-02', '2026-01-01')):
+                with self.assertRaises(osv.except_osv):
+                    self.moves.cron_sync_only_moves(
+                        self.cursor, self.uid, date_from, date_to)
+            search.assert_not_called()
+
+    def test_only_moves_cron_dry_run_does_not_select_or_dispatch(self):
+        with mock.patch.object(self.moves, 'search') as search, \
+                mock.patch.object(self.sync, 'common_sync_model_create_update') as dispatch:
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-01', context={'is_dry_run': True})
+        self.assertEqual(summary['status'], 'dry_run')
+        for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+            self.assertEqual(summary[counter], 0)
+        search.assert_not_called()
+        dispatch.assert_not_called()
+
+    def test_only_moves_cron_logs_and_returns_paginated_summary(self):
+        self.cron_config()
+        linked = self.cron_move('2026-01-24')
+        first = self.cron_move('2026-01-24')
+        second = self.cron_move('2026-01-24')
+        self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
+        with mock.patch.object(self.moves, 'ONLY_MOVES_CRON_PAGE_SIZE', 1), \
+                mock.patch.object(self.sync, 'syncronize') as queued, \
+                mock.patch('som_sync_openerp.models.account_move.time',
+                           side_effect=[100, 102.3456]), \
+                mock.patch('som_sync_openerp.models.account_move._logger') as logger:
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-24', '2026-01-24')
+        self.assertEqual(summary, {
+            'sync_profile': 'only_moves', 'date_from': '2026-01-24',
+            'date_to': '2026-01-24', 'status': 'completed',
+            'pages': 3, 'scanned': 3, 'already_linked': 1, 'submitted': 2,
+            'elapsed_seconds': 2.346,
+        })
+        self.assertEqual([call[0][4] for call in queued.call_args_list], [first, second])
+        messages = [call[0][0] % call[0][1:] for call in logger.info.call_args_list]
+        self.assertEqual(len(messages), 5)
+        self.assertIn('started: date_from=2026-01-24 date_to=2026-01-24', messages[0])
+        for page, message in enumerate(messages[1:-1], 1):
+            self.assertIn('page={}'.format(page), message)
+            self.assertIn('total_scanned={}'.format(page), message)
+        self.assertIn('already_linked=1 candidates=0', messages[1])
+        self.assertIn('finished: status=completed pages=3 scanned=3 already_linked=1 '
+                      'submitted=2 elapsed_seconds=2.346', messages[-1])
+
+    def test_only_moves_cron_empty_range_returns_and_logs_zero_summary(self):
+        self.cron_config()
+        with mock.patch('som_sync_openerp.models.account_move._logger') as logger, \
+                mock.patch.object(self.sync, 'common_sync_model_create_update') as dispatch:
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '9999-12-31', '9999-12-31')
+        self.assertEqual(summary['status'], 'completed')
+        for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+            self.assertEqual(summary[counter], 0)
+        self.assertGreaterEqual(summary['elapsed_seconds'], 0)
+        self.assertEqual(logger.info.call_count, 2)
+        dispatch.assert_not_called()
+
+    def test_only_moves_job_rechecks_mapping_without_remote_calls(self):
+        self.cron_config()
+        move_id = self.cron_move()
+        self.mapping('all_in', model='account.move', erp_id=move_id, odoo_id=101)
+        with mock.patch.object(self.sync, 'syncronize') as queued:
+            self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-15', '2026-01-15')
+        queued.assert_called_once()
+        # Another job finishes after selection but before this job starts.
+        mapping_id = self.mapping(
+            'only_moves', model='account.move', erp_id=move_id,
+            odoo_id=202, sync_state='synced')
+        with mock.patch.object(self.sync, 'get_model_vals_to_sync') as prepare, \
+                mock.patch('som_sync_openerp.models.odoo_sync.requests.get') as get, \
+                mock.patch('som_sync_openerp.models.odoo_sync.requests.post') as post:
+            for unused in range(2):
+                result = self.sync.syncronize_sync(*queued.call_args[0], **queued.call_args[1])
+                self.assertEqual(result, (202, move_id))
+        prepare.assert_not_called()
+        get.assert_not_called()
+        post.assert_not_called()
+        record = self.sync.browse(self.cursor, self.uid, mapping_id)
+        self.assertEqual(record.sync_state, 'synced')
+        self.assertEqual(record.odoo_id, 202)
+
+    def test_only_moves_cron_real_request_and_repeat_run(self):
+        self.cron_config(asynchronous=False)
+        config = self.openerp.pool.get('res.config')
+        config.set(self.cursor, self.uid, 'odoo_url_api', 'http://cron-test.invalid/api/')
+        config.set(self.cursor, self.uid, 'odoo_api_key_only_moves', 'cron-key')
+        move_id = self.cron_move()
+        move = self.moves.browse(self.cursor, self.uid, move_id)
+        self.mapping('only_moves', model='account.journal', erp_id=move.journal_id.id,
+                     odoo_id=201, sync_state='static')
+        self.mapping('only_moves', erp_id=move.partner_id.id,
+                     odoo_id=202, sync_state='static')
+        for line in move.line_id:
+            self.mapping('shared', model='account.account', erp_id=line.account_id.id,
+                         odoo_id=300 + line.account_id.id, sync_state='static')
+
+        def partner_response(url, headers):
+            self.assertEqual(url, 'http://cron-test.invalid/api/entities/partner/{}'.format(
+                move.partner_id.id))
+            self.assertEqual(headers['X-API-Key'], 'cron-key')
+            body = {'success': True, 'data': {'odoo_id': 202}}
+            return mock.Mock(status_code=200, text=json.dumps(body),
+                             json=mock.Mock(return_value=body))
+
+        response = {'success': True, 'data': {'odoo_id': 401}}
+        with mock.patch('som_sync_openerp.models.odoo_sync.requests.get',
+                        side_effect=partner_response) as get, \
+                mock.patch('som_sync_openerp.models.odoo_sync.requests.post') as post:
+            post.return_value.status_code = 201
+            post.return_value.text = json.dumps(response)
+            post.return_value.json.return_value = response
+            self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-15', '2026-01-15')
+            post.assert_called_once()
+            self.assertEqual(post.call_args[0][0], 'http://cron-test.invalid/api/entries')
+            self.assertEqual(post.call_args[1]['headers']['X-API-Key'], 'cron-key')
+            payload = post.call_args[1]['json']
+            self.assertEqual(payload['pnt_erp_id'], move_id)
+            self.assertEqual(payload['journal_id'], 201)
+            self.assertEqual(len(payload['lines']), 2)
+            get_count = get.call_count
+            self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-15', '2026-01-15')
+            post.assert_called_once()
+            self.assertEqual(get.call_count, get_count)
+        mapping_ids = self.sync.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.move'), ('res_id', '=', move_id),
+            ('sync_profile', '=', 'only_moves')])
+        self.assertEqual(len(mapping_ids), 1)
+        record = self.sync.browse(self.cursor, self.uid, mapping_ids[0])
+        self.assertEqual(record.odoo_id, 401)
+        self.assertEqual(record.sync_state, 'synced')
+        self.assertEqual(json.loads(record.odoo_last_sync_request), payload)
 
     def test_same_erp_partner_has_independent_profiles(self):
         full = self.mapping('all_in', odoo_id=41)
