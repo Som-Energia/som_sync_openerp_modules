@@ -81,6 +81,7 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         start = self.cron_move('2026-01-10')
         end = self.cron_move('2026-01-15')
         self.cron_move('2026-01-16')
+        self.cron_move('2026-01-12', posted=False)
         invalid = self.cron_move('2026-01-12')
         self.cursor.execute(
             "UPDATE account_move_line SET state = 'draft' WHERE move_id = %s", (invalid,))
@@ -92,8 +93,8 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
             summary = self.moves.cron_sync_only_moves(
                 self.cursor, self.uid, '2026-01-10', '2026-01-15', context=context)
         self.assertEqual(summary['status'], 'completed')
-        self.assertEqual(summary['scanned'], 3)
-        self.assertEqual(summary['already_linked'], 0)
+        self.assertNotIn('scanned', summary)
+        self.assertNotIn('already_linked', summary)
         # The invalid entry is submitted to the dispatcher, but is not queued.
         self.assertEqual(summary['submitted'], 3)
         self.assertEqual([call[0][4] for call in queued.call_args_list], [start, end])
@@ -110,6 +111,7 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         linked = self.cron_move('2026-01-21')
         failed = self.cron_move('2026-01-22')
         self.mapping('all_in', model='account.move', erp_id=full_only, sync_state='synced')
+        self.mapping('only_moves', model='res.partner', erp_id=full_only, odoo_id=999)
         self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
         self.mapping('only_moves', model='account.move', erp_id=failed, odoo_id=False)
         with mock.patch.object(self.sync, 'syncronize') as queued:
@@ -130,7 +132,9 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
         with mock.patch.object(self.moves, 'ONLY_MOVES_CRON_PAGE_SIZE', 1), \
                 mock.patch.object(self.sync, 'syncronize') as queued:
-            self.moves.cron_sync_only_moves(self.cursor, self.uid, '2026-01-20')
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-20', '2026-01-22')
+        self.assertEqual(summary['pages'], 2)
         queued_ids = [call[0][4] for call in queued.call_args_list]
         self.assertEqual(queued_ids[-2:], [first, second])
         self.assertNotIn(linked, queued_ids)
@@ -147,16 +151,83 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
             queued.assert_not_called()
             if enabled:
                 self.assertEqual(summary['status'], 'completed')
-                self.assertEqual(summary['scanned'], 1)
                 self.assertEqual(summary['submitted'], 1)
                 direct.assert_called_once_with(
                     self.cursor, self.uid, 'account.move', 'sync', move_id,
                     context={'sync_profile': 'only_moves', 'only_moves_cron': True})
             else:
                 self.assertEqual(summary['status'], 'disabled')
-                for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+                for counter in ('pages', 'submitted'):
                     self.assertEqual(summary[counter], 0)
                 direct.assert_not_called()
+
+    def test_only_moves_cron_sql_excludes_linked_entries_before_orm(self):
+        self.cron_config()
+        linked = self.cron_move('2026-01-26')
+        linked_with_error = self.cron_move('2026-01-26')
+        pending = self.cron_move('2026-01-26')
+        self.mapping('only_moves', model='account.move', erp_id=linked, sync_state='synced')
+        self.mapping('only_moves', model='account.move', erp_id=linked_with_error)
+        with mock.patch.object(self.moves, 'search', wraps=self.moves.search) as search, \
+                mock.patch.object(self.sync, 'search') as mapping_search, \
+                mock.patch.object(self.sync, 'read') as mapping_read, \
+                mock.patch.object(self.sync, 'syncronize') as queued:
+            summary = self.moves.cron_sync_only_moves(
+                self.cursor, self.uid, '2026-01-26', '2026-01-26')
+        search.assert_called_once_with(
+            self.cursor, self.uid, [('id', 'in', [pending])], order='id',
+            context={'sync_profile': 'only_moves', 'only_moves_cron': True})
+        mapping_search.assert_not_called()
+        mapping_read.assert_not_called()
+        self.assertEqual(summary['pages'], 1)
+        self.assertEqual(summary['submitted'], 1)
+        self.assertEqual(queued.call_args[0][4], pending)
+
+    def test_only_moves_cron_sql_preserves_record_rules_and_advances_hidden_pages(self):
+        self.cron_config()
+        self.cron_move('2026-01-27')
+        visible = self.cron_move('2026-01-27')
+        user_id = self.imd.get_object_reference(
+            self.cursor, self.uid, 'base', 'user_demo')[1]
+        group_id = self.imd.get_object_reference(
+            self.cursor, self.uid, 'account', 'group_account_user')[1]
+        self.openerp.pool.get('res.users').write(
+            self.cursor, self.uid, [user_id], {'groups_id': [(4, group_id)]})
+        model_id = self.openerp.pool.get('ir.model').search(
+            self.cursor, self.uid, [('model', '=', 'account.move')])[0]
+        self.openerp.pool.get('ir.rule.group').create(self.cursor, self.uid, {
+            'name': 'Only the visible cron entry', 'model_id': model_id, 'global': True,
+            'rules': [(0, 0, {'domain_force': "[('id', '=', {})]".format(visible)})],
+        })
+        rules = self.openerp.pool.get('ir.rule')
+        try:
+            with mock.patch.object(self.moves, 'ONLY_MOVES_CRON_PAGE_SIZE', 1), \
+                    mock.patch.object(self.sync, 'syncronize') as queued:
+                summary = self.moves.cron_sync_only_moves(
+                    self.cursor, user_id, '2026-01-27', '2026-01-27')
+            self.assertEqual(summary['pages'], 2)
+            self.assertEqual(summary['submitted'], 1)
+            queued.assert_called_once_with(
+                self.cursor, user_id, 'account.move', 'sync', visible,
+                context={'sync_profile': 'only_moves', 'only_moves_cron': True})
+        finally:
+            rules.domain_get.clear_cache(self.cursor.dbname)
+            rules.only_domain_get.clear_cache(self.cursor.dbname)
+
+    def test_only_moves_cron_requires_read_access_even_for_an_empty_range(self):
+        self.cron_config()
+        with mock.patch.object(self.moves, 'check_perm', side_effect=osv.except_osv(
+                'Access error', 'Read access denied')) as access, \
+                mock.patch.object(self.moves, 'search') as search, \
+                mock.patch.object(self.sync, 'common_sync_model_create_update') as dispatch:
+            with self.assertRaises(osv.except_osv):
+                self.moves.cron_sync_only_moves(
+                    self.cursor, self.uid, '9999-12-31', '9999-12-31')
+        access.assert_called_once_with(
+            self.cursor, self.uid, 'read', raise_exception=True,
+            context={'sync_profile': 'only_moves', 'only_moves_cron': True})
+        search.assert_not_called()
+        dispatch.assert_not_called()
 
     def test_only_moves_cron_validates_dates_before_selection(self):
         with mock.patch.object(self.moves, 'search') as search:
@@ -177,7 +248,7 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
             summary = self.moves.cron_sync_only_moves(
                 self.cursor, self.uid, '2026-01-01', context={'is_dry_run': True})
         self.assertEqual(summary['status'], 'dry_run')
-        for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+        for counter in ('pages', 'submitted'):
             self.assertEqual(summary[counter], 0)
         search.assert_not_called()
         dispatch.assert_not_called()
@@ -198,19 +269,18 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         self.assertEqual(summary, {
             'sync_profile': 'only_moves', 'date_from': '2026-01-24',
             'date_to': '2026-01-24', 'status': 'completed',
-            'pages': 3, 'scanned': 3, 'already_linked': 1, 'submitted': 2,
+            'pages': 2, 'submitted': 2,
             'elapsed_seconds': 2.346,
         })
         self.assertEqual([call[0][4] for call in queued.call_args_list], [first, second])
         messages = [call[0][0] % call[0][1:] for call in logger.info.call_args_list]
-        self.assertEqual(len(messages), 5)
+        self.assertEqual(len(messages), 4)
         self.assertIn('started: date_from=2026-01-24 date_to=2026-01-24', messages[0])
         for page, message in enumerate(messages[1:-1], 1):
             self.assertIn('page={}'.format(page), message)
-            self.assertIn('total_scanned={}'.format(page), message)
-        self.assertIn('already_linked=1 candidates=0', messages[1])
-        self.assertIn('finished: status=completed pages=3 scanned=3 already_linked=1 '
-                      'submitted=2 elapsed_seconds=2.346', messages[-1])
+            self.assertIn('candidates=1 submitted_so_far={}'.format(page - 1), message)
+        self.assertIn('finished: status=completed pages=2 submitted=2 elapsed_seconds=2.346',
+                      messages[-1])
 
     def test_only_moves_cron_empty_range_returns_and_logs_zero_summary(self):
         self.cron_config()
@@ -219,7 +289,7 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
             summary = self.moves.cron_sync_only_moves(
                 self.cursor, self.uid, '9999-12-31', '9999-12-31')
         self.assertEqual(summary['status'], 'completed')
-        for counter in ('pages', 'scanned', 'already_linked', 'submitted'):
+        for counter in ('pages', 'submitted'):
             self.assertEqual(summary[counter], 0)
         self.assertGreaterEqual(summary['elapsed_seconds'], 0)
         self.assertEqual(logger.info.call_count, 2)

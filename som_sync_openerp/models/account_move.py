@@ -188,8 +188,7 @@ class AccountMove(osv.osv):
         summary = {
             'sync_profile': 'only_moves', 'date_from': date_from,
             'date_to': date_to if date_to is not None else False,
-            'status': 'completed', 'pages': 0, 'scanned': 0,
-            'already_linked': 0, 'submitted': 0,
+            'status': 'completed', 'pages': 0, 'submitted': 0,
         }
         _logger.info('only_moves cron started: date_from=%s date_to=%s',
                      date_from, date_to or 'open')
@@ -207,32 +206,46 @@ class AccountMove(osv.osv):
                 summary['status'] = 'disabled'
 
         if summary['status'] == 'completed':
-            domain = [('state', '=', 'posted'), ('date', '>=', date_from)]
+            self.check_perm(cr, uid, 'read', raise_exception=True, context=cron_context)
+            model_id = self.pool.get('ir.model').search(
+                cr, uid, [('model', '=', self._name)])[0]
+            date_params = [date_from]
+            date_to_clause = ''
             if date_to is not None:
-                domain.append(('date', '<=', date_to))
+                date_to_clause = 'AND move.date <= %s'
+                date_params.append(date_to)
+            query = """
+                SELECT move.id
+                FROM account_move AS move
+                WHERE move.state = 'posted'
+                  AND move.date >= %s
+                  {date_to_clause}
+                  AND move.id > %s
+                  AND NOT EXISTS (
+                      SELECT 1 FROM odoo_sync AS sync
+                      WHERE sync.model = %s
+                        AND sync.res_id = move.id
+                        AND sync.sync_profile = 'only_moves'
+                        AND sync.odoo_id > 0
+                  )
+                ORDER BY move.id
+                LIMIT %s
+            """.format(date_to_clause=date_to_clause)
             last_id = 0
             while True:
-                move_ids = self.search(
-                    cr, uid, domain + [('id', '>', last_id)],
-                    order='id', limit=self.ONLY_MOVES_CRON_PAGE_SIZE, context=cron_context)
-                if not move_ids:
+                cr.execute(
+                    query, date_params + [last_id, model_id, self.ONLY_MOVES_CRON_PAGE_SIZE])
+                candidate_ids = [row[0] for row in cr.fetchall()]
+                if not candidate_ids:
                     break
-                last_id = move_ids[-1]
-                mapping_ids = sync.search(cr, uid, [
-                    ('model.model', '=', self._name), ('res_id', 'in', move_ids),
-                    ('sync_profile', '=', 'only_moves'), ('odoo_id', '>', 0),
-                ], context=cron_context)
-                linked_ids = set(record['res_id'] for record in sync.read(
-                    cr, uid, mapping_ids, ['res_id'], context=cron_context))
-                pending_ids = [move_id for move_id in move_ids if move_id not in linked_ids]
+                # Advance over the SQL page even when record rules hide all its entries.
+                last_id = candidate_ids[-1]
+                pending_ids = self.search(
+                    cr, uid, [('id', 'in', candidate_ids)], order='id', context=cron_context)
                 summary['pages'] += 1
-                summary['scanned'] += len(move_ids)
-                summary['already_linked'] += len(linked_ids)
                 _logger.info(
-                    'only_moves cron page=%s last_id=%s scanned=%s already_linked=%s '
-                    'candidates=%s total_scanned=%s',
-                    summary['pages'], last_id, len(move_ids), len(linked_ids),
-                    len(pending_ids), summary['scanned'])
+                    'only_moves cron page=%s last_id=%s candidates=%s submitted_so_far=%s',
+                    summary['pages'], last_id, len(pending_ids), summary['submitted'])
                 if pending_ids:
                     sync.common_sync_model_create_update(
                         cr, uid, self._name, 'sync', pending_ids, context=cron_context)
@@ -240,10 +253,8 @@ class AccountMove(osv.osv):
 
         summary['elapsed_seconds'] = round(time() - started_at, 3)
         _logger.info(
-            'only_moves cron finished: status=%s pages=%s scanned=%s already_linked=%s '
-            'submitted=%s elapsed_seconds=%s',
-            summary['status'], summary['pages'], summary['scanned'],
-            summary['already_linked'], summary['submitted'], summary['elapsed_seconds'])
+            'only_moves cron finished: status=%s pages=%s submitted=%s elapsed_seconds=%s',
+            summary['status'], summary['pages'], summary['submitted'], summary['elapsed_seconds'])
         return summary
 
     def post(self, cr, uid, ids, context=None):

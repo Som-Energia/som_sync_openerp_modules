@@ -167,10 +167,14 @@ These are alternative calls; each performs a real load. No scheduled action is
 enabled automatically by this feature. Before scheduling, configure the dedicated
 key, receiver prerequisites and journal/group-5 mappings described above.
 
-The function scans posted entries in pages of 1,000, skips entries already linked
-to an Odoo ID under `only_moves`, and dispatches the rest with
-`sync_profile='only_moves'` and `only_moves_cron=True`. The dispatcher requires
-nonempty, valid move lines. An existing `odoo.sync.model.config` for `account.move`
+The function uses a parameterized SQL `NOT EXISTS` query to select posted entries
+without a positive `only_moves` Odoo ID, in pages of up to 1,000 candidates ordered
+by ID. Already linked entries are filtered inside the database rather than loaded
+into Python. The ORM then applies read access and record rules to each candidate
+page before dispatch with `sync_profile='only_moves'` and `only_moves_cron=True`.
+The cursor advances even when an entire page is hidden by record rules.
+The dispatcher requires nonempty, valid move lines. An existing
+`odoo.sync.model.config` for `account.move`
 is required; `async_enabled` controls queueing and `auto_sync` need not be enabled.
 Earlier errors without a remote ID remain candidates on subsequent runs.
 
@@ -185,9 +189,7 @@ returned dictionary there instead. An illustrative result is:
     'date_from': '2026-11-01',
     'date_to': False,
     'status': 'completed',
-    'pages': 2,
-    'scanned': 1500,
-    'already_linked': 1450,
+    'pages': 1,
     'submitted': 50,
     'elapsed_seconds': 1.234,
 }
@@ -197,15 +199,15 @@ returned dictionary there instead. An illustrative result is:
 |---|---|
 | `date_to` | Inclusive upper bound, or `False` when omitted (XML-RPC compatible). |
 | `status` | `completed`: selection/dispatch finished; `dry_run`: no selection or dispatch; `disabled`: the model has no sync configuration. |
-| `pages` | Number of nonempty pages scanned. |
-| `scanned` | Posted entries read within the date range, including entries the dispatcher may reject. |
-| `already_linked` | Entries skipped because they already have a positive `only_moves` Odoo ID. |
+| `pages` | Number of nonempty SQL candidate pages, before ORM access filtering. Already linked entries do not occupy these pages. |
 | `submitted` | Unlinked candidates passed to the dispatcher, **not** confirmed queued jobs or successful exports. |
 | `elapsed_seconds` | Time spent in this call, including dispatch; excludes subsequent background execution. |
 
 `dry_run` and `disabled` return zero counters. A completed empty range also
-returns zero counters. In particular, invalid-line entries can count as
-`submitted` even though the dispatcher skips them without scheduling a job.
+returns zero counters, as does a range where every entry is already linked.
+The function does not count all scanned or already linked entries. In particular,
+invalid-line entries can count as `submitted` even though the dispatcher skips
+them without scheduling a job.
 
 The scheduler does not inspect queued jobs. At execution time, an `only_moves`
 entry job reuses an existing mapping without preparing or sending another entry.
