@@ -35,6 +35,10 @@ MAPPING_MODELS_ENTITIES = {
 MAPPING_MODELS_GET_ENTITIES = dict(MAPPING_MODELS_ENTITIES)
 MAPPING_MODELS_GET_ENTITIES['res.partner.address'] = 'partner_address'
 
+SYNC_PROFILES = [('all_in', 'All in'), ('only_moves', 'Only moves'), ('shared', 'Shared')]
+ONLY_MOVES_MODELS = ('account.move', 'account.move.line', 'account.journal',
+                     'account.account', 'res.partner')
+
 STATIC_MODELS = [
     'account.fiscal.position',
     'account.journal',
@@ -88,14 +92,116 @@ class OdooSync(osv.osv):
     _name = "odoo.sync"
     _description = 'Syncronization manager'
 
-    def _get_conn_params(self, cursor, uid):
+    def _get_profile(self, context=None):
+        context = context or {}
+        profile = context.get('sync_profile') or (
+            'only_moves' if context.get('only_moves') else 'all_in')
+        if profile not in dict(SYNC_PROFILES):
+            raise osv.except_osv('Configuration error', 'Unknown synchronization profile.')
+        if context.get('only_moves') and profile != 'only_moves':
+            raise osv.except_osv('Configuration error', 'Conflicting synchronization profiles.')
+        return profile
+
+    def _mapping_profile(self, cursor, uid, model, erp_id, context=None):
+        profile = self._get_profile(context)
+        if model == 'account.account':
+            if not self.pool.get(model).is_sync_excluded(
+                    cursor, uid, erp_id, context=context):
+                return 'shared'
+            if profile == 'shared':
+                raise osv.except_osv('Configuration error',
+                                     'Group 5 accounts require a company-specific profile.')
+        return profile
+
+    def _mapping_domain(self, cursor, uid, model, erp_id, context=None):
+        return [('model.model', '=', model), ('res_id', '=', erp_id),
+                ('sync_profile', '=', self._mapping_profile(
+                    cursor, uid, model, erp_id, context))]
+
+    def _check_profile_model(self, model, context=None):
+        profile = self._get_profile(context)
+        if profile == 'only_moves' and model not in ONLY_MOVES_MODELS:
+            raise osv.except_osv('Synchronization error',
+                                 'Model {} is not allowed in only_moves.'.format(model))
+        if profile == 'shared' and model != 'account.account':
+            raise osv.except_osv('Synchronization error',
+                                 'Only account.account has a shared mapping.')
+
+    def _fields_to_sync(self, model, context=None):
+        self._check_profile_model(model, context)
+        model_obj = self.pool.get(model)
+        if self._get_profile(context) == 'only_moves':
+            return getattr(model_obj, 'ONLY_MOVES_FIELDS_TO_SYNC',
+                           model_obj.MAPPING_FIELDS_TO_SYNC)
+        return model_obj.MAPPING_FIELDS_TO_SYNC
+
+    def _validate_profile_attempt(self, cursor, uid, model, ids, context=None):
+        """Persist rejected attempts without admitting them to the sync engine."""
+        context = context or {}
+        # Invalid or conflicting profile names remain configuration errors.
+        profile = self._get_profile(context)
+        try:
+            self._check_profile_model(model, context)
+        except osv.except_osv as error:
+            model_id = self.pool.get('ir.model').search(
+                cursor, uid, [('model', '=', model)], limit=1)[0]
+            origins = [flag for flag in (
+                'from_fk_sync', 'only_moves_retry', 'only_moves_cron',
+                'only_moves_manual_load') if context.get(flag)]
+            values = {
+                'sync_state': 'error',
+                'odoo_last_sync_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'odoo_last_update_result': self.format_response(
+                    'Profile validation rejected: {}. Origin: {}'.format(
+                        error, ', '.join(origins) or 'direct/event')),
+            }
+            for erp_id in ids if isinstance(ids, list) else [ids]:
+                # Use the attempted profile, not account-sharing classification.
+                domain = [('model', '=', model_id), ('res_id', '=', erp_id),
+                          ('sync_profile', '=', profile)]
+                with Sudo(uid=1, gid=0):
+                    existing = self.search(cursor, uid, domain, limit=1)
+                    if existing:
+                        self.write(cursor, uid, existing, values, context=context)
+                    else:
+                        diagnostic = dict(values, model=model_id, res_id=erp_id,
+                                          sync_profile=profile, odoo_id=False)
+                        # Only this diagnostic path bypasses mapping validation.
+                        super(OdooSync, self).create(
+                            cursor, uid, diagnostic, context=context)
+            return False
+        return True
+
+    def create(self, cursor, uid, vals, context=None):
+        vals = vals.copy()
+        model = False
+        if vals.get('model'):
+            model = self.pool.get('ir.model').read(
+                cursor, uid, vals['model'], ['model'])['model']
+        profile_context = dict(context or {})
+        if vals.get('sync_profile'):
+            profile_context['sync_profile'] = vals['sync_profile']
+        self._check_profile_model(model, profile_context)
+        vals['sync_profile'] = self._mapping_profile(
+            cursor, uid, model, vals.get('res_id'), profile_context)
+        return super(OdooSync, self).create(cursor, uid, vals, context=context)
+
+    def _get_conn_params(self, cursor, uid, context=None):
         config_obj = self.pool.get('res.config')
+        profile = self._get_profile(context)
         try:
             odoo_url_api = config_obj.get(cursor, uid, 'odoo_url_api', 'http://localhost:8069/api/')
-            odoo_api_key = config_obj.get(cursor, uid, 'odoo_api_key', 'secret')
+            if profile == 'only_moves':
+                odoo_api_key = config_obj.get(cursor, uid, 'odoo_api_key_only_moves', False)
+            else:
+                # Shared account events and retries retain the existing connection.
+                odoo_api_key = config_obj.get(cursor, uid, 'odoo_api_key', 'secret')
         except Exception:
             raise osv.except_osv('Configuration error',
                                  'Odoo connection parameters not found.')
+        if profile == 'only_moves' and (not odoo_api_key or odoo_api_key == '###'):
+            raise osv.except_osv('Configuration error',
+                                 'odoo_api_key_only_moves is not configured; no fallback allowed.')
         return odoo_url_api, odoo_api_key
 
     def sync_model_enabled_amplified(self, cursor, uid, model):
@@ -129,6 +235,13 @@ class OdooSync(osv.osv):
         if context is None:
             context = {}
         if is_dry_run(context):
+            return None, None
+        if not self._validate_profile_attempt(cursor, uid, model, ids, context):
+            return None, None
+        if self._get_profile(context) == 'only_moves' and not (
+                action == 'sync' and any(context.get(flag) for flag in (
+                    'from_fk_sync', 'only_moves_retry', 'only_moves_cron',
+                    'only_moves_manual_load'))):
             return None, None
         try:
             if not isinstance(ids, list):
@@ -177,6 +290,10 @@ class OdooSync(osv.osv):
         if context is None:
             context = {}
         if is_dry_run(context):
+            return None, None
+        if not self._validate_profile_attempt(cursor, uid, model, ids, context):
+            return None, None
+        if self._get_profile(context) == 'only_moves':
             return None, None
         try:
             if not isinstance(ids, list):
@@ -228,6 +345,8 @@ class OdooSync(osv.osv):
             context = {}
         rp_obj = self.pool.get(model)
 
+        mapping_fields = self._fields_to_sync(model, context)
+
         result_data = {}
 
         has_mapping_fk = (
@@ -241,7 +360,7 @@ class OdooSync(osv.osv):
 
         # Read fields that are not foreign keys or related fields
         keys_to_read = [
-            key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
+            key for key in mapping_fields.keys()
             if key not in keys_no_direct_read
         ]
         # TODO: check in prod if record id is already created when async
@@ -254,7 +373,7 @@ class OdooSync(osv.osv):
 
         # Read and sync foreign key fields
         if has_mapping_fk:
-            keys_fk = [key for key in rp_obj.MAPPING_FIELDS_TO_SYNC.keys()
+            keys_fk = [key for key in mapping_fields.keys()
                        if key in rp_obj.MAPPING_FK.keys()]
             if keys_fk:
                 context_copy = self._clean_context_update_data(cursor, uid, context)
@@ -268,7 +387,7 @@ class OdooSync(osv.osv):
                     odoo_id = False
                     if model_fk == 'res.partner':
                         odoo_id = self.get_partner_odoo_id_by_erp_id(
-                            cursor, uid, id_fk[0])
+                            cursor, uid, id_fk[0], context=context_copy)
                     if not odoo_id:
                         odoo_id, _ = self.common_sync_model_create_update(
                             cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
@@ -277,7 +396,7 @@ class OdooSync(osv.osv):
                     data[fk_field] = odoo_id
 
         # Map fields to sync
-        for erp_key, odoo_key in rp_obj.MAPPING_FIELDS_TO_SYNC.items():
+        for erp_key, odoo_key in mapping_fields.items():
             if erp_key in data:
                 result_data[odoo_key] = data[erp_key]
 
@@ -306,19 +425,20 @@ class OdooSync(osv.osv):
 
         return result_data
 
-    def get_partner_odoo_id_by_erp_id(self, cursor, uid, erp_id):
+    def get_partner_odoo_id_by_erp_id(self, cursor, uid, erp_id, context=None):
         local_odoo_id = self.get_odoo_id_by_erp_id(
-            cursor, uid, 'res.partner', erp_id)
+            cursor, uid, 'res.partner', erp_id, context=context)
         odoo_id, is_conclusive = self.get_odoo_id_by_erp_id_from_odoo(
-            cursor, uid, 'res.partner', erp_id, return_status=True)
+            cursor, uid, 'res.partner', erp_id, return_status=True, context=context)
         if not is_conclusive:
             raise ForeingKeyNotAvailable('res.partner,{}'.format(erp_id))
         if not odoo_id:
             return False
         if odoo_id != local_odoo_id:
+            mapping_context = dict(context or {}, sync_state='synced', update_last_sync=True)
             self.update_odoo_id(
                 cursor, uid, 'res.partner', erp_id, odoo_id,
-                context={'sync_state': 'synced', 'update_last_sync': True})
+                context=mapping_context)
         return odoo_id
 
     def check_erp_record_exist(self, cursor, uid, model, openerp_id):
@@ -372,7 +492,7 @@ class OdooSync(osv.osv):
                 model_fk = mapping_fk[erp_key]
                 if model_fk == 'res.partner':
                     odoo_id = self.get_partner_odoo_id_by_erp_id(
-                        cursor, uid, value)
+                        cursor, uid, value, context=context)
                 else:
                     fk_context = self._clean_context_update_data(
                         cursor, uid, context)
@@ -416,6 +536,10 @@ class OdooSync(osv.osv):
             context = {}
         if is_dry_run(context):
             return False, False
+        if not self._validate_profile_attempt(cursor, uid, model, openerp_id, context):
+            return False, False
+        if self._get_profile(context) == 'only_moves':
+            return False, False
         if isinstance(openerp_id, list):
             openerp_id = openerp_id[0]
 
@@ -429,7 +553,7 @@ class OdooSync(osv.osv):
 
             if model == 'res.partner':
                 odoo_id = self.get_partner_odoo_id_by_erp_id(
-                    cursor, uid, openerp_id)
+                    cursor, uid, openerp_id, context=context)
                 if odoo_id:
                     erp_id = openerp_id
             else:
@@ -494,6 +618,9 @@ class OdooSync(osv.osv):
             context = {}
         if is_dry_run(context):
             return False, False
+        if not self._validate_profile_attempt(cursor, uid, model, openerp_id, context):
+            return False, False
+        context = context.copy()
 
         # Ensure openerp_id is an integer if passed as a list
         if isinstance(openerp_id, list):
@@ -521,16 +648,15 @@ class OdooSync(osv.osv):
         if model == 'account.account' and rp_obj.is_sync_excluded(
                 cursor, uid, openerp_id, context=context):
             if context.get('from_fk_sync'):
-                return self.get_odoo_id_by_erp_id(cursor, uid, model, openerp_id), openerp_id
+                return self.get_odoo_id_by_erp_id(
+                    cursor, uid, model, openerp_id, context=context), openerp_id
             return False, False
 
         # Check if odoo.sync object exists
         logger = logging.getLogger('openerp.odoo.sync')
         sync_obj = self.pool.get('odoo.sync')
-        sync_id = sync_obj.search(cursor, uid, [
-            ('model.model', '=', model),
-            ('res_id', '=', openerp_id),
-        ], limit=1)
+        sync_id = sync_obj.search(cursor, uid, self._mapping_domain(
+            cursor, uid, model, openerp_id, context), limit=1)
         sync_state_before_retry = False
         if sync_id:
             sync_state_before_retry = sync_obj.read(
@@ -563,10 +689,13 @@ class OdooSync(osv.osv):
             # If exists it means that the record in Odoo already exists and is linked with erp_id.
             # This shortcut is to avoid doing unnecessary API calls to Odoo in FK syncs.
             # Models in MAPPING_MODELS_CHECK_LOCAL always use this shortcut, regardless of context.
-            if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL) \
+            # only_moves entry jobs also recheck mappings to tolerate duplicate queued jobs.
+            if (context.get('from_fk_sync') or model in MAPPING_MODELS_CHECK_LOCAL
+                    or (model == 'account.move' and self._get_profile(context) == 'only_moves')) \
                     and not MAPPING_MODELS_PATCH.get(model, False):
                 erp_id = openerp_id
-                odoo_id = self.get_odoo_id_by_erp_id(cursor, uid, model, erp_id)
+                odoo_id = self.get_odoo_id_by_erp_id(
+                    cursor, uid, model, erp_id, context=context)
                 if odoo_id:
                     return odoo_id, erp_id
 
@@ -574,7 +703,7 @@ class OdooSync(osv.osv):
                 # The ERP id is the canonical partner identity. VAT is only a fallback
                 # for legacy partners that have not yet been linked to the ERP.
                 odoo_id = self.get_partner_odoo_id_by_erp_id(
-                    cursor, uid, openerp_id)
+                    cursor, uid, openerp_id, context=context)
                 if odoo_id:
                     erp_id = openerp_id
 
@@ -694,10 +823,8 @@ class OdooSync(osv.osv):
             self, cursor, uid, model, openerp_id, odoo_id=False, context=None):
         if context is None:
             context = {}
-        sync_ids = self.search(cursor, uid, [
-            ('model.model', '=', model),
-            ('res_id', '=', openerp_id),
-        ])
+        sync_ids = self.search(cursor, uid, self._mapping_domain(
+            cursor, uid, model, openerp_id, context))
         if sync_ids:
             # sync record exists and we check if we need to update odoo_id
             sync_id = sync_ids[0]
@@ -721,13 +848,14 @@ class OdooSync(osv.osv):
             'res_id': openerp_id,
             'odoo_id': odoo_id,
             'sync_state': 'static',
+            'sync_profile': self._mapping_profile(cursor, uid, model, openerp_id, context),
         }, context=context)
         return odoo_id
 
     def create_odoo_record(self, cursor, uid, model, data, context=None):
         if context is None:
             context = {}
-        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid, context=context)
         post_sufix = MAPPING_MODELS_POST.get(model, False)
         if hasattr(self.pool.get(model), 'get_mapping_model_post'):
             pnt_erp_id = data.get('pnt_erp_id', False)
@@ -769,7 +897,7 @@ class OdooSync(osv.osv):
         if context is None:
             context = {}
         # TODO: needs an endpoint with PATCH operation to implement this
-        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid, context=context)
         url_base = '{}{}/{}/{}'.format(
             odoo_url_api, MAPPING_MODELS_PATCH.get(model), odoo_id, erp_id)
         headers = {
@@ -809,7 +937,7 @@ class OdooSync(osv.osv):
     def get_odoo_data(self, cursor, uid, model, url_sufix, context=None):
         if context is None:
             context = {}
-        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid, context=context)
         url_base = '{}{}/{}'.format(odoo_url_api, MAPPING_MODELS_GET.get(model), url_sufix)
         headers = {
             "X-API-Key": odoo_api_key,
@@ -828,10 +956,8 @@ class OdooSync(osv.osv):
 
         str_now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        ids = self.search(cursor, uid, [
-            ('model.model', '=', model),
-            ('res_id', '=', openerp_id),
-        ])
+        ids = self.search(cursor, uid, self._mapping_domain(
+            cursor, uid, model, openerp_id, context))
 
         if not ids:
             return self._create_sync_record(
@@ -858,6 +984,7 @@ class OdooSync(osv.osv):
             'odoo_id': odoo_id,
             'odoo_last_sync_at': str_now,
             'sync_state': context.get('sync_state', 'draft'),
+            'sync_profile': self._mapping_profile(cursor, uid, model, openerp_id, context),
         }
 
         if context.get('update_odoo_created_sync'):
@@ -939,7 +1066,7 @@ class OdooSync(osv.osv):
     def update_erp_id(self, cursor, uid, model, odoo_id, erp_id, context=None):
         if context is None:
             context = {}
-        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid, context=context)
         url_base = "{}entities/{}/{}/{}".format(
             odoo_url_api, MAPPING_MODELS_ENTITIES.get(model), odoo_id, erp_id
         )
@@ -1058,10 +1185,10 @@ class OdooSync(osv.osv):
         return result
 
     def get_odoo_id_by_erp_id_from_odoo(
-            self, cursor, uid, model, erp_id, return_status=False):
+            self, cursor, uid, model, erp_id, return_status=False, context=None):
         # This method is used when we want to get the odoo_id from Odoo using the ERP id,
         # in cases where we don't have the sync record created yet in OpenERP
-        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid)
+        odoo_url_api, odoo_api_key = self._get_conn_params(cursor, uid, context=context)
         url_base = '{}entities/{}/{}'.format(
             odoo_url_api, MAPPING_MODELS_GET_ENTITIES.get(model), erp_id)
         headers = {
@@ -1090,27 +1217,28 @@ class OdooSync(osv.osv):
             return False, response.status_code == 404
         return False
 
-    def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id):
-        sync_ids = self.search(cursor, uid, [
-            ('model.model', '=', model),
-            ('res_id', '=', erp_id),
-        ])
+    def get_odoo_id_by_erp_id(self, cursor, uid, model, erp_id, context=None):
+        sync_ids = self.search(cursor, uid, self._mapping_domain(
+            cursor, uid, model, erp_id, context))
         if sync_ids:
             sync = self.browse(cursor, uid, sync_ids[0])
             return sync.odoo_id
         else:
             return False
 
-    def get_erp_id_by_odoo_id(self, cursor, uid, model, odoo_id):
+    def get_erp_id_by_odoo_id(self, cursor, uid, model, odoo_id, context=None):
+        profile = self._get_profile(context)
+        profiles = [profile, 'shared'] if model == 'account.account' else [profile]
         sync_ids = self.search(cursor, uid, [
             ('model.model', '=', model),
             ('odoo_id', '=', odoo_id),
+            ('sync_profile', 'in', profiles),
         ])
-        if sync_ids:
-            sync = self.browse(cursor, uid, sync_ids[0])
-            return sync.res_id
-        else:
-            return False
+        for sync in self.browse(cursor, uid, sync_ids):
+            if sync.sync_profile == self._mapping_profile(
+                    cursor, uid, model, sync.res_id, context):
+                return sync.res_id
+        return False
 
     def format_response(self, data, context=None):
         if isinstance(data, dict):
@@ -1145,6 +1273,33 @@ class OdooSync(osv.osv):
                 cursor, uid, sync_record.res_id, context=context)
 
         return False
+
+    def retry_sync_record(self, cursor, uid, sync_id, context=None):
+        """Retry synchronization using the saved profile, not the screen's profile."""
+        if is_dry_run(context):
+            return False, False
+        record = self.browse(cursor, uid, sync_id)
+        if record.sync_profile not in dict(SYNC_PROFILES):
+            raise osv.except_osv('Configuration error',
+                                 'The synchronization record has no valid saved profile.')
+        model = record.model.model
+        retry_context = self._clean_context_update_data(cursor, uid, context)
+        for key in ('from_fk_sync', 'only_moves', 'only_moves_retry', 'only_moves_cron',
+                    'only_moves_manual_load'):
+            retry_context.pop(key, None)
+        retry_context['sync_profile'] = record.sync_profile
+        if record.sync_profile == 'only_moves':
+            retry_context.update(only_moves=True, only_moves_retry=True)
+        if not self._validate_profile_attempt(
+                cursor, uid, model, record.res_id, retry_context):
+            return False, False
+
+        if (context or {}).get('is_static'):
+            retry_context['odoo_id'] = context.get('odoo_id')
+            return self.syncronize_sync(
+                cursor, uid, model, 'sync', record.res_id, context=retry_context)
+        return self.common_sync_model_create_update(
+            cursor, uid, model, 'sync', record.res_id, context=retry_context)
 
     def poll_payment_order_status_sync(self, cursor, uid, model_name, erp_id, context=None):
         if context is None:
@@ -1200,6 +1355,7 @@ class OdooSync(osv.osv):
         'model': fields.many2one('ir.model', 'Model'),
         'res_id': fields.integer('ERP id'),
         'odoo_id': fields.integer('Odoo id'),
+        'sync_profile': fields.selection(SYNC_PROFILES, 'Sync profile', required=True),
         # Aquest camp indica la última vegada que hem fet sync amb Odoo (s'hagin modificat o no les dades)  # noqa: E501
         'odoo_last_sync_at': fields.datetime('Odoo last sync at'),
         # Aquests camps indiquen la data de creacio i ultima modificacio al Odoo, no la data d'actualitzció de l'odoo_id a OpenERP  # noqa: E501
@@ -1237,11 +1393,13 @@ class OdooSync(osv.osv):
     }
 
     _sql_constraints = [
-        ('model_res_id_uniq', 'unique (model,res_id)', ("Model and res_id must be unique"))
+        ('model_res_id_uniq', 'unique (model,res_id,sync_profile)',
+         'Model, ERP id and sync profile must be unique.')
     ]
 
     _defaults = {
         'sync_state': lambda obj, cr, uid, context: 'draft',
+        'sync_profile': lambda *a: 'all_in',
     }
 
 

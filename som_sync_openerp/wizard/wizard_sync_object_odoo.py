@@ -11,6 +11,7 @@ class WizardSyncObjectOdoo(osv.osv_memory):
     def action_sync(self, cursor, uid, ids, context=None):
         if context is None:
             context = {}
+        context = context.copy()
         from_model = context.get('from_model')
         active_ids = context.get('active_ids', [])
 
@@ -38,21 +39,14 @@ class WizardSyncObjectOdoo(osv.osv_memory):
             if from_model == 'odoo.sync':
                 # Support execution from model odoo.sync
                 for _id in active_ids:
-                    # Get the real model and res_id from odoo.sync record
-                    sync_data = sync_obj.browse(cursor, uid, _id)
-                    from_res_model = sync_data.model.model
-                    erp_id = sync_data.res_id
-                    if wiz.is_static:
-                        sync_obj.syncronize_sync(
-                            cursor, uid, from_res_model, 'sync', erp_id, context=context
-                        )
-                    else:
-                        sync_obj.common_sync_model_create_update(
-                            cursor, uid, from_res_model, 'sync', erp_id, context=context
-                        )
+                    sync_obj.retry_sync_record(cursor, uid, _id, context=context.copy())
                 return {'type': 'ir.actions.act_window_close'}
 
             # Normal execution from any model that can be synced
+            if sync_obj._get_profile(context) != 'all_in':
+                raise osv.except_osv(
+                    'Synchronization error',
+                    'Use the odoo.sync record to retry a non-default profile.')
             for record_id in active_ids:
                 if wiz.is_static:
                     sync_obj.syncronize_sync(

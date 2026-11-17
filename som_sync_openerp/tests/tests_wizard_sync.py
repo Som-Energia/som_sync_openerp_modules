@@ -29,7 +29,8 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
 
         # Verify arguments of the last call
         self.sync_obj.syncronize.assert_called_with(
-            ANY, self.uid, 'res.partner', 'sync', 3, context=context
+            ANY, self.uid, 'res.partner', 'sync', 3,
+            context=dict(context, is_static=False)
         )
 
     def test_action_sync__odoo_sync(self):
@@ -64,9 +65,12 @@ class TestWizardSyncObjectOdoo(testing.OOTestCaseWithCursor):
         country_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_2).res_id
         country_state_id = self.sync_obj.browse(self.cursor, self.uid, osdemo_3).res_id
         self.sync_obj.syncronize.assert_has_calls([
-            call(ANY, self.uid, u'res.partner', 'sync', partner_id, context=context),
-            call(ANY, self.uid, u'res.country', 'sync', country_id, context=context),
-            call(ANY, self.uid, u'res.country.state', 'sync', country_state_id, context=context),
+            call(ANY, self.uid, u'res.partner', 'sync', partner_id,
+                 context=dict(context, is_static=False, sync_profile='all_in')),
+            call(ANY, self.uid, u'res.country', 'sync', country_id,
+                 context=dict(context, is_static=False, sync_profile='all_in')),
+            call(ANY, self.uid, u'res.country.state', 'sync', country_state_id,
+                 context=dict(context, is_static=False, sync_profile='all_in')),
         ])
 
     def test_action_sync__static_model(self):

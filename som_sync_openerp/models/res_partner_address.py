@@ -56,10 +56,8 @@ class ResPartnerAddress(osv.osv):
         # /contact/{parent_id}/{ttype}
         address = self.browse(cr, uid, id, context=context)
         sync_obj = self.pool.get('odoo.sync')
-        sync_parent_ids = sync_obj.search(cr, uid, [
-            ('model', '=', 'res.partner'),
-            ('res_id', '=', address.partner_id.id),
-        ])
+        sync_parent_ids = sync_obj.search(cr, uid, sync_obj._mapping_domain(
+            cr, uid, 'res.partner', address.partner_id.id, context))
         if sync_parent_ids:
             parent_odoo_id = sync_obj.read(
                 cr, uid, sync_parent_ids[0], ['odoo_id'])['odoo_id']

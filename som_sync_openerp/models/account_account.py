@@ -65,12 +65,7 @@ class AccountAccount(osv.osv):
 
     def is_sync_excluded(self, cr, uid, id, context=None):
         account = self.browse(cr, uid, id, context=context)
-        config_obj = self.pool.get('res.config')
-        config_key = 'odoo_sync_excluded_account_groups'
-        excluded_groups = config_obj.get(cr, uid, config_key, '') or ''
-        excluded_groups = [group.strip() for group in excluded_groups.split(',')]
-        account_group = (account.code or '')[:1]
-        return bool(account_group and account_group in excluded_groups)
+        return (account.code or '').startswith('5')
 
     def copy(self, cr, uid, id, default=None, context=None,
              done_list=None, local=False):
@@ -116,6 +111,23 @@ class AccountAccount(osv.osv):
     def write(self, cr, uid, ids, vals, context=None):
         if context is None:
             context = {}
+        if 'code' in vals:
+            account_ids = ids if isinstance(ids, list) else [ids]
+            new_excluded = (vals['code'] or '').startswith('5')
+            for account in self.browse(cr, uid, account_ids, context=context):
+                if (account.code or '').startswith('5') == new_excluded:
+                    continue
+                with Sudo(uid=1, gid=0):
+                    linked = self.pool.get('odoo.sync').search(cr, uid, [
+                        ('model.model', '=', self._name), ('res_id', '=', account.id),
+                    ], limit=1)
+                if linked:
+                    raise osv.except_osv(
+                        _('Error'),
+                        _('Changing this code would change the synchronization profile '
+                          'of an account with saved mappings. An explicit mapping '
+                          'migration is required.'),
+                    )
         if 'odoo_account_code' in vals:
             if not isinstance(ids, list):
                 ids = [ids]

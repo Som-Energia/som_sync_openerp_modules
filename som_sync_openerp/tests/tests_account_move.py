@@ -69,6 +69,61 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertIn('REF-001', [line['name'] for line in related_values['lines']])
 
+    @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
+    @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
+    def test_zero_amount_lines_are_skipped_in_both_profiles(
+            self, mock_partner_odoo_id, mock_sync):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_move_001')[1]
+        move = self.am_obj.browse(self.cursor, self.uid, move_id)
+        source = move.line_id[0]
+        zero_id = self.aml_obj.create(self.cursor, self.uid, {
+            'move_id': move_id, 'name': 'Zero amount',
+            'account_id': source.account_id.id,
+            'partner_id': source.partner_id.id,
+            'journal_id': move.journal_id.id, 'period_id': move.period_id.id,
+            'debit': 0, 'credit': 0,
+        })
+        nonzero_ids = [line.id for line in move.line_id if line.id != zero_id]
+        # Small nonzero amounts must not be treated as zero.
+        for line in move.line_id:
+            if line.id != zero_id:
+                self.aml_obj.write(self.cursor, self.uid, [line.id], {
+                    'debit': 0.01 if line.debit else 0,
+                    'credit': 0.01 if line.credit else 0,
+                })
+        mock_sync.return_value = (99, 1)
+        mock_partner_odoo_id.return_value = False
+        for profile in ('all_in', 'only_moves'):
+            context = {'sync_profile': profile}
+            with mock.patch.object(
+                    self.sync_obj, 'get_model_vals_to_sync',
+                    wraps=self.sync_obj.get_model_vals_to_sync) as prepare:
+                result = self.am_obj.get_related_values(
+                    self.cursor, self.uid, move_id, context=context)
+            self.assertEqual(sorted(call[0][3] for call in prepare.call_args_list),
+                             sorted(nonzero_ids))
+            self.assertEqual(len(result['lines']), 2)
+            self.assertEqual(sum(line.get('debit', 0) for line in result['lines']), 0.01)
+            self.assertEqual(sum(line.get('credit', 0) for line in result['lines']), 0.01)
+            self.assertTrue(all(('debit' in line) != ('credit' in line)
+                                for line in result['lines']))
+
+    def test_all_zero_lines_are_rejected_before_dependencies_in_both_profiles(self):
+        move_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_move_001')[1]
+        move = self.am_obj.browse(self.cursor, self.uid, move_id)
+        self.aml_obj.write(self.cursor, self.uid, [line.id for line in move.line_id], {
+            'debit': 0, 'credit': 0,
+        })
+        for profile in ('all_in', 'only_moves'):
+            with mock.patch.object(self.sync_obj, 'get_model_vals_to_sync') as prepare:
+                with self.assertRaisesRegexp(ValueError, 'no nonzero journal lines'):
+                    self.am_obj.get_related_values(
+                        self.cursor, self.uid, move_id,
+                        context={'sync_profile': profile})
+            prepare.assert_not_called()
+
     def test__journal_is_syncrozable_True(self):
         move_id = self.imd_obj.get_object_reference(
             self.cursor, self.uid, "som_sync_openerp", "account_move_001"
