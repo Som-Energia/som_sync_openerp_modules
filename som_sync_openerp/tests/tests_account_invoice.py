@@ -22,6 +22,56 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
         self.maxDiff = None
         super(TestAccountInvoice, self).setUp()
 
+    def test_invoice_line_analytic_account_uses_static_fk_mapping(self):
+        self.assertEqual(
+            self.ail_obj.MAPPING_FIELDS_TO_SYNC['account_analytic_id'],
+            'analytic_account_id')
+        self.assertEqual(
+            self.ail_obj.MAPPING_FK['account_analytic_id'],
+            'account.analytic.account')
+
+    @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
+    @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
+    def test_process_invoice_lines_does_not_merge_distinct_analytic_accounts(
+            self, mock_model_values, mock_erp_id):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        invoice = self.ai_obj.browse(self.cursor, self.uid, invoice_id)
+        erp_account_id = invoice.invoice_line[0].account_id.id
+        invoice_lines = [
+            mock.Mock(id=101, invoice_line_tax_id=[], product_id=False),
+            mock.Mock(id=102, invoice_line_tax_id=[], product_id=False),
+        ]
+        mock_model_values.side_effect = [
+            {
+                'account_id': 99,
+                'analytic_account_id': 501,
+                'price_subtotal': 100.0,
+            },
+            {
+                'account_id': 99,
+                'analytic_account_id': 502,
+                'price_subtotal': 200.0,
+            },
+        ]
+        mock_erp_id.return_value = erp_account_id
+
+        grouped_lines, energy_tax_id = self.ai_obj._process_invoice_lines(
+            self.cursor,
+            self.uid,
+            mock.Mock(invoice_line=invoice_lines),
+        )
+
+        self.assertFalse(energy_tax_id)
+        self.assertEqual(len(grouped_lines), 2)
+        self.assertEqual(
+            set(line['analytic_account_id'] for line in grouped_lines.values()),
+            set([501, 502]))
+        self.assertEqual(
+            sorted(line['price_unit'] for line in grouped_lines.values()),
+            [100.0, 200.0])
+
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     def test__get_related_values(self, mock_syncronize_sync, mock_erp_id):
