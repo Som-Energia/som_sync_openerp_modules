@@ -13,6 +13,13 @@ import json
 
 from base_extended_som.utils import is_dry_run, skip_job_in_dry_run
 
+try:
+    STRING_TYPES = (basestring,)
+    INTEGER_TYPES = (int, long)
+except NameError:
+    STRING_TYPES = (str,)
+    INTEGER_TYPES = (int,)
+
 
 FF_ENABLE_ODOO_SYNC = True  # TODO: as variable in res.config ??
 
@@ -40,6 +47,7 @@ ONLY_MOVES_MODELS = ('account.move', 'account.move.line', 'account.journal',
                      'account.account', 'res.partner')
 
 STATIC_MODELS = [
+    'account.analytic.account',
     'account.fiscal.position',
     'account.journal',
     'account.payment.term',
@@ -203,6 +211,79 @@ class OdooSync(osv.osv):
             raise osv.except_osv('Configuration error',
                                  'odoo_api_key_only_moves is not configured; no fallback allowed.')
         return odoo_url_api, odoo_api_key
+
+    def get_analytic_account_odoo_id(
+            self, cursor, uid, reference, company_id, plan_id,
+            expected_company_name, expected_plan_name, context=None):
+        """Resolve an existing Odoo analytic account by its full identity."""
+        if not reference or not isinstance(reference, STRING_TYPES):
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'An analytic account reference is required.')
+        if not expected_company_name or not expected_plan_name:
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'Expected Odoo company and plan names are required.')
+        if any(isinstance(value, bool) or not isinstance(value, INTEGER_TYPES) or value <= 0
+               for value in (company_id, plan_id)):
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'Positive Odoo company and plan IDs are required.')
+
+        odoo_url_api, odoo_api_key = self._get_conn_params(
+            cursor, uid, context=context)
+        api_base = odoo_url_api.rstrip('/')
+        if api_base.endswith('/api'):
+            api_base = '{}/v1'.format(api_base)
+        url = '{}/analytic_accounts'.format(api_base)
+        identity = '{}/{}/{}'.format(reference, company_id, plan_id)
+        try:
+            response = requests.get(
+                url,
+                params={
+                    'reference': reference,
+                    'company_id': company_id,
+                    'plan_id': plan_id,
+                },
+                headers={
+                    'X-API-Key': odoo_api_key,
+                    'Accept': 'application/json',
+                },
+                timeout=30,
+            )
+        except requests.RequestException as error:
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'Could not resolve Odoo analytic account {}: {}'.format(
+                    identity, error))
+
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        if response.status_code != 200 or not payload.get('success'):
+            error_code = payload.get('error_code', 'INVALID_RESPONSE')
+            message = payload.get('message', 'No valid response from Odoo.')
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'Could not resolve Odoo analytic account {} (HTTP {}, {}): {}'.format(
+                    identity, response.status_code, error_code, message))
+
+        data = payload.get('data')
+        odoo_id = data.get('odoo_id') if isinstance(data, dict) else False
+        if (isinstance(odoo_id, bool) or not isinstance(odoo_id, INTEGER_TYPES)
+                or odoo_id <= 0 or data.get('reference') != reference
+                or data.get('company_id') != company_id
+                or data.get('plan_id') != plan_id
+                or data.get('company_name') != expected_company_name
+                or data.get('plan_name') != expected_plan_name):
+            raise osv.except_osv(
+                'Analytic account lookup error',
+                'Odoo returned an invalid identity for analytic account {}.'.format(
+                    identity))
+        return odoo_id
 
     def sync_model_enabled_amplified(self, cursor, uid, model):
         """
@@ -828,14 +909,17 @@ class OdooSync(osv.osv):
         if sync_ids:
             # sync record exists and we check if we need to update odoo_id
             sync_id = sync_ids[0]
-            current_odoo_id = self.read(cursor, uid, sync_id, ['odoo_id'])['odoo_id']
+            sync_record = self.read(
+                cursor, uid, sync_id, ['odoo_id', 'sync_state'])
+            current_odoo_id = sync_record['odoo_id']
+            sync_vals = {}
             if odoo_id and odoo_id != current_odoo_id:
-                self.write(cursor, uid, sync_id, {
-                    'odoo_id': odoo_id,
-                    'sync_state': 'static',
-                }, context=context)
-                return odoo_id
-            return current_odoo_id
+                sync_vals['odoo_id'] = odoo_id
+            if sync_record['sync_state'] != 'static':
+                sync_vals['sync_state'] = 'static'
+            if sync_vals:
+                self.write(cursor, uid, sync_id, sync_vals, context=context)
+            return odoo_id or current_odoo_id
 
         # No sync record exists → create only if we have odoo_id
         if not odoo_id:

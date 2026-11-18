@@ -5,6 +5,7 @@ import time
 
 import netsvc
 from destral import testing
+from osv import osv
 from ..models import odoo_sync, payment_order
 from som_sync_openerp.models.odoo_exceptions import (
     CreationNotSupportedException, ERPObjectNotExistsException, ForeingKeyNotAvailable
@@ -351,6 +352,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
             self.cursor, self.uid, 'account.fiscal.position', afp_id, param_odoo_id, context={}
         )
         self.assertEqual(odoo_id, param_odoo_id)
+        odoo_id = self.sync_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, False, context={}
+        )
+        self.assertEqual(odoo_id, param_odoo_id)
 
         os_ids = self.sync_obj.search(self.cursor, self.uid, [
             ('model.model', '=', 'account.fiscal.position'),
@@ -359,6 +364,38 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         self.assertEqual(len(os_ids), 1)
         os_record = self.sync_obj.browse(self.cursor, self.uid, os_ids[0])
         self.assertEqual(os_record.odoo_id, param_odoo_id)
+
+    def test_analytic_accounts_are_registered_as_static_models(self):
+        self.assertIn('account.analytic.account', odoo_sync.STATIC_MODELS)
+
+    def test_analytic_account_static_sync_uses_saved_mapping_only(self):
+        analytic_obj = self.openerp.pool.get('account.analytic.account')
+        account_id = analytic_obj.create(self.cursor, self.uid, {
+            'name': 'Static analytic account',
+            'code': '010101',
+            'company_id': self.openerp.pool.get('res.users').browse(
+                self.cursor, self.uid, self.uid).company_id.id,
+            'type': 'normal',
+            'state': 'open',
+        })
+        with mock.patch.object(
+                odoo_sync.OdooSync, 'get_or_create_static_odoo_id',
+                return_value=777) as get_static_mapping, \
+                mock.patch.object(
+                    odoo_sync.OdooSync, 'create_odoo_record') as create_remote, \
+                mock.patch.object(odoo_sync.requests, 'get') as get_remote, \
+                mock.patch.object(odoo_sync.requests, 'post') as post_remote, \
+                mock.patch.object(odoo_sync.requests, 'patch') as patch_remote:
+            result = self.sync_obj.syncronize_sync(
+                self.cursor, self.uid, 'account.analytic.account', 'sync',
+                account_id, context={'is_static': True, 'odoo_id': 777})
+
+        self.assertEqual(result, (777, account_id))
+        get_static_mapping.assert_called_once()
+        self.assertFalse(create_remote.called)
+        self.assertFalse(get_remote.called)
+        self.assertFalse(post_remote.called)
+        self.assertFalse(patch_remote.called)
 
     def test__get_or_create_static_odoo_id__existing_update(self):
         afp_obj = self.openerp.pool.get("account.fiscal.position")
@@ -399,10 +436,80 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
         )
         self.assertEqual(odoo_id, param_odoo_id)
 
-        odoo_id = self.sync_obj.get_or_create_static_odoo_id(
-            self.cursor, self.uid, 'account.fiscal.position', afp_id, False, context={}
+    def test__get_or_create_static_odoo_id__enforces_static_state(self):
+        afp_obj = self.openerp.pool.get("account.fiscal.position")
+        afp_id = afp_obj.create(
+            self.cursor, self.uid, {'name': 'Test Static AFP'}, context={})
+        self.sync_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.fiscal.position', afp_id, 123,
+            context={})
+        sync_ids = self.sync_obj.search(self.cursor, self.uid, [
+            ('model.model', '=', 'account.fiscal.position'),
+            ('res_id', '=', afp_id),
+        ])
+        self.sync_obj.write(
+            self.cursor, self.uid, sync_ids, {'sync_state': 'draft'})
+
+        self.assertEqual(
+            self.sync_obj.get_or_create_static_odoo_id(
+                self.cursor, self.uid, 'account.fiscal.position', afp_id, 123,
+                context={}),
+            123)
+        self.assertEqual(
+            self.sync_obj.read(
+                self.cursor, self.uid, sync_ids[0], ['sync_state'])['sync_state'],
+            'static')
+
+    def test__get_analytic_account_odoo_id__uses_exact_identity_endpoint(self):
+        response = mock.Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            'success': True,
+            'data': {
+                'odoo_id': 801,
+                'reference': '010101',
+                'company_id': 42,
+                'plan_id': 12,
+                'company_name': 'Som Energia SCCL Assentaments',
+                'plan_name': 'Project',
+            },
+        }
+        with mock.patch.object(
+                odoo_sync.OdooSync, '_get_conn_params',
+                return_value=('https://odoo.test/api/v1/', 'api-key')), \
+                mock.patch.object(odoo_sync.requests, 'get', return_value=response) as get:
+            result = self.sync_obj.get_analytic_account_odoo_id(
+                self.cursor, self.uid, '010101', 42, 12,
+                'Som Energia SCCL Assentaments', 'Project')
+
+        self.assertEqual(result, 801)
+        get.assert_called_once_with(
+            'https://odoo.test/api/v1/analytic_accounts',
+            params={
+                'reference': '010101',
+                'company_id': 42,
+                'plan_id': 12,
+            },
+            headers={'X-API-Key': 'api-key', 'Accept': 'application/json'},
+            timeout=30,
         )
-        self.assertEqual(odoo_id, param_odoo_id)
+
+    def test__get_analytic_account_odoo_id__raises_on_ambiguous_identity(self):
+        response = mock.Mock()
+        response.status_code = 409
+        response.json.return_value = {
+            'success': False,
+            'error_code': 'AMBIGUOUS_RECORD',
+            'message': 'Multiple records match the provided identity',
+        }
+        with mock.patch.object(
+                odoo_sync.OdooSync, '_get_conn_params',
+                return_value=('https://odoo.test/api/v1/', 'api-key')), \
+                mock.patch.object(odoo_sync.requests, 'get', return_value=response):
+            with self.assertRaises(osv.except_osv):
+                self.sync_obj.get_analytic_account_odoo_id(
+                    self.cursor, self.uid, '010101', 42, 12,
+                    'Som Energia SCCL Assentaments', 'Project')
 
     def test__sync_model_enabled_amplified__setting_ok(self):
         sync_model_config_obj = self.openerp.pool.get('odoo.sync.model.config')
