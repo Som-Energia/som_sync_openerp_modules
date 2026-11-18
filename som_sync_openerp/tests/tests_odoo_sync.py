@@ -367,6 +367,10 @@ class TestOdooSync(testing.OOTestCaseWithCursor):
 
     def test_analytic_accounts_are_registered_as_static_models(self):
         self.assertIn('account.analytic.account', odoo_sync.STATIC_MODELS)
+        self.assertEqual(
+            self.sync_obj.sync_model_enabled_amplified(
+                self.cursor, self.uid, 'account.analytic.account'),
+            (True, False, False))
 
     def test_analytic_account_static_sync_uses_saved_mapping_only(self):
         analytic_obj = self.openerp.pool.get('account.analytic.account')

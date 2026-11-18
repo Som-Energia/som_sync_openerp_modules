@@ -30,6 +30,43 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
             self.ail_obj.MAPPING_FK['account_analytic_id'],
             'account.analytic.account')
 
+    def test_invoice_line_resolves_static_analytic_mapping_without_remote_calls(self):
+        invoice_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "invoice_0001"
+        )[1]
+        line = self.ai_obj.browse(
+            self.cursor, self.uid, invoice_id).invoice_line[0]
+        company_id = self.openerp.pool.get('res.users').browse(
+            self.cursor, self.uid, self.uid).company_id.id
+        analytic_id = self.openerp.pool.get('account.analytic.account').create(
+            self.cursor,
+            self.uid,
+            {
+                'name': 'Static invoice analytic account',
+                'code': '010199',
+                'company_id': company_id,
+                'type': 'normal',
+                'state': 'open',
+            },
+        )
+        self.sync_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.account', line.account_id.id, 990,
+            context={})
+        self.sync_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, 'account.analytic.account', analytic_id, 991,
+            context={})
+
+        with mock.patch.object(odoo_sync.requests, 'get') as get_remote, \
+                mock.patch.object(odoo_sync.requests, 'post') as post_remote, \
+                mock.patch.object(odoo_sync.requests, 'patch') as patch_remote:
+            values = self.sync_obj.get_model_vals_to_sync(
+                self.cursor, self.uid, 'account.invoice.line', line.id)
+
+        self.assertEqual(values['analytic_account_id'], 991)
+        self.assertFalse(get_remote.called)
+        self.assertFalse(post_remote.called)
+        self.assertFalse(patch_remote.called)
+
     @mock.patch.object(odoo_sync.OdooSync, "get_erp_id_by_odoo_id")
     @mock.patch.object(odoo_sync.OdooSync, "get_model_vals_to_sync")
     def test_process_invoice_lines_does_not_merge_distinct_analytic_accounts(
