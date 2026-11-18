@@ -54,6 +54,48 @@ and their Odoo links remain unchanged. Accounts without a mapping and with a cod
 length other than 12 retain their standard duplication behavior. During copying,
 the confirmed codes are applied before `create()`, not corrected afterwards.
 
+## Importing the Odoo analytic account catalog
+
+Use `scripts/import_analytic_accounts.py` with
+`som_sync_openerp/migrations/comptes_analítics.csv`. The default run is a
+read-only preflight; `--apply` is required to create local records.
+
+Provide three destination-specific IDs:
+
+- `--erp-company-id`: company in the OpenERP database configured in
+  `scripts/dbconfig.py`.
+- `--odoo-company-id`: company in the Odoo instance configured by OpenERP's
+  `odoo_url_api` and `odoo_api_key`.
+- `--odoo-plan-id`: analytic plan in that same Odoo instance.
+
+For example:
+
+```sh
+python scripts/import_analytic_accounts.py \
+  --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3
+python scripts/import_analytic_accounts.py \
+  --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3 --apply
+```
+
+The CSV must contain one company and one plan. Odoo account IDs are resolved
+through the read-only API by reference, Odoo company ID and plan ID. An absent
+or ambiguous remote identity stops the import before any local writes.
+
+OpenERP has one analytic account tree rather than Odoo's separate analytic
+plans. The selected Odoo plan is represented by the `Projectes Odoo` parent
+analytic account (`type=view`); imported accounts are active, open normal
+children with the Odoo reference as their local code. The parent is a local
+container only and does not receive an Odoo mapping. Each child gets a static
+`odoo.sync` mapping; static resolution returns the saved Odoo ID without
+creating or updating a remote account.
+
+The importer reuses matching local accounts and mappings on rerun. It stops on
+duplicate local references, conflicting local names/parents, or an existing
+mapping to a different Odoo ID; those cases need manual review. It never
+renames, reparents, archives or deletes existing accounts. Set
+`scripts/dbconfig.py` to the intended OpenERP database before running; that
+configuration currently defaults to production.
+
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
 
