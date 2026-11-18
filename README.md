@@ -57,7 +57,7 @@ the confirmed codes are applied before `create()`, not corrected afterwards.
 ## Importing the Odoo analytic account catalog
 
 Use `scripts/import_analytic_accounts.py` with
-`som_sync_openerp/migrations/comptes_analítics.csv`. The default run is a
+`som_sync_openerp/migrations/comptes_analitics.csv`. The default run is a
 read-only preflight; `--apply` is required to create local records.
 
 Provide three destination-specific IDs:
@@ -65,8 +65,11 @@ Provide three destination-specific IDs:
 - `--erp-company-id`: company in the OpenERP database configured in
   `scripts/dbconfig.py`.
 - `--odoo-company-id`: company in the Odoo instance configured by OpenERP's
-  `odoo_url_api` and `odoo_api_key`.
+  `odoo_url_api` and `odoo_api_key_only_moves`.
 - `--odoo-plan-id`: analytic plan in that same Odoo instance.
+
+The catalog lookup uses the dedicated `only_moves` API key so the requested
+company must match that key's Odoo company.
 
 For example:
 
