@@ -44,7 +44,7 @@ MAPPING_MODELS_GET_ENTITIES['res.partner.address'] = 'partner_address'
 
 SYNC_PROFILES = [('all_in', 'All in'), ('only_moves', 'Only moves'), ('shared', 'Shared')]
 ONLY_MOVES_MODELS = ('account.move', 'account.move.line', 'account.journal',
-                     'account.account', 'res.partner')
+                     'account.account', 'res.partner', 'account.analytic.account')
 
 STATIC_MODELS = [
     'account.analytic.account',

@@ -14,9 +14,12 @@ class AccountMoveLine(osv.osv):
         'debit': 'debit',
         'credit': 'credit',
     }
+    ONLY_MOVES_FIELDS_TO_SYNC = dict(
+        MAPPING_FIELDS_TO_SYNC, analytic_account_id='analytic_account_id')
     MAPPING_FK = {
         'account_id': 'account.account',
         'partner_id': 'res.partner',
+        'analytic_account_id': 'account.analytic.account',
     }
     MAPPING_CONSTANTS = {
     }

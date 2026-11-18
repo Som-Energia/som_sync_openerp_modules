@@ -16,6 +16,65 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         self.sync_obj = self.openerp.pool.get("odoo.sync")
         super(TestAccountMove, self).setUp()
 
+    def test_move_line_analytic_account_is_sent_for_only_moves_from_static_mapping(self):
+        self.assertNotIn(
+            'analytic_account_id', self.aml_obj.MAPPING_FIELDS_TO_SYNC)
+        self.assertEqual(
+            self.aml_obj.ONLY_MOVES_FIELDS_TO_SYNC['analytic_account_id'],
+            'analytic_account_id')
+        self.assertEqual(
+            self.aml_obj.MAPPING_FK['analytic_account_id'],
+            'account.analytic.account')
+
+        line_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, "som_sync_openerp", "account_move_line_001"
+        )[1]
+        line = self.aml_obj.browse(self.cursor, self.uid, line_id)
+        company_id = self.openerp.pool.get("res.users").browse(
+            self.cursor, self.uid, self.uid
+        ).company_id.id
+        analytic_id = self.openerp.pool.get("account.analytic.account").create(
+            self.cursor,
+            self.uid,
+            {
+                "name": "Static entry analytic account",
+                "code": "ENTRY-ANALYTIC-001",
+                "company_id": company_id,
+                "type": "normal",
+                "state": "open",
+            },
+        )
+        self.aml_obj.write(
+            self.cursor, self.uid, [line_id], {"analytic_account_id": analytic_id}
+        )
+        only_moves_context = {"sync_profile": "only_moves"}
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, "account.account", line.account_id.id, 990,
+            context=only_moves_context,
+        )
+        self.sync_obj.get_or_create_static_odoo_id(
+            self.cursor, self.uid, "account.analytic.account", analytic_id, 991,
+            context=only_moves_context,
+        )
+
+        with mock.patch.object(
+            self.sync_obj, "get_partner_odoo_id_by_erp_id", return_value=992
+        ), mock.patch.object(odoo_sync.requests, "get") as get_remote, mock.patch.object(
+            odoo_sync.requests, "post"
+        ) as post_remote, mock.patch.object(odoo_sync.requests, "patch") as patch_remote:
+            values = self.sync_obj.get_model_vals_to_sync(
+                self.cursor,
+                self.uid,
+                "account.move.line",
+                line_id,
+                context=only_moves_context,
+            )
+
+        self.assertEqual(values["analytic_account_id"], 991)
+        self.assertFalse(get_remote.called)
+        self.assertFalse(post_remote.called)
+        self.assertFalse(patch_remote.called)
+
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")
     def test__get_related_values(self, mock_partner_odoo_id, mock_syncronize_sync):
