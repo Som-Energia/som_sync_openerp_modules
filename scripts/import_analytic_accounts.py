@@ -8,10 +8,10 @@ their static odoo.sync mappings.
 
 Example:
     python scripts/import_analytic_accounts.py --input \\
-        som_sync_openerp/migrations/comptes_analítics.csv \\
+        som_sync_openerp/migrations/comptes_analitics.csv \\
         --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3
     python scripts/import_analytic_accounts.py --input \\
-        som_sync_openerp/migrations/comptes_analítics.csv \\
+        som_sync_openerp/migrations/comptes_analitics.csv \\
         --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3 --apply
 
 The Odoo company and plan IDs are specific to the configured Odoo instance.
@@ -350,7 +350,7 @@ def parse_arguments(arguments):
         "..",
         "som_sync_openerp",
         "migrations",
-        "comptes_analítics.csv",
+        "comptes_analitics.csv",
     )
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", default=default_csv, help="Odoo analytic account CSV")

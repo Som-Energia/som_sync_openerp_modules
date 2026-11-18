@@ -104,7 +104,7 @@ class ImportAnalyticAccountsTest(TestCase):
             os.path.dirname(SCRIPTS),
             "som_sync_openerp",
             "migrations",
-            "comptes_analítics.csv",
+            "comptes_analitics.csv",
         )
 
         accounts = importer.read_accounts(path)
