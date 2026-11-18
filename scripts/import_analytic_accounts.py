@@ -15,6 +15,7 @@ Example:
         --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3 --apply
 
 The Odoo company and plan IDs are specific to the configured Odoo instance.
+The catalog lookup uses the dedicated ``odoo_api_key_only_moves`` key.
 Set scripts/dbconfig.py to the intended OpenERP database before running this
 script; that file currently defaults to production.
 """
@@ -33,6 +34,7 @@ SYNC = "odoo.sync"
 ROOT_NAME = u"Projectes Odoo"
 ROOT_CODE = "ODOO-PROJECTS"
 CONTEXT = {"active_test": False}
+ODOO_LOOKUP_CONTEXT = dict(CONTEXT, sync_profile="only_moves")
 CSV_HEADERS = [
     u"Compte analític",
     u"Referència",
@@ -247,7 +249,7 @@ def prepare_import(client, accounts, erp_company_id, odoo_company_id, odoo_plan_
             odoo_plan_id,
             account["company"],
             account["plan"],
-            context=dict(CONTEXT),
+            context=dict(ODOO_LOOKUP_CONTEXT),
         )
         if isinstance(odoo_id, bool) or not isinstance(odoo_id, integer_types) or odoo_id <= 0:
             raise ValueError(

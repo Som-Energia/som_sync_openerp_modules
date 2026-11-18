@@ -121,6 +121,15 @@ class ImportAnalyticAccountsTest(TestCase):
         self.assertFalse(plan["root"])
         self.assertFalse(plan["accounts"][0]["local_account"])
         self.assertEqual(plan["accounts"][0]["odoo_id"], 501)
+        lookup_call = next(
+            call for call in self.client.calls
+            if call[0] == importer.SYNC
+            and call[1] == "get_analytic_account_odoo_id"
+        )
+        self.assertEqual(
+            lookup_call[3]["context"]["sync_profile"],
+            "only_moves",
+        )
         self.assertFalse(
             [call for call in self.client.calls
              if call[1] in ("create", "syncronize_sync")])

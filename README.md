@@ -65,8 +65,11 @@ Provide three destination-specific IDs:
 - `--erp-company-id`: company in the OpenERP database configured in
   `scripts/dbconfig.py`.
 - `--odoo-company-id`: company in the Odoo instance configured by OpenERP's
-  `odoo_url_api` and `odoo_api_key`.
+  `odoo_url_api` and `odoo_api_key_only_moves`.
 - `--odoo-plan-id`: analytic plan in that same Odoo instance.
+
+The catalog lookup uses the dedicated `only_moves` API key so the requested
+company must match that key's Odoo company.
 
 For example:
 
