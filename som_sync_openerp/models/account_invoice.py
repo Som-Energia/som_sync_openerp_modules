@@ -165,15 +165,18 @@ class AccountInvoice(osv.osv):
                     new_tax_ids.append(odoo_tax_id)
 
             ail_vals['tax_ids'] = new_tax_ids
-            dict_key = "{}_{}".format(ail_vals['account_id'], ail_vals['tax_ids'])
+            analytic_account_id = ail_vals.get('analytic_account_id')
+            dict_key = "{}_{}_{}".format(
+                ail_vals['account_id'], ail_vals['tax_ids'],
+                analytic_account_id or '')
 
-            # Agrupate lines by account_id and taxes
+            # Group lines by account, taxes and analytic account.
             if original_res.get(dict_key, False) and \
                     original_res[dict_key]['tax_ids'] == ail_vals['tax_ids']:
                 original_res[dict_key]['price_unit'] = original_res[dict_key]['price_unit'] + \
                     ail_vals['price_subtotal']
             else:
-                original_res[dict_key] = {
+                invoice_line_values = {
                     'account_id': account_id,
                     'quantity': 1 * factor_reverse,
                     'name': "Agrupació {}".format(account_code),
@@ -182,6 +185,9 @@ class AccountInvoice(osv.osv):
                     'quantity_erp': 1,
                     'tax_ids': ail_vals['tax_ids'],
                 }
+                if analytic_account_id:
+                    invoice_line_values['analytic_account_id'] = analytic_account_id
+                original_res[dict_key] = invoice_line_values
         return original_res, energy_tax_id
 
     def get_related_values(self, cr, uid, id, context=None):

@@ -99,6 +99,15 @@ renames, reparents, archives or deletes existing accounts. Set
 `scripts/dbconfig.py` to the intended OpenERP database before running; that
 configuration currently defaults to production.
 
+## Analytic account on synchronized invoice lines
+
+When an OpenERP invoice line has `account_analytic_id`, invoice synchronization
+resolves it through its static `account.analytic.account` mapping and sends the
+Odoo ID as `analytic_account_id`. Odoo applies that single account to 100% of
+the line's analytic distribution. Lines with different analytic accounts are
+kept separate during invoice grouping; lines without an analytic account retain
+the existing payload behavior.
+
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
 
