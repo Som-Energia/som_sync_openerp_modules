@@ -108,6 +108,18 @@ the line's analytic distribution. Lines with different analytic accounts are
 kept separate during invoice grouping; lines without an analytic account retain
 the existing payload behavior.
 
+## Analytic defaults on synchronized journal entries
+
+For `only_moves`, an explicit move-line `analytic_account_id` takes precedence.
+Otherwise, export uses `account.analytic.default.account_get()` with the line's
+account, partner, product and accounting date, and the exporting user. The selected
+`analytic_id` uses the existing static mapping for `only_moves`; a missing mapping
+fails synchronization. No matching rule, or a rule without `analytic_id`, leaves
+the exported line without an analytic account. The source line is never modified.
+
+The ERP's existing rule selection is preserved, including generic rules and its
+lack of company filtering. The `all_in` journal-entry payload is unchanged.
+
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
 
