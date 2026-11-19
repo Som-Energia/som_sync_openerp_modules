@@ -44,6 +44,21 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
                 "state": "open",
             },
         )
+        analytic_journal_id = self.openerp.pool.get("account.analytic.journal").create(
+            self.cursor,
+            self.uid,
+            {
+                "name": "Entry Analytic Journal",
+                "code": "EAJ",
+                "type": "general",
+            },
+        )
+        self.openerp.pool.get("account.journal").write(
+            self.cursor,
+            self.uid,
+            [line.journal_id.id],
+            {"analytic_journal_id": analytic_journal_id},
+        )
         self.aml_obj.write(
             self.cursor, self.uid, [line_id], {"analytic_account_id": analytic_id}
         )

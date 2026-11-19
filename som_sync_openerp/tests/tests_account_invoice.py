@@ -49,6 +49,9 @@ class TestAccountInvoice(testing.OOTestCaseWithCursor):
                 'state': 'open',
             },
         )
+        self.ail_obj.write(
+            self.cursor, self.uid, [line.id],
+            {'account_analytic_id': analytic_id})
         self.sync_obj.get_or_create_static_odoo_id(
             self.cursor, self.uid, 'account.account', line.account_id.id, 990,
             context={})
