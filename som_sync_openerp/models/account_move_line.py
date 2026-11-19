@@ -27,6 +27,9 @@ class AccountMoveLine(osv.osv):
     def hook_last_modifications(self, cr, uid, data, context=None):
         if context is None:
             context = {}
+        if context.get('sync_profile') == 'only_moves' and \
+                not data.get('analytic_account_id'):
+            data.pop('analytic_account_id', None)
         data['name'] = data.get('ref', False) or data.get('name', '')
         data.pop('ref', False)
         return data
