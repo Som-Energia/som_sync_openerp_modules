@@ -118,8 +118,15 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         return line, analytic_id, default_obj
 
     def test_move_line_analytic_default_uses_static_mapping_and_accounting_date(self):
+        self._assert_move_line_analytic_default_uses_static_mapping(
+            {'sync_profile': 'only_moves'})
+
+    def test_move_line_analytic_default_supports_manual_only_moves_alias(self):
+        self._assert_move_line_analytic_default_uses_static_mapping(
+            {'only_moves': True, 'only_moves_manual_load': True})
+
+    def _assert_move_line_analytic_default_uses_static_mapping(self, context):
         line, analytic_id, default_obj = self._prepare_move_line_analytic_default()
-        context = {'sync_profile': 'only_moves'}
         for profile, odoo_id in (('all_in', 1991), ('only_moves', 991)):
             self.sync_obj.get_or_create_static_odoo_id(
                 self.cursor, self.uid, 'account.analytic.account', analytic_id,
@@ -163,6 +170,14 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         self.assertFalse(remote_request.called)
 
     def test_move_line_without_default_analytic_is_exported_without_analytics(self):
+        self._assert_move_line_without_default_analytic(
+            {'sync_profile': 'only_moves'})
+
+    def test_move_line_without_default_analytic_supports_manual_only_moves_alias(self):
+        self._assert_move_line_without_default_analytic(
+            {'only_moves': True, 'only_moves_manual_load': True})
+
+    def _assert_move_line_without_default_analytic(self, context):
         line, _, default_obj = self._prepare_move_line_analytic_default()
         empty_rule = mock.Mock(analytic_id=False)
         for default in (False, empty_rule):
@@ -174,7 +189,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
                     self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992):
                 values = self.sync_obj.get_model_vals_to_sync(
                     self.cursor, self.uid, 'account.move.line', line.id,
-                    context={'sync_profile': 'only_moves'})
+                    context=context)
             self.assertTrue(get_default.called)
             self.assertNotIn('analytic_account_id', values)
             self.assertNotIn('account.analytic.account', [
