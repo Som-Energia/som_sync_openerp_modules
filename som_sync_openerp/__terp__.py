@@ -7,6 +7,7 @@
     "category": "Added functionality",
     "depends": [
         'account',
+        'account_analytic_default',
         'account_payment_extension',
         'base_extended_som',
         'base_iban',
