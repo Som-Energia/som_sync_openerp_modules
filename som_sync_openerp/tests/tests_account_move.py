@@ -73,7 +73,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )
 
         default_obj = self.openerp.pool.get('account.analytic.default')
-        with mock.patch.object(default_obj, 'account_get') as get_default, mock.patch.object(
+        with mock.patch.object(default_obj, 'search') as get_default, mock.patch.object(
             self.sync_obj, "get_partner_odoo_id_by_erp_id", return_value=992
         ), mock.patch.object(odoo_sync.requests, "get") as get_remote, mock.patch.object(
             odoo_sync.requests, "post"
@@ -133,7 +133,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
                 odoo_id, context={'sync_profile': profile})
 
         with mock.patch.object(
-                default_obj, 'account_get', wraps=default_obj.account_get
+                default_obj, 'domain_get', wraps=default_obj.domain_get
         ) as get_default, mock.patch.object(
                 self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992
         ), mock.patch.object(
@@ -145,7 +145,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertEqual(values['analytic_account_id'], 991)
         get_default.assert_called_once_with(
-            self.cursor, self.uid, account_id=line.account_id.id,
+            account_id=line.account_id.id,
             partner_id=line.partner_id.id, product_id=line.product_id.id,
             user_id=self.uid, date='2026-01-15', context=context)
         self.assertFalse(remote_request.called)
@@ -179,11 +179,15 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
     def _assert_move_line_without_default_analytic(self, context):
         line, _, default_obj = self._prepare_move_line_analytic_default()
-        empty_rule = mock.Mock(analytic_id=False)
-        for default in (False, empty_rule):
+        empty_rule = mock.Mock(
+            analytic_id=False, product_id=False, partner_id=False, user_id=False,
+            date_start=False, date_stop=False, src_analytic_id=False)
+        for rule_ids, rules in (([], []), ([1], [empty_rule])):
             with mock.patch.object(
-                    default_obj, 'account_get', return_value=default
+                    default_obj, 'search', return_value=rule_ids
             ) as get_default, mock.patch.object(
+                    default_obj, 'browse', return_value=rules
+            ), mock.patch.object(
                     self.sync_obj, 'common_sync_model_create_update', return_value=(990, 1)
             ) as sync_fk, mock.patch.object(
                     self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992):
@@ -197,7 +201,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
     def test_move_line_analytic_default_is_not_used_for_all_in(self):
         line, _, default_obj = self._prepare_move_line_analytic_default()
-        with mock.patch.object(default_obj, 'account_get') as get_default, mock.patch.object(
+        with mock.patch.object(default_obj, 'search') as get_default, mock.patch.object(
                 self.sync_obj, 'common_sync_model_create_update', return_value=(990, 1)
         ), mock.patch.object(
                 self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992):
@@ -206,6 +210,80 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
                 context={'sync_profile': 'all_in'})
         self.assertNotIn('analytic_account_id', values)
         self.assertFalse(get_default.called)
+
+    def test_move_analytic_defaults_match_only_present_products(self):
+        self._assert_move_analytic_defaults_match_only_present_products(
+            {'sync_profile': 'only_moves', 'only_moves_manual_load': True})
+
+    def test_move_analytic_defaults_match_only_present_products_with_alias(self):
+        self._assert_move_analytic_defaults_match_only_present_products(
+            {'only_moves': True, 'only_moves_manual_load': True})
+
+    def _assert_move_analytic_defaults_match_only_present_products(self, context):
+        line, analytic_id, default_obj = self._prepare_move_line_analytic_default()
+        # Match the real account-only rule: date bounds would boost its score
+        # above the unrelated product rule and hide the regression.
+        rule_ids = default_obj.search(self.cursor, self.uid, [
+            ('account_id', '=', line.account_id.id),
+            ('analytic_id', '=', analytic_id),
+        ])
+        default_obj.write(self.cursor, self.uid, rule_ids, {
+            'date_start': False, 'date_stop': False, 'sequence': 0,
+        })
+        other_line_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'som_sync_openerp', 'account_move_line_002')[1]
+        self.aml_obj.write(self.cursor, self.uid, [line.id, other_line_id], {
+            'analytic_account_id': False, 'product_id': False,
+        })
+        other_line = self.aml_obj.browse(self.cursor, self.uid, other_line_id)
+        self.assertNotEqual(line.account_id.id, other_line.account_id.id)
+        self.sync_obj.update_odoo_id(
+            self.cursor, self.uid, 'account.account', other_line.account_id.id,
+            993, context=context)
+        product_id = self.imd_obj.get_object_reference(
+            self.cursor, self.uid, 'product', 'product_product_0')[1]
+        company_id = self.openerp.pool.get('res.users').browse(
+            self.cursor, self.uid, self.uid).company_id.id
+        product_analytic_id = self.openerp.pool.get('account.analytic.account').create(
+            self.cursor, self.uid, {
+                'name': 'Product entry analytic account', 'code': 'ENTRY-PRODUCT',
+                'company_id': company_id, 'type': 'normal', 'state': 'open',
+            })
+        default_obj.create(self.cursor, self.uid, {
+            'product_id': product_id, 'analytic_id': product_analytic_id,
+            'sequence': 3,
+        })
+        for local_id, remote_id in ((analytic_id, 991), (product_analytic_id, 994)):
+            self.sync_obj.get_or_create_static_odoo_id(
+                self.cursor, self.uid, 'account.analytic.account',
+                local_id, remote_id, context=context)
+
+        for selected_product in (False, product_id):
+            self.aml_obj.write(self.cursor, self.uid, [other_line_id], {
+                'product_id': selected_product,
+            })
+            source_fields = ['account_id', 'product_id', 'analytic_account_id']
+            source_before = self.aml_obj.read(
+                self.cursor, self.uid, [line.id, other_line_id], source_fields)
+            with mock.patch.object(
+                    self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992
+            ), mock.patch.object(
+                    odoo_sync.requests.sessions.Session, 'request',
+                    side_effect=AssertionError('Unexpected HTTP request')
+            ) as remote_request:
+                values = self.am_obj.get_related_values(
+                    self.cursor, self.uid, line.move_id.id, context=context)
+
+            exported = dict((item['account_id'], item) for item in values['lines'])
+            self.assertEqual(len(values['lines']), 2)
+            self.assertEqual(exported[990]['analytic_account_id'], 991)
+            if selected_product:
+                self.assertEqual(exported[993]['analytic_account_id'], 994)
+            else:
+                self.assertNotIn('analytic_account_id', exported[993])
+            self.assertEqual(source_before, self.aml_obj.read(
+                self.cursor, self.uid, [line.id, other_line_id], source_fields))
+            self.assertFalse(remote_request.called)
 
     @mock.patch.object(odoo_sync.OdooSync, "common_sync_model_create_update")
     @mock.patch.object(odoo_sync.OdooSync, "get_partner_odoo_id_by_erp_id")

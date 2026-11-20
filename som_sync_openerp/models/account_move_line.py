@@ -30,10 +30,18 @@ class AccountMoveLine(osv.osv):
                 self.pool.get('odoo.sync')._get_profile(context) != 'only_moves':
             return False
         line = self.browse(cr, uid, line_id, context=context)
-        default = self.pool.get('account.analytic.default').account_get(
-            cr, uid, account_id=line.account_id.id,
+        default_obj = self.pool.get('account.analytic.default')
+        domain = default_obj.domain_get(
+            account_id=line.account_id.id,
             partner_id=line.partner_id.id, product_id=line.product_id.id,
             user_id=uid, date=line.date, context=context)
+        # The ERP omits this constraint for a missing product, admitting rules
+        # for unrelated products. Filter candidates before choosing the winner.
+        if not line.product_id:
+            domain.append(('product_id', '=', False))
+        rule_ids = default_obj.search(cr, uid, domain, context=context)
+        rules = default_obj.browse(cr, uid, rule_ids, context=context)
+        default = max(rules, key=default_obj.best_index_get) if rules else False
         return default.analytic_id.id if default and default.analytic_id else False
 
     def hook_last_modifications(self, cr, uid, data, context=None):

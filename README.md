@@ -111,14 +111,17 @@ the existing payload behavior.
 ## Analytic defaults on synchronized journal entries
 
 For `only_moves`, an explicit move-line `analytic_account_id` takes precedence.
-Otherwise, export uses `account.analytic.default.account_get()` with the line's
+Otherwise, export selects an `account.analytic.default` rule using the line's
 account, partner, product and accounting date, and the exporting user. The selected
 `analytic_id` uses the existing static mapping for `only_moves`; a missing mapping
 fails synchronization. No matching rule, or a rule without `analytic_id`, leaves
 the exported line without an analytic account. The source line is never modified.
 
-The ERP's existing rule selection is preserved, including generic rules and its
-lack of company filtering. The `all_in` journal-entry payload is unchanged.
+Export reuses the ERP's `domain_get()` and `best_index_get()` matching and ranking,
+including generic rules and its lack of company filtering, with one restriction:
+when the line has no product, product-specific rules are excluded before ranking.
+Rules for a matching product remain eligible. This restriction is local to export;
+the ERP's global default selection and the `all_in` payload are unchanged.
 
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html
