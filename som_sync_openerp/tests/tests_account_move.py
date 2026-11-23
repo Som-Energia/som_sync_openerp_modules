@@ -73,7 +73,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         )
 
         default_obj = self.openerp.pool.get('account.analytic.default')
-        with mock.patch.object(default_obj, 'search') as get_default, mock.patch.object(
+        with mock.patch.object(default_obj, 'account_get') as get_default, mock.patch.object(
             self.sync_obj, "get_partner_odoo_id_by_erp_id", return_value=992
         ), mock.patch.object(odoo_sync.requests, "get") as get_remote, mock.patch.object(
             odoo_sync.requests, "post"
@@ -133,7 +133,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
                 odoo_id, context={'sync_profile': profile})
 
         with mock.patch.object(
-                default_obj, 'domain_get', wraps=default_obj.domain_get
+                default_obj, 'account_get', wraps=default_obj.account_get
         ) as get_default, mock.patch.object(
                 self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992
         ), mock.patch.object(
@@ -145,7 +145,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
         self.assertEqual(values['analytic_account_id'], 991)
         get_default.assert_called_once_with(
-            account_id=line.account_id.id,
+            self.cursor, self.uid, account_id=line.account_id.id,
             partner_id=line.partner_id.id, product_id=line.product_id.id,
             user_id=self.uid, date='2026-01-15', context=context)
         self.assertFalse(remote_request.called)
@@ -179,15 +179,11 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
     def _assert_move_line_without_default_analytic(self, context):
         line, _, default_obj = self._prepare_move_line_analytic_default()
-        empty_rule = mock.Mock(
-            analytic_id=False, product_id=False, partner_id=False, user_id=False,
-            date_start=False, date_stop=False, src_analytic_id=False)
-        for rule_ids, rules in (([], []), ([1], [empty_rule])):
+        empty_rule = mock.Mock(analytic_id=False)
+        for default in (False, empty_rule):
             with mock.patch.object(
-                    default_obj, 'search', return_value=rule_ids
+                    default_obj, 'account_get', return_value=default
             ) as get_default, mock.patch.object(
-                    default_obj, 'browse', return_value=rules
-            ), mock.patch.object(
                     self.sync_obj, 'common_sync_model_create_update', return_value=(990, 1)
             ) as sync_fk, mock.patch.object(
                     self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992):
@@ -201,7 +197,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
 
     def test_move_line_analytic_default_is_not_used_for_all_in(self):
         line, _, default_obj = self._prepare_move_line_analytic_default()
-        with mock.patch.object(default_obj, 'search') as get_default, mock.patch.object(
+        with mock.patch.object(default_obj, 'account_get') as get_default, mock.patch.object(
                 self.sync_obj, 'common_sync_model_create_update', return_value=(990, 1)
         ), mock.patch.object(
                 self.sync_obj, 'get_partner_odoo_id_by_erp_id', return_value=992):
