@@ -89,8 +89,9 @@ plans. The selected Odoo plan is represented by the `Projectes Odoo` parent
 analytic account (`type=view`); imported accounts are active, open normal
 children with the Odoo reference as their local code. The parent is a local
 container only and does not receive an Odoo mapping. Each child gets a static
-`odoo.sync` mapping; static resolution returns the saved Odoo ID without
-creating or updating a remote account.
+`odoo.sync` mapping under `only_moves`; static resolution returns the saved Odoo
+ID without creating or updating a remote account. The importer only targets
+`only_moves` and leaves existing `all_in` mappings untouched.
 
 The importer reuses matching local accounts and mappings on rerun. It stops on
 duplicate local references, conflicting local names/parents, or an existing
@@ -98,6 +99,23 @@ mapping to a different Odoo ID; those cases need manual review. It never
 renames, reparents, archives or deletes existing accounts. Set
 `scripts/dbconfig.py` to the intended OpenERP database before running; that
 configuration currently defaults to production.
+
+## Analytic defaults on synchronized journal entries
+
+For `only_moves`, an explicit move-line `analytic_account_id` takes precedence.
+Otherwise, export calls `account.analytic.default.account_get()` using the line's
+account, partner, product and accounting date, and the exporting user. The selected
+`analytic_id` uses the existing static mapping for `only_moves`; a missing mapping
+fails synchronization. No matching rule, or a rule without `analytic_id`, leaves
+the exported line without an analytic account. The source line is never modified.
+
+The `account_analytic_som` dependency supplies the shared matching behavior for
+all `account_get()` callers: an explicit `product_id=False` excludes
+product-specific rules before ranking, while matching products and generic rules
+remain eligible. The exporter does not duplicate selection logic. Existing
+ranking, date filters and lack of company filtering are preserved; the `all_in`
+journal-entry payload is unchanged. Deploy `account_analytic_som` before updating
+this module, and restart the ERP to load the inherited matching behavior.
 
 ## Odoo API doc
 The API documentation is here https://som-energia.github.io/odoo_api_doc/index_swagger.html

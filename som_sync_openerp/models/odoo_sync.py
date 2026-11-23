@@ -44,7 +44,7 @@ MAPPING_MODELS_GET_ENTITIES['res.partner.address'] = 'partner_address'
 
 SYNC_PROFILES = [('all_in', 'All in'), ('only_moves', 'Only moves'), ('shared', 'Shared')]
 ONLY_MOVES_MODELS = ('account.move', 'account.move.line', 'account.journal',
-                     'account.account', 'res.partner')
+                     'account.account', 'res.partner', 'account.analytic.account')
 
 STATIC_MODELS = [
     'account.analytic.account',
@@ -462,18 +462,23 @@ class OdooSync(osv.osv):
             for fk_field in keys_fk:
                 model_fk = rp_obj.MAPPING_FK[fk_field]
                 id_fk = rp_obj.read(cursor, uid, id, [fk_field])[fk_field]
+                id_fk = id_fk[0] if id_fk else False
+                # Resolve local defaults before translating ERP IDs to Odoo IDs.
+                if not id_fk and hasattr(rp_obj, 'get_default_sync_fk'):
+                    id_fk = rp_obj.get_default_sync_fk(
+                        cursor, uid, id, fk_field, context=context)
                 if not id_fk:
                     data[fk_field] = None
                 else:
                     odoo_id = False
                     if model_fk == 'res.partner':
                         odoo_id = self.get_partner_odoo_id_by_erp_id(
-                            cursor, uid, id_fk[0], context=context_copy)
+                            cursor, uid, id_fk, context=context_copy)
                     if not odoo_id:
                         odoo_id, _ = self.common_sync_model_create_update(
-                            cursor, uid, model_fk, 'sync', id_fk[0], context_copy)
+                            cursor, uid, model_fk, 'sync', id_fk, context_copy)
                     if not odoo_id:
-                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk[0]))
+                        raise ForeingKeyNotAvailable("{},{}".format(model_fk, id_fk))
                     data[fk_field] = odoo_id
 
         # Map fields to sync

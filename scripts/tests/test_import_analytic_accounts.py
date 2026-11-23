@@ -46,19 +46,32 @@ class FakeErpPeekClient(object):
             domain = args[0]
             account_id = next(value for key, operator, value in domain
                               if key == "res_id")
-            return [account_id] if account_id in self.mappings else []
+            profile = next(
+                (value for key, operator, value in domain if key == "sync_profile"),
+                False,
+            )
+            return [
+                mapping_id for mapping_id, mapping in self.mappings.items()
+                if mapping_id[0] == account_id
+                and (not profile or mapping_id[1] == profile)
+            ]
         if model == importer.SYNC and method == "read":
-            sync_id = args[0][0]
-            return [dict({"id": sync_id}, **self.mappings[sync_id])]
+            mapping_id = args[0][0]
+            return [dict({"id": mapping_id[0]}, **self.mappings[mapping_id])]
         if model == importer.SYNC and method == "get_analytic_account_odoo_id":
-            return self.odoo_ids[args[0]]
+            profile = kwargs.get("context", {}).get(
+                "sync_profile", importer.SYNC_PROFILE)
+            return self.odoo_ids.get(
+                (args[0], profile), self.odoo_ids[args[0]])
         if model == importer.SYNC and method == "syncronize_sync":
             account_id = args[2]
             context = kwargs["context"]
-            self.mappings[account_id] = {
+            profile = context.get("sync_profile", "all_in")
+            mapping_id = (account_id, profile)
+            self.mappings[mapping_id] = {
                 "odoo_id": context["odoo_id"],
                 "sync_state": "static",
-                "sync_profile": "all_in",
+                "sync_profile": profile,
             }
             return context["odoo_id"], account_id
         raise AssertionError("Unexpected ERP call: {}.{}".format(model, method))
@@ -148,8 +161,10 @@ class ImportAnalyticAccountsTest(TestCase):
         self.assertEqual(child["type"], "normal")
         self.assertEqual(child["state"], "open")
         self.assertEqual(self.client.accounts[self.client.root_id]["name"], "Projectes Odoo")
-        self.assertEqual(self.client.mappings[101]["odoo_id"], 501)
-        self.assertEqual(self.client.mappings[101]["sync_state"], "static")
+        self.assertEqual(
+            self.client.mappings[(101, "only_moves")]["odoo_id"], 501)
+        self.assertEqual(
+            self.client.mappings[(101, "only_moves")]["sync_state"], "static")
 
     def test_reexecution_reuses_local_ids_and_existing_static_mapping(self):
         first_plan = self.prepare()
@@ -183,6 +198,54 @@ class ImportAnalyticAccountsTest(TestCase):
         self.assertFalse(
             [call for call in self.client.calls
              if call[1] in ("create", "syncronize_sync")])
+
+    def test_import_creates_profile_mapping_alongside_all_in_mapping(self):
+        root_id = self.client._create_account({
+            "name": importer.ROOT_NAME,
+            "code": importer.ROOT_CODE,
+            "company_id": self.client.company_id,
+            "type": "view",
+            "state": "open",
+            "active": True,
+        })
+        local_id = self.client._create_account({
+            "name": "Vendes",
+            "code": "010101",
+            "company_id": self.client.company_id,
+            "parent_id": root_id,
+            "type": "normal",
+            "state": "open",
+            "active": True,
+        })
+        self.client.mappings[(local_id, "all_in")] = {
+            "odoo_id": 601,
+            "sync_state": "static",
+            "sync_profile": "all_in",
+        }
+        self.client.odoo_ids["010101"] = 502
+
+        plan = self.prepare()
+
+        self.assertFalse(plan["accounts"][0]["mapping"])
+        summary = importer.apply_import(
+            self.client, plan, self.client.company_id)
+
+        self.assertEqual(summary["created_mappings"], 1)
+        self.assertEqual(
+            self.client.mappings[(local_id, "all_in")]["odoo_id"], 601)
+        self.assertEqual(
+            self.client.mappings[(local_id, "only_moves")]["odoo_id"], 502)
+
+    def test_cli_rejects_all_in_profile(self):
+        with self.assertRaises(SystemExit) as error:
+            importer.parse_arguments([
+                "--input", "accounts.csv",
+                "--erp-company-id", "1",
+                "--odoo-company-id", "2",
+                "--odoo-plan-id", "3",
+                "--sync-profile", "all_in",
+            ])
+        self.assertEqual(error.exception.code, 2)
 
     def test_csv_rejects_duplicate_references(self):
         contents = ";".join(importer.CSV_HEADERS) + "\n"
