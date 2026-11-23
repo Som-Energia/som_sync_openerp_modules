@@ -42,7 +42,7 @@ class ImportAccountAnalyticDefaultsTest(TestCase):
         ]
         client.AccountAnalyticAccount.search.return_value = [22]
         client.AccountAnalyticAccount.read.return_value = [
-            {"id": 22, "name": "010102-Aprovisionament"}
+            {"id": 22, "code": "010102"}
         ]
         mappings = [("600.000.000.000", "010102-Aprovisionament")]
         defaults = importer.resolve_mappings(client, mappings)
@@ -74,7 +74,7 @@ class ImportAccountAnalyticDefaultsTest(TestCase):
         client.AccountAccount.search.assert_called_once_with([])
         client.AccountAnalyticAccount.search.assert_called_once_with([])
 
-    def test_resolution_matches_utf8_analytic_names(self):
+    def test_resolution_matches_analytic_code_from_utf8_mapping(self):
         client = Mock()
         client.AccountAccount.search.return_value = [11]
         client.AccountAccount.read.return_value = [
@@ -82,12 +82,33 @@ class ImportAccountAnalyticDefaultsTest(TestCase):
         ]
         client.AccountAnalyticAccount.search.return_value = [22]
         client.AccountAnalyticAccount.read.return_value = [
-            {"id": 22, "name": "010201-Representació".encode("utf-8")}
+            {"id": 22, "code": "010201"}
         ]
 
         defaults = importer.resolve_mappings(
             client,
             [("600.000.000.000", "010201-Representació")],
+        )
+
+        self.assertEqual(
+            defaults,
+            [{"account_id": 11, "analytic_id": 22, "sequence": 100}],
+        )
+
+    def test_analytic_account_is_resolved_by_six_digit_code(self):
+        client = Mock()
+        client.AccountAccount.search.return_value = [11]
+        client.AccountAccount.read.return_value = [
+            {"id": 11, "code": "600000000000"}
+        ]
+        client.AccountAnalyticAccount.search.return_value = [22]
+        client.AccountAnalyticAccount.read.return_value = [
+            {"id": 22, "code": "040402"}
+        ]
+
+        defaults = importer.resolve_mappings(
+            client,
+            [("600.000.000.000", "040402-Gestor d'autoconsum")],
         )
 
         self.assertEqual(

@@ -65,6 +65,10 @@ def _account_code(value):
     return _text(value).replace(".", "")
 
 
+def _analytic_code(value):
+    return _text(value)[:6]
+
+
 def _index_records(records, field, normalize=None):
     indexed = {}
     for record in records:
@@ -91,25 +95,25 @@ def resolve_mappings(client, mappings):
         normalize=_account_code,
     )
     analytics = _index_records(
-        _get_records(client, "AccountAnalyticAccount", "name"),
-        "name",
+        _get_records(client, "AccountAnalyticAccount", "code"),
+        "code",
     )
 
     defaults = []
     for account_code, analytic_name in mappings:
         account_code = _account_code(account_code)
-        analytic_name = _text(analytic_name)
+        analytic_code = _analytic_code(analytic_name)
         account_ids = accounts.get(account_code, [])
         if len(account_ids) != 1:
             reason = "not found" if not account_ids else "ambiguous"
             raise ValueError(
                 "OpenERP account code {} {}".format(account_code, reason)
             )
-        analytic_ids = analytics.get(analytic_name, [])
+        analytic_ids = analytics.get(analytic_code, [])
         if len(analytic_ids) != 1:
             reason = "not found" if not analytic_ids else "ambiguous"
             raise ValueError(
-                "Analytic account {} {}".format(analytic_name, reason)
+                "Analytic account code {} {}".format(analytic_code, reason)
             )
         defaults.append({
             "account_id": account_ids[0],
