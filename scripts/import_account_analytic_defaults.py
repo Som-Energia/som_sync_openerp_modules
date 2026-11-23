@@ -61,10 +61,18 @@ def _text(value):
     return value
 
 
-def _index_records(records, field):
+def _account_code(value):
+    return _text(value).replace(".", "")
+
+
+def _index_records(records, field, normalize=None):
     indexed = {}
     for record in records:
-        key = _text(record.get(field))
+        key = record.get(field)
+        if normalize:
+            key = normalize(key)
+        else:
+            key = _text(key)
         if key:
             indexed.setdefault(key, []).append(record["id"])
     return indexed
@@ -78,7 +86,9 @@ def _get_records(client, model, field):
 
 def resolve_mappings(client, mappings):
     accounts = _index_records(
-        _get_records(client, "AccountAccount", "code"), "code"
+        _get_records(client, "AccountAccount", "code"),
+        "code",
+        normalize=_account_code,
     )
     analytics = _index_records(
         _get_records(client, "AccountAnalyticAccount", "name"),
@@ -87,7 +97,7 @@ def resolve_mappings(client, mappings):
 
     defaults = []
     for account_code, analytic_name in mappings:
-        account_code = _text(account_code)
+        account_code = _account_code(account_code)
         analytic_name = _text(analytic_name)
         account_ids = accounts.get(account_code, [])
         if len(account_ids) != 1:

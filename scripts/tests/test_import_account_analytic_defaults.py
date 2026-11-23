@@ -38,7 +38,7 @@ class ImportAccountAnalyticDefaultsTest(TestCase):
         client = Mock()
         client.AccountAccount.search.return_value = [11]
         client.AccountAccount.read.return_value = [
-            {"id": 11, "code": "600.000.000.000"}
+            {"id": 11, "code": "600000000000"}
         ]
         client.AccountAnalyticAccount.search.return_value = [22]
         client.AccountAnalyticAccount.read.return_value = [
@@ -78,7 +78,7 @@ class ImportAccountAnalyticDefaultsTest(TestCase):
         client = Mock()
         client.AccountAccount.search.return_value = [11]
         client.AccountAccount.read.return_value = [
-            {"id": 11, "code": "600.000.000.000"}
+            {"id": 11, "code": "600000000000"}
         ]
         client.AccountAnalyticAccount.search.return_value = [22]
         client.AccountAnalyticAccount.read.return_value = [
