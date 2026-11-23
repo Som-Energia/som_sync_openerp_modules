@@ -1,0 +1,98 @@
+Compte analític;Referència;Client/a;Pla;Empresa;Deure;Haver;Saldo
+010101-Vendes;010101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010102-Aprovisionament;010102;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010103-CAEs;010103;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010104-Generation kWh;010104;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010105-Flexibilitat de la demanda;010105;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010106-Gestió Mercat / Altres;010106;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010201-Representació;010201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010301-Acció comercial B2C;010301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010302-Operativa comer;010302;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010303-Flux solar;010303;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010304-Estratègia comercial;010304;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010401-Acció comercial B2B;010401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010402-Venda creuada Soms;010402;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010403-Operativa comer empresa;010403;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010404-Flux Solar empreses;010404;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010405-Estratègia comercial empresa;010405;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010501-Actualització preus;010501;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010502-Producte tarifes;010502;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010503-Atenció;010503;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010504-Fraus i anomalies;010504;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010505-Gestió de l'atenció;010505;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010506-Reclamació deute pendent;010506;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010601-Oficina Virtual;010601;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010602-Som Energia Activa - Singulars;010602;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010603-Singulars 26-28;010603;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010604-ERP;010604;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010901-Canvis normatius comer;010901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010902-Jurídic comercialització;010902;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010903-Coordinació comer;010903;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010904-Auvi;010904;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+010905-COMER General;010905;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020101-Gestió Plantes FV;020101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020201-Gurb Explotació;020201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020301-Gestio Plantes Hidro;020301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020401-Gestio Parcs Eol.;020401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020901-Jurídic Generació;020901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+020902-GEN General;020902;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030101-Creació plantes FV;030101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030102-Hibridació de plantes;030102;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030201-Gurb promoció;030201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030301-Creació plantes hidràuliques;030301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030401-Creació plantes eòliques;030401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+030901-PROM General;030901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040101-Xarxa d'instal.ladores;040101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040201-Som Comunitats;040201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040301-Gestió de plantes de tercers;040301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040302-Gestió de plantes pròpies;040302;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040401-Coordinadora CE;040401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040501-Gestor d'autoconsum;040501;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040901-SERV General;040901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+040902-Nous Serveis;040902;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050101-Gran Conversa;050101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050102-Trobada Sòcies Activistes;050102;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050103-Participació sòcies;050103;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050104-Descompte social;050104;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050201-Formació a les sòcies;050201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050202-Esc[hola];050202;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050301-Lobby;050301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050302-Incidencia;050302;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050401-Representació intercoop;050401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050901-Gestió Donatiu Voluntari;050901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050902-Jurídic cooperativisme;050902;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+050903-COOP General;050903;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090101-Consell Rector - IdC;090101;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090102-Assemblea General;090102;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090103-Sostenibilitat i reporting ASG;090103;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090201-Pilotatge de la coope;090201;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090202-Pla estratègic;090202;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090203-Indicadors;090203;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090301-Comptabilitat;090301;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090401-Compliment jurídic;090401;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090501-Gestió laboral;090501;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090502-Odoo;090502;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090503-Entorn laboral;090503;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090504-Formació específica;090504;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090505-Formació transversal;090505;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090506-Trobades estratègiques equips;090506;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090507-Trobades ET;090507;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090508-Baixes i permisos ET;090508;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090601-Marketing;090601;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090603-Difusió;090603;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090701-Manteniment sistemes;090701;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090702-Gestió de servidors propis;090702;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090703-Helpdesk;090703;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090704-Web;090704;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090705-Gestió requeriments IT;090705;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090706-Autogestió IT;090706;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090707-Gestió IT-Agile;090707;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090801-Gestió oficina;090801;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090901-Resultats financers;090901;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090902-Carrega impositiva;090902;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090903-EST General;090903;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090904-Descans;090904;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090905-Sòcia de treball;090905;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090906-Prospecció noves iniciatives;090906;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090907-Anàlisi barrera 100€;090907;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
+090908-Integracio IA;090908;;Project;Som Energia SCCL Assentaments;0,00;0,00;0,00
