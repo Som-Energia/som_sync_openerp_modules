@@ -89,8 +89,9 @@ plans. The selected Odoo plan is represented by the `Projectes Odoo` parent
 analytic account (`type=view`); imported accounts are active, open normal
 children with the Odoo reference as their local code. The parent is a local
 container only and does not receive an Odoo mapping. Each child gets a static
-`odoo.sync` mapping; static resolution returns the saved Odoo ID without
-creating or updating a remote account.
+`odoo.sync` mapping under `only_moves`; static resolution returns the saved Odoo
+ID without creating or updating a remote account. The importer only targets
+`only_moves` and leaves existing `all_in` mappings untouched.
 
 The importer reuses matching local accounts and mappings on rerun. It stops on
 duplicate local references, conflicting local names/parents, or an existing
@@ -98,15 +99,6 @@ mapping to a different Odoo ID; those cases need manual review. It never
 renames, reparents, archives or deletes existing accounts. Set
 `scripts/dbconfig.py` to the intended OpenERP database before running; that
 configuration currently defaults to production.
-
-## Analytic account on synchronized invoice lines
-
-When an OpenERP invoice line has `account_analytic_id`, invoice synchronization
-resolves it through its static `account.analytic.account` mapping and sends the
-Odoo ID as `analytic_account_id`. Odoo applies that single account to 100% of
-the line's analytic distribution. Lines with different analytic accounts are
-kept separate during invoice grouping; lines without an analytic account retain
-the existing payload behavior.
 
 ## Analytic defaults on synchronized journal entries
 

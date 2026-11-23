@@ -6,17 +6,17 @@ The default mode validates the CSV, resolves each Odoo identity and reports the
 local changes without writing. Use --apply to create missing local accounts and
 their static odoo.sync mappings.
 
-Run once per Odoo destination, using the corresponding profile and company/plan:
+Import accounts and static mappings for the only_moves destination:
     python scripts/import_analytic_accounts.py --input \\
-        som_sync_openerp/migrations/comptes_analitics.csv --sync-profile only_moves \\
+        som_sync_openerp/migrations/comptes_analitics.csv \\
         --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3
     python scripts/import_analytic_accounts.py --input \\
-        som_sync_openerp/migrations/comptes_analitics.csv --sync-profile all_in \\
-        --erp-company-id 1 --odoo-company-id 4 --odoo-plan-id 5 --apply
+        som_sync_openerp/migrations/comptes_analitics.csv \\
+        --erp-company-id 1 --odoo-company-id 2 --odoo-plan-id 3 --apply
 
 The Odoo company and plan IDs are specific to the configured Odoo instance.
-The selected profile determines both the API key and the static mapping namespace;
-``only_moves`` requires the dedicated ``odoo_api_key_only_moves`` key.
+The catalog lookup uses the dedicated ``odoo_api_key_only_moves`` key.
+Static mappings are created exclusively under the ``only_moves`` profile.
 Set scripts/dbconfig.py to the intended OpenERP database before running this
 script; that file currently defaults to production.
 """
@@ -32,8 +32,7 @@ import sys
 
 ANALYTIC_ACCOUNT = "account.analytic.account"
 SYNC = "odoo.sync"
-SYNC_PROFILES = ("all_in", "only_moves")
-DEFAULT_SYNC_PROFILE = "only_moves"
+SYNC_PROFILE = "only_moves"
 ROOT_NAME = u"Projectes Odoo"
 ROOT_CODE = "ODOO-PROJECTS"
 CONTEXT = {"active_test": False}
@@ -201,16 +200,14 @@ def find_local_account(client, reference, erp_company_id, root_id):
     return account
 
 
-def find_mapping(
-        client, account_id, expected_odoo_id=None,
-        sync_profile=DEFAULT_SYNC_PROFILE):
+def find_mapping(client, account_id, expected_odoo_id=None):
     mappings = read_records(
         client,
         SYNC,
         [
             ("model.model", "=", ANALYTIC_ACCOUNT),
             ("res_id", "=", account_id),
-            ("sync_profile", "=", sync_profile),
+            ("sync_profile", "=", SYNC_PROFILE),
         ],
         SYNC_FIELDS,
     )
@@ -226,19 +223,15 @@ def find_mapping(
         raise ValueError(
             "Local account {} is already mapped to a different Odoo ID".format(
                 account_id))
-    if mapping.get("sync_profile") != sync_profile:
+    if mapping.get("sync_profile") != SYNC_PROFILE:
         raise ValueError(
             "Local account {} has a mapping under an unexpected profile".format(
                 account_id))
     return mapping
 
 
-def prepare_import(
-        client, accounts, erp_company_id, odoo_company_id, odoo_plan_id,
-        sync_profile=DEFAULT_SYNC_PROFILE):
+def prepare_import(client, accounts, erp_company_id, odoo_company_id, odoo_plan_id):
     """Resolve every remote identity and validate all local conflicts first."""
-    if sync_profile not in SYNC_PROFILES:
-        raise ValueError("Unsupported synchronization profile: {}".format(sync_profile))
     companies = client.execute(
         "res.company", "read", [erp_company_id], ["name"], context=dict(CONTEXT))
     if len(companies) != 1:
@@ -258,7 +251,7 @@ def prepare_import(
             odoo_plan_id,
             account["company"],
             account["plan"],
-            context=dict(CONTEXT, sync_profile=sync_profile),
+            context=dict(CONTEXT, sync_profile=SYNC_PROFILE),
         )
         if isinstance(odoo_id, bool) or not isinstance(odoo_id, integer_types) or odoo_id <= 0:
             raise ValueError(
@@ -267,8 +260,7 @@ def prepare_import(
 
         mapping = False
         if local_account:
-            mapping = find_mapping(
-                client, local_account["id"], odoo_id, sync_profile=sync_profile)
+            mapping = find_mapping(client, local_account["id"], odoo_id)
             if local_account.get("name") != account["name"]:
                 raise ValueError(
                     "Local account {} has a different name; refusing an automatic rename"
@@ -283,7 +275,6 @@ def prepare_import(
         "company": companies[0],
         "root": root,
         "accounts": prepared,
-        "sync_profile": sync_profile,
     }
 
 
@@ -345,7 +336,7 @@ def apply_import(client, plan, erp_company_id):
                 context={
                     "is_static": True,
                     "odoo_id": item["odoo_id"],
-                    "sync_profile": plan["sync_profile"],
+                    "sync_profile": SYNC_PROFILE,
                 },
             )
             if not mapping:
@@ -378,9 +369,6 @@ def parse_arguments(arguments):
         "--odoo-plan-id", required=True, type=positive_int,
         help="Analytic plan ID in the configured Odoo instance")
     parser.add_argument(
-        "--sync-profile", choices=SYNC_PROFILES, default=DEFAULT_SYNC_PROFILE,
-        help="Destination profile; mappings and API keys are profile-specific")
-    parser.add_argument(
         "--apply", action="store_true",
         help="Create missing local accounts and static mappings; default is dry-run")
     return parser.parse_args(arguments)
@@ -404,7 +392,6 @@ def main(arguments=None):
         args.erp_company_id,
         args.odoo_company_id,
         args.odoo_plan_id,
-        sync_profile=args.sync_profile,
     )
     create_count = sum(
         1 for item in plan["accounts"] if not item["local_account"])

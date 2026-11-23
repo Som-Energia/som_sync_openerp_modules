@@ -60,7 +60,7 @@ class FakeErpPeekClient(object):
             return [dict({"id": mapping_id[0]}, **self.mappings[mapping_id])]
         if model == importer.SYNC and method == "get_analytic_account_odoo_id":
             profile = kwargs.get("context", {}).get(
-                "sync_profile", importer.DEFAULT_SYNC_PROFILE)
+                "sync_profile", importer.SYNC_PROFILE)
             return self.odoo_ids.get(
                 (args[0], profile), self.odoo_ids[args[0]])
         if model == importer.SYNC and method == "syncronize_sync":
@@ -236,31 +236,16 @@ class ImportAnalyticAccountsTest(TestCase):
         self.assertEqual(
             self.client.mappings[(local_id, "only_moves")]["odoo_id"], 502)
 
-    def test_import_keeps_distinct_static_mappings_for_both_profiles(self):
-        only_moves_plan = self.prepare()
-        importer.apply_import(
-            self.client, only_moves_plan, self.client.company_id)
-        local_id = next(
-            account_id for account_id, account in self.client.accounts.items()
-            if account["code"] == "010101")
-        self.client.odoo_ids[("010101", "all_in")] = 601
-
-        all_in_plan = importer.prepare_import(
-            self.client,
-            self.accounts,
-            self.client.company_id,
-            4,
-            5,
-            sync_profile="all_in",
-        )
-        summary = importer.apply_import(
-            self.client, all_in_plan, self.client.company_id)
-
-        self.assertEqual(summary["created_mappings"], 1)
-        self.assertEqual(
-            self.client.mappings[(local_id, "only_moves")]["odoo_id"], 501)
-        self.assertEqual(
-            self.client.mappings[(local_id, "all_in")]["odoo_id"], 601)
+    def test_cli_rejects_all_in_profile(self):
+        with self.assertRaises(SystemExit) as error:
+            importer.parse_arguments([
+                "--input", "accounts.csv",
+                "--erp-company-id", "1",
+                "--odoo-company-id", "2",
+                "--odoo-plan-id", "3",
+                "--sync-profile", "all_in",
+            ])
+        self.assertEqual(error.exception.code, 2)
 
     def test_csv_rejects_duplicate_references(self):
         contents = ";".join(importer.CSV_HEADERS) + "\n"

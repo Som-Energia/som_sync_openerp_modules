@@ -11,12 +11,10 @@ class AccountInvoiceLine(osv.osv):
         'quantity': 'quantity',
         'price_unit': 'price_unit',
         'account_id': 'account_id',
-        'account_analytic_id': 'analytic_account_id',
         'price_subtotal': 'price_subtotal',
     }
     MAPPING_FK = {
         'account_id': 'account.account',
-        'account_analytic_id': 'account.analytic.account',
     }
     MAPPING_CONSTANTS = {
         'extra_operations_erp': 1,
