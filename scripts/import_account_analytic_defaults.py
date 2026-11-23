@@ -12,6 +12,7 @@ Examples:
 from __future__ import print_function, unicode_literals
 
 import argparse
+import csv
 import io
 import os
 import sys
@@ -23,6 +24,24 @@ DEFAULT_INPUT = os.path.join(
 )
 ACCOUNT_HEADER = "compte_comptabel"
 ANALYTIC_HEADER = "compte_analitic"
+DEFAULT_CONDITION_FIELDS = (
+    "product_id",
+    "partner_id",
+    "user_id",
+    "company_id",
+    "date_start",
+    "date_stop",
+)
+REPORT_FIELDS = (
+    "account_code_csv",
+    "account_code_erp",
+    "analytic_mapping_csv",
+    "analytic_code",
+    "account_id",
+    "analytic_id",
+    "status",
+    "detail",
+)
 
 try:
     text_type = unicode
@@ -88,6 +107,30 @@ def _get_records(client, model, field):
     return model_proxy.read(ids, ["id", field]) if ids else []
 
 
+def _many2one_id(value):
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else False
+    return value or False
+
+
+def _existing_default_pairs(client):
+    model = client.AccountAnalyticDefault
+    ids = model.search([])
+    if not ids:
+        return set()
+    fields = ["account_id", "analytic_id"] + list(DEFAULT_CONDITION_FIELDS)
+    records = model.read(ids, fields)
+    pairs = set()
+    for record in records:
+        if any(record.get(field) for field in DEFAULT_CONDITION_FIELDS):
+            continue
+        account_id = _many2one_id(record.get("account_id"))
+        analytic_id = _many2one_id(record.get("analytic_id"))
+        if account_id and analytic_id:
+            pairs.add((account_id, analytic_id))
+    return pairs
+
+
 def resolve_mappings(client, mappings):
     accounts = _index_records(
         _get_records(client, "AccountAccount", "code"),
@@ -98,42 +141,107 @@ def resolve_mappings(client, mappings):
         _get_records(client, "AccountAnalyticAccount", "code"),
         "code",
     )
-
-    defaults = []
-    for account_code, analytic_name in mappings:
-        account_code = _account_code(account_code)
-        analytic_code = _analytic_code(analytic_name)
+    existing_pairs = _existing_default_pairs(client)
+    seen_pairs = set()
+    rows = []
+    for account_code_csv, analytic_mapping_csv in mappings:
+        account_code = _account_code(account_code_csv)
+        analytic_code = _analytic_code(analytic_mapping_csv)
         account_ids = accounts.get(account_code, [])
-        if len(account_ids) != 1:
-            reason = "not found" if not account_ids else "ambiguous"
-            raise ValueError(
-                "OpenERP account code {} {}".format(account_code, reason)
-            )
         analytic_ids = analytics.get(analytic_code, [])
+        details = []
+        if len(account_ids) != 1:
+            status = "account_not_found" if not account_ids else "account_ambiguous"
+            details.append("{}: {}".format(status, account_code))
         if len(analytic_ids) != 1:
-            reason = "not found" if not analytic_ids else "ambiguous"
-            raise ValueError(
-                "Analytic account code {} {}".format(analytic_code, reason)
-            )
-        defaults.append({
-            "account_id": account_ids[0],
-            "analytic_id": analytic_ids[0],
-            "sequence": 100,
-        })
-    return defaults
+            status = "analytic_not_found" if not analytic_ids else "analytic_ambiguous"
+            details.append("{}: {}".format(status, analytic_code))
+
+        account_id = account_ids[0] if len(account_ids) == 1 else ""
+        analytic_id = analytic_ids[0] if len(analytic_ids) == 1 else ""
+        row = {
+            "account_code_csv": account_code_csv,
+            "account_code_erp": account_code,
+            "analytic_mapping_csv": analytic_mapping_csv,
+            "analytic_code": analytic_code,
+            "account_id": account_id,
+            "analytic_id": analytic_id,
+            "status": "skipped" if details else "ready",
+            "detail": "; ".join(details),
+        }
+        if not details:
+            pair = (account_id, analytic_id)
+            if pair in existing_pairs:
+                row["status"] = "already_exists"
+                row["detail"] = "Matching unconditional default already exists"
+            elif pair in seen_pairs:
+                row["status"] = "duplicate_mapping"
+                row["detail"] = "Same account and analytic mapping appeared earlier"
+            else:
+                seen_pairs.add(pair)
+        rows.append(row)
+    return rows
 
 
-def create_defaults(client, defaults):
+def create_defaults(client, rows):
     model = client.AccountAnalyticDefault
-    for values in defaults:
-        model.create(values)
-    return len(defaults)
+    created = 0
+    for row in rows:
+        if row["status"] != "ready":
+            continue
+        values = {
+            "account_id": row["account_id"],
+            "analytic_id": row["analytic_id"],
+            "sequence": 100,
+        }
+        try:
+            model.create(values)
+        except Exception as error:
+            row["status"] = "error"
+            row["detail"] = _text(str(error))
+        else:
+            row["status"] = "created"
+            created += 1
+    return created
+
+
+def write_report(path, rows):
+    if sys.version_info[0] == 2:
+        report_file = open(path, "wb")
+    else:
+        report_file = io.open(path, "w", encoding="utf-8", newline="")
+    try:
+        writer = csv.writer(report_file, delimiter=str(";"))
+        writer.writerow([_report_value(field) for field in REPORT_FIELDS])
+        for row in rows:
+            writer.writerow([
+                _report_value(row.get(field, "")) for field in REPORT_FIELDS
+            ])
+    finally:
+        report_file.close()
+
+
+def _report_value(value):
+    if sys.version_info[0] == 2 and isinstance(value, text_type):
+        return value.encode("utf-8")
+    return value
+
+
+def summarize(rows):
+    counts = {}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return counts
 
 
 def parse_arguments(arguments):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--input", default=DEFAULT_INPUT, help="Mapping CSV file"
+    )
+    parser.add_argument(
+        "--report",
+        help="CSV report path; defaults to <input>_import_report.csv",
     )
     parser.add_argument(
         "--apply", action="store_true",
@@ -145,6 +253,7 @@ def parse_arguments(arguments):
 def main(arguments=None):
     args = parse_arguments(arguments)
     mappings = read_mappings(args.input)
+    report_path = args.report or os.path.splitext(args.input)[0] + "_import_report.csv"
     try:
         from erppeek import Client
         import dbconfig
@@ -152,15 +261,23 @@ def main(arguments=None):
         raise RuntimeError("erppeek and scripts/dbconfig.py are required")
 
     client = Client(**dbconfig.erppeek)
-    defaults = resolve_mappings(client, mappings)
-    print("Validated {} analytic default mappings".format(len(defaults)))
-    if not args.apply:
-        print("Dry run only; use --apply to create these records.")
-        return 0
+    rows = resolve_mappings(client, mappings)
+    if args.apply:
+        created = create_defaults(client, rows)
+    else:
+        created = 0
+        for row in rows:
+            if row["status"] == "ready":
+                row["status"] = "would_create"
+    write_report(report_path, rows)
 
-    created = create_defaults(client, defaults)
-    print("Created {} analytic defaults".format(created))
-    return 0
+    counts = summarize(rows)
+    print("Mappings: {}".format(len(rows)))
+    print("Created: {}".format(created))
+    for status in sorted(counts):
+        print("{}: {}".format(status, counts[status]))
+    print("CSV report: {}".format(os.path.abspath(report_path)))
+    return 1 if counts.get("error") else 0
 
 
 if __name__ == "__main__":
