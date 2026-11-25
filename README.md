@@ -100,6 +100,38 @@ renames, reparents, archives or deletes existing accounts. Set
 `scripts/dbconfig.py` to the intended OpenERP database before running; that
 configuration currently defaults to production.
 
+## Reassigning analytics on exported entries
+
+Confirming the `account_analytic_som` reassignment wizard applies local changes
+first, then queues an analytic PATCH for each existing `all_in` or `only_moves`
+entry export. It never creates a missing export or updates invoice/payment
+exports. The entry synchronization model must be enabled; this explicit action
+does not require automatic synchronization or synchronous mode to be enabled.
+
+Workers run after commit on `sync_odoo`, use the saved export profile's API key,
+and read the latest local analytics under journal-item locks. Pending jobs do
+not replay stale wizard choices. ERP defaults are resolved locally when the
+wizard is confirmed, never during PATCH execution. The request replaces the
+distribution of each nonzero item with one mapped Odoo analytic account at
+100%, or explicit `null`. Zero-amount items are omitted, as in entry creation.
+Existing analytic distributions require manual review.
+
+Inspect each export's `odoo.sync` status, endpoint, request and result. Failures
+leave ERP accounting changes in place and mark the export as `error`. Its Retry
+action queues another analytic PATCH using current values, never a creation
+POST. Missing profile-specific analytic mappings block the entire PATCH.
+Confirmation also queues unchanged local values: an empty ERP field may need
+to clear an old Odoo export-time default. Odoo skips unchanged distributions.
+
+New entry POSTs include `lines[].pnt_erp_id` (ERP journal-item IDs).
+Deploy the Odoo source-ID/PATCH support before this version. Historical items
+without source IDs cannot be updated; Odoo rejects them without partial writes.
+No historical correspondence is inferred by order, description or amount.
+The posted-entry reassignment support from `account_analytic_som` must be
+available before deploying this integration. Restart ERP and queue workers to
+load the new code. Wizard wording and its translations are maintained in
+`account_analytic_som`; this integration adds no views or migration scripts.
+
 ## Analytic defaults on synchronized journal entries
 
 For `only_moves`, an explicit move-line `analytic_account_id` takes precedence.

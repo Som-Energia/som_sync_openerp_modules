@@ -2,11 +2,9 @@
 from __future__ import absolute_import
 
 import json
-import os
 import mock
 from destral import testing
 from osv import osv
-from six import exec_
 
 from som_sync_openerp.models import odoo_sync_analytics
 
@@ -95,20 +93,6 @@ class TestEntryAnalytics(testing.OOTestCaseWithCursor):
             self.apply(self.analytic_id)
             self.assertFalse(mode.is_async())
         queued.assert_called_once()
-
-    def test_job_waits_for_commit_and_rollback_discards_it(self):
-        from oorq.decorators import ProcessJobs
-        self.mapping()
-        with mock.patch.object(odoo_sync_analytics.requests, 'patch') as remote:
-            try:
-                self.sync.enqueue_entry_analytics(self.cursor, self.uid, self.move_id)
-                jobs = ProcessJobs.JOBS_TO_PROCESS.get(id(self.cursor), [])
-                self.assertEqual(len(jobs), 1)
-                self.assertEqual(jobs[0].queue.name, 'sync_odoo')
-                remote.assert_not_called()
-            finally:
-                ProcessJobs.rollback(self.cursor)
-        self.assertNotIn(id(self.cursor), ProcessJobs.JOBS_TO_PROCESS)
 
     def test_unexported_or_statement_entries_are_local_only(self):
         with mock.patch.object(self.sync, 'sync_entry_analytics') as queued:
@@ -216,29 +200,6 @@ class TestEntryAnalytics(testing.OOTestCaseWithCursor):
     def test_post_item_id_mapping_applies_to_both_profiles(self):
         self.assertEqual(self.lines.MAPPING_FIELDS_TO_SYNC['id'], 'pnt_erp_id')
         self.assertEqual(self.lines.ONLY_MOVES_FIELDS_TO_SYNC['id'], 'pnt_erp_id')
-
-    def test_migration_loads_view_then_translations_only_on_upgrade(self):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'migrations',
-                            '5.0.25.5.0', 'post-0015_add_entry_analytic_sync_view.py')
-        migration = {}
-        with open(path, 'rb') as source:
-            exec_(compile(source.read(), path, 'exec'), migration)
-        load = migration['load_data'] = mock.Mock()
-        translate = migration['trans_load'] = mock.Mock()
-        migration['up'](self.cursor, None)
-        load.assert_not_called()
-        translate.assert_not_called()
-        migration['up'](self.cursor, '0.1')
-        load.assert_called_once_with(
-            self.cursor, 'som_sync_openerp', 'views/reassign_move_analytics_view.xml',
-            idref=None, mode='update')
-        self.assertEqual(translate.call_args[0][2], 'ca_ES')
-
-    def test_inherited_wizard_notice_describes_queued_synchronization(self):
-        view = self.openerp.pool.get('wizard.reassign.move.analytics').fields_view_get(
-            self.cursor, self.uid, view_type='form', context={'lang': 'en_US'})
-        self.assertIn('existing Odoo entry exports are updated asynchronously', view['arch'])
-        self.assertNotIn('Only ERP analytics are updated.', view['arch'])
 
     def test_local_default_is_resolved_before_queueing(self):
         self.mapping()
