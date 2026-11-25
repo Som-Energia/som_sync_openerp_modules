@@ -197,6 +197,17 @@ class TestEntryAnalytics(testing.OOTestCaseWithCursor):
             self.assertFalse(self.sync.sync_entry_analytics_sync(self.cursor, self.uid, sync_id))
         self.assertEqual(self.state(sync_id)['sync_state'], 'error')
 
+    def test_patch_response_is_pretty_printed_for_success_and_errors(self):
+        sync_id = self.mapping()
+        for status, body in (
+                (200, {'success': True, 'data': {'name': u'Caf\u00e9'}}),
+                (400, {'success': False, 'message': u'Invalid account: Caf\u00e9'})):
+            result, _ = self.run_patch(sync_id, status, body)
+            self.assertEqual(result, status == 200)
+            self.assertEqual(
+                self.state(sync_id)['odoo_last_update_result'],
+                json.dumps(body, ensure_ascii=False, indent=2))
+
     def test_post_item_id_mapping_applies_to_both_profiles(self):
         self.assertEqual(self.lines.MAPPING_FIELDS_TO_SYNC['id'], 'pnt_erp_id')
         self.assertEqual(self.lines.ONLY_MOVES_FIELDS_TO_SYNC['id'], 'pnt_erp_id')

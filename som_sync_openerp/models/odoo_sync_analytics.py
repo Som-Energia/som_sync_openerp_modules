@@ -106,7 +106,7 @@ class OdooSyncAnalytics(osv.osv):
                 endpoint, json=payload,
                 headers={'X-API-Key': api_key, 'Accept': 'application/json'},
                 timeout=30)
-            values['odoo_last_update_result'] = response.text
+            values['odoo_last_update_result'] = self.format_response(response.text)
             data = response.json()
             if response.status_code == 200 and isinstance(data, dict) and \
                     data.get('success') is True:
