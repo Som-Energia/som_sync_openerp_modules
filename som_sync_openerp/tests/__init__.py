@@ -5,6 +5,7 @@ from .tests_account_account import *
 from .tests_account_journal import *
 from .tests_account_invoice import *
 from .tests_account_move import *
+from .tests_entry_analytics import *
 from .tests_odoo_sync import *
 from .tests_sync_profiles import *
 from .tests_payment_order import *

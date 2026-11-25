@@ -25,6 +25,7 @@
     "update_xml": [
         "data/som_sync_openerp_data.xml",
         "views/account_journal_view.xml",
+        "views/reassign_move_analytics_view.xml",
         "views/account_account_view.xml",
         "views/odoo_sync_view.xml",
         "views/odoo_sync_model_config_view.xml",

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+        <record id="view_reassign_move_analytics_sync" model="ir.ui.view">
+            <field name="name">wizard.reassign.move.analytics.sync</field>
+            <field name="model">wizard.reassign.move.analytics</field>
+            <field name="inherit_id" ref="account_analytic_som.view_wizard_reassign_move_analytics"/>
+            <field name="arch" type="xml">
+                <xpath expr="//label[contains(@string, 'Only ERP analytics are updated.')]" position="attributes">
+                    <attribute name="string">An empty analytic account applies the current default, if available. When synchronization is enabled, existing Odoo entry exports are updated asynchronously; check their synchronization status.</attribute>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</openerp>

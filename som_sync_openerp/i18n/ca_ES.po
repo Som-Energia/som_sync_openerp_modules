@@ -1,4 +1,4 @@
-# Catalan translations for the account duplication workflow.
+# Catalan translations for Som ERP synchronization.
 # Copyright (C) Som Energia
 # This file is distributed under the same license as the som_sync_openerp module.
 msgid ""
@@ -10,6 +10,11 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. module: som_sync_openerp
+#: view:wizard.reassign.move.analytics:0
+msgid "An empty analytic account applies the current default, if available. When synchronization is enabled, existing Odoo entry exports are updated asynchronously; check their synchronization status."
+msgstr "Si el compte analític és buit, s'aplica el valor per defecte actual, si n'hi ha. Si la sincronització està habilitada, les exportacions existents de l'assentament a Odoo s'actualitzen de manera asíncrona; consulteu-ne l'estat de sincronització."
 
 #. module: som_sync_openerp
 #: model:ir.model,name:som_sync_openerp.model_wizard_duplicate_account

@@ -19,6 +19,16 @@ class AccountMove(osv.osv):
     TPV_JOURNAL_NAME = 'tpv triodos'
     ONLY_MOVES_CRON_PAGE_SIZE = 1000
 
+    def apply_analytic_assignments(
+            self, cursor, uid, move_id, assignments, context=None):
+        result = super(AccountMove, self).apply_analytic_assignments(
+            cursor, uid, move_id, assignments, context=context)
+        # A confirmation can also clear an old remote export-time default even
+        # when the local analytic account was already empty.
+        self.pool.get('odoo.sync').enqueue_entry_analytics(
+            cursor, uid, move_id, context=context)
+        return result
+
     MAPPING_FIELDS_TO_SYNC = {
         'id': 'pnt_erp_id',
         'name': 'number',
