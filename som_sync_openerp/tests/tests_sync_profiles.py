@@ -824,8 +824,10 @@ class TestSyncProfiles(testing.OOTestCaseWithCursor):
         self.assertEqual(payload['journal_id'], 20101)
         self.assertEqual(len(payload['lines']), 2)
         expected_lines = [
-            {'account_id': 20103, 'partner_id': 20102, 'name': 'Product A', 'debit': 1000.0},
-            {'account_id': 30104, 'partner_id': 20102, 'name': 'Product A', 'credit': 1000.0},
+            {'account_id': 20103, 'partner_id': 20102, 'name': 'Product A', 'debit': 1000.0,
+             'pnt_erp_id': next(line.id for line in move.line_id if line.debit)},
+            {'account_id': 30104, 'partner_id': 20102, 'name': 'Product A', 'credit': 1000.0,
+             'pnt_erp_id': next(line.id for line in move.line_id if line.credit)},
         ]
         self.assertEqual(sorted(payload['lines'], key=lambda line: line['account_id']),
                          expected_lines)

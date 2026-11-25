@@ -87,6 +87,7 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
             )
 
         self.assertEqual(values["analytic_account_id"], 991)
+        self.assertEqual(values["pnt_erp_id"], line_id)
         self.assertFalse(get_default.called)
         self.assertFalse(get_remote.called)
         self.assertFalse(post_remote.called)
@@ -297,12 +298,16 @@ class TestAccountMove(testing.OOTestCaseWithCursor):
         expected_values = {
             'lines': [
                 {
+                    'pnt_erp_id': self.imd_obj.get_object_reference(
+                        self.cursor, self.uid, 'som_sync_openerp', 'account_move_line_002')[1],
                     'account_id': 99,
                     'credit': 1000.0,
                     'name': u'Product A',
                     'partner_id': 99,
                 },
                 {
+                    'pnt_erp_id': self.imd_obj.get_object_reference(
+                        self.cursor, self.uid, 'som_sync_openerp', 'account_move_line_001')[1],
                     'account_id': 99,
                     'debit': 1000.0,
                     'name': u'Product A',
